@@ -1,0 +1,23 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Status;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Order extends Model
+{
+    protected $fillable = [
+        'order_code', 'customer_id', 'order_date', 
+        'total_price', 'status_id', 'created_by', 'notes',
+    ];
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+     public function status(): BelongsTo
+    {
+        return $this->belongsTo(Status::class, 'status_id');
+    }
+}

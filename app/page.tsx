@@ -174,7 +174,12 @@ interface Order {
   customer?: { name: string }; // 'Windy Destiana'
   order_date: string;
   total_price: number;   // 50000
-  status: string;        // 'pending' atau 'completed'
+  current_stage_id: number
+    stage?: {
+    id: number
+    name: string
+  }
+  status_id: number;       // 'pending' atau 'completed'
   created_by: number;
   notes: string;         // 'Cetak banner'
   created_at: string;
@@ -183,12 +188,21 @@ interface Order {
 export default function Dashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("Last 30 days")
   const [orders, setOrders] = useState<Order[]>([])
-  const Diproses = orders.filter(order => order.status === "pending").length
-  const Selesai = orders.filter(order => order.status === "completed").length
+  
+  const menunggu = orders.filter(o => o.status_id === 1).length
+  const diproses = orders.filter(o => o.status_id === 2).length
+  const selesai = orders.filter(o => o.status_id === 3).length
 
-  const menunggu = orders.filter(o => o.status === "pending").length
-  const diproses = orders.filter(o => o.status === "processing").length
-  const selesai = orders.filter(o => o.status === "completed").length
+  const statusLabel = {
+  1: "Menunggu",
+  2: "Proses",
+  3: "Selesai",
+}
+  const statusColor = {
+  1: "bg-yellow-100 text-yellow-600",
+  2: "bg-blue-100 text-blue-600",
+  3: "bg-green-100 text-green-600",
+}
 
  const pieData = [
   { name: "Menunggu", value: menunggu },
@@ -205,14 +219,20 @@ export default function Dashboard() {
     },
     { 
     label: "Pesanan Diproses", 
-    value: Diproses.toString(), 
+    value: diproses.toString(), 
     change: "Menunggu", 
     trend: "down", 
     icon: Clock 
   },
   { 
+    label: "Pesanan Menunggu", 
+    value: menunggu.toString(),
+    trend: "down", 
+    icon: Clock 
+  },
+  { 
     label: "Pesanan Selesai", 
-    value: Selesai.toString(), 
+    value: selesai.toString(), 
     change: "Berhasil", 
     trend: "up", 
     icon: CheckCircle 
@@ -597,10 +617,11 @@ useEffect(() => {
                           <TableCell>
                             <Badge variant="outline" className={`
                               rounded-md px-3 py-1 font-normal border
-                              ${order.status === 'pending' ? 'text-red-500 border-red-200 bg-red-50/30' : ''}
-                              ${order.status === 'completed' ? 'text-green-500 border-green-200 bg-green-50/30' : ''}
+                              ${order.status_id === 1 ? 'text-red-500 border-red-200 bg-red-50/30' : ''}
+                              ${order.status_id === 2 ? 'text-yellow-500 border-yellow-200 bg-yellow-50/30' : ''}
+                              ${order.status_id === 3 ? 'text-green-500 border-green-200 bg-green-50/30' : ''}
                             `}>
-                              {order.status === 'pending' ? 'Butuh Desain' : 'Selesai'}
+                              {order.stage?.name || '-'}
                             </Badge>
                           </TableCell>
 
@@ -608,9 +629,13 @@ useEffect(() => {
                           <TableCell>
                             <Badge className={`
                               rounded-md px-4 py-1 border-none font-medium shadow-none
-                              ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'}
-                            `}>
-                              {order.status === 'pending' ? 'Menunggu' : 'Selesai'}
+                              ${order.status_id === 1
+                                  ? 'bg-yellow-100 text-yellow-600'
+                                  : order.status_id === 2
+                                  ? 'bg-blue-100 text-blue-600'
+                                  : 'bg-green-100 text-green-600'}
+                              `}>
+                              {order.status_id === 1 ? 'Menunggu' : order.status_id === 2 ? 'Diproses' : 'Selesai'}
                             </Badge>
                           </TableCell>
 

@@ -10,10 +10,8 @@ class OrderController extends Controller
 {
     public function index()
     {
-        // Mengambil semua data pesanan dari database XAMPP kamu
-        $orders = Order::with('customer')->get();
+        $orders = Order::with(['customer', 'stage'])->get();
 
-        // Mengirimkan data dalam format JSON agar bisa dibaca Next.js
-        return response()->json($orders);
+    return response()->json($orders);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Status;
+use App\Models\Stage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -19,5 +20,9 @@ class Order extends Model
      public function status(): BelongsTo
     {
         return $this->belongsTo(Status::class, 'status_id');
+    }
+    public function stage()
+    {
+        return $this->belongsTo(Stage::class, 'current_stage_id');
     }
 }

@@ -14,4 +14,9 @@ class Stage extends Model
     ];
 
     public $timestamps = false; // kalau tabel kamu gak ada created_at
+
+    public function status()
+    {
+        return $this->belongsTo(Status::class, 'status_id');
+    }
 }

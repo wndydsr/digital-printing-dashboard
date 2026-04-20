@@ -10,12 +10,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Order extends Model
 {
     protected $fillable = [
-        'order_code', 'customer_id', 'order_date', 
-        'total_price', 'status_id', 'created_by', 'notes',
+        'order_code', 'customer_id', 'order_date', 'product_id',
+        'total_price', 'status_id', 'created_by', 'notes',  'current_stage_id',
     ];
-    public function customer(): BelongsTo
+    public function customer()
     {
-        return $this->belongsTo(Customer::class, 'customer_id');
+        return $this->belongsTo(Customer::class);
     }
      public function status(): BelongsTo
     {
@@ -25,4 +25,16 @@ class Order extends Model
     {
         return $this->belongsTo(Stage::class, 'current_stage_id');
     }
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
+    protected static function booted()
+    {
+        static::created(function ($order) {
+            $order->update([
+                'order_code' => 'ORD-' . str_pad($order->id, 4, '0', STR_PAD_LEFT)
+            ]);
+        });
+        }
 }

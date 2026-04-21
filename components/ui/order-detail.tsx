@@ -41,15 +41,18 @@ export default function OrderDetailModal({ open, onClose, order }: OrderDetailMo
 
           {/* Grid */}
         <div className="grid grid-cols-4 gap-4">
-        <Field label="Produk" value={order.product?.name || "-"} />
-        <Field label="Bahan" value={parsed.material || "-"} />
-        <Field label="Panjang (cm)" value={parsed.tinggi || "-"} />
-        <Field label="Lebar (cm)" value={parsed.lebar || "-"} />
+          {/* Produk tetap */}
+          <Field label="Produk" value={order.product?.name || "-"} />
 
-        <Field label="Finishing" value={parsed.finishing || "-"} />
-        <Field label="Deadline" value={parsed.deadline || "-"} />
-        <Field label="Jumlah" value={parsed.qty || "1"} />
-      </div>
+          {/* 🔥 Dynamic fields */}
+          {Object.entries(parsed).map(([key, value]) => (
+            <Field
+              key={key}
+              label={formatLabel(key)}
+              value={value || "-"}
+            />
+          ))}
+        </div>
 
           {/* Catatan */}
           <div>
@@ -84,6 +87,12 @@ export default function OrderDetailModal({ open, onClose, order }: OrderDetailMo
       </DialogContent>
     </Dialog>
   )
+}
+
+function formatLabel(key: string) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 function Field({ label, value }: { label: string; value: any }) {

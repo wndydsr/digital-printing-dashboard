@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import CustomerCreateModal from "@/components/ui/customer-create"
 import CustomerDetailModal from "@/components/ui/customer-detail"
+import DeleteModal from "@/components/ui/DeleteModal"
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow
@@ -40,6 +41,31 @@ export default function CustomerPage() {
       .then(res => res.json())
       .then(data => setCustomers(data))
       .catch(err => console.error(err))
+
+     }
+
+  const [openDelete, setOpenDelete] = useState(false)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+
+  const handleDelete = async () => {
+    if (!selectedId) return
+
+    try {
+      await fetch(`http://127.0.0.1:8000/api/customers/${selectedId}`, {
+        method: "DELETE",
+      })
+
+      console.log("Data kehapus")
+
+      // refresh data
+      fetchCustomers()
+
+      // reset
+      setOpenDelete(false)
+      setSelectedId(null)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   useEffect(() => {
@@ -50,6 +76,7 @@ export default function CustomerPage() {
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   )
+
 
   // PAGINATION
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -125,8 +152,13 @@ export default function CustomerPage() {
                         >
                           <Eye className="w-5 h-5" />
                         </button>
-                        <button className="text-gray-400 hover:text-red-500">
-                          <Trash2 className="w-5 h-5" />
+                        <button onClick={() => {
+                                  setSelectedId(customers.find((cust) => cust.id === c.id)?.id || null)
+                                  setOpenDelete(true)
+                                }}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 className="w-5 h-5" />
                         </button>
                       </div>
                     </TableCell>
@@ -141,7 +173,7 @@ export default function CustomerPage() {
                       <span className="text-sm text-gray-500">
                         {startIndex + 1} - {Math.min(startIndex + itemsPerPage, customers.length)} of {customers.length} Pages
                       </span>          
-           <Pagination className="mx-0 w-auto justify-end"> 
+                      <Pagination className="mx-0 w-auto justify-end"> 
                         <PaginationContent>
 
                           <PaginationItem>
@@ -189,7 +221,13 @@ export default function CustomerPage() {
           open={openDetail}
           onClose={() => setOpenDetail(false)}
           customer={selectedCustomer}
-    />
+       />
+
+         <DeleteModal
+                  open={openDelete}
+                  onClose={() => setOpenDelete(false)}
+                  onDelete={handleDelete}
+                />
       </div>
     </DashboardLayout>
   )

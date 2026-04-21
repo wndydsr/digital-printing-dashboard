@@ -10,7 +10,9 @@ Route::get('/', function () {
 });
 Route::get('/customers', [CustomerController::class, 'index']);
 Route::post('/customers', [CustomerController::class, 'store']);
+Route::delete('/customers/{id}', [CustomerController::class, 'destroy']);
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/orders', [OrderController::class, 'index']); 
 Route::post('/orders', [OrderController::class, 'store']);
+Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
 Route::get('/products', [ProductController::class, 'index']);

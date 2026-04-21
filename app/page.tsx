@@ -12,8 +12,6 @@ import {
   RefreshCw,
   MoreHorizontal,
   Filter,
-  TrendingUp,
-  TrendingDown,
   Clock,
   CheckCircle,
   XCircle,
@@ -22,6 +20,7 @@ import {
   ArrowRight,
   Users,
   Eye,
+  Trash2,
   Database,
 } from "lucide-react"
 import { AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area } from "recharts"
@@ -33,6 +32,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import OrderDetailModal from "@/components/ui/order-detail"
 import { PieChart, Pie, Cell, Legend } from "recharts"
+import DeleteModal from "@/components/ui/DeleteModal"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,6 +109,34 @@ export default function Dashboard() {
     "cetak": "text-blue-500 border-blue-200 bg-blue-50/30",
     "desain": "text-blue-500 border-blue-50 bg-blue-50/30",
     "selesai": "text-green-500 border-green-200 bg-green-50/30",
+  }
+
+  const [openDelete, setOpenDelete] = useState(false)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+
+  const handleDelete = async () => {
+    if (!selectedId) return
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/api/orders/${selectedId}`,
+        { method: "DELETE" }
+      )
+
+      if (!res.ok) {
+        console.error("Delete gagal")
+        return
+      }
+
+      fetch("http://127.0.0.1:8000/api/orders")
+        .then(res => res.json())
+        .then(setOrders)
+
+      setOpenDelete(false)
+      setSelectedId(null)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const statusLabel = {
@@ -397,8 +425,13 @@ useEffect(() => {
                               >
                                 <Eye className="w-5 h-5" />
                               </button>
-                              <button className="text-gray-400 hover:text-red-500 transition-colors">
-                                <XCircle className="w-5 h-5" />
+                              <button onClick={() => {
+                                  setSelectedId(order.id)
+                                  setOpenDelete(true)
+                                }}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 className="w-5 h-5" />
                               </button>
                             </div>
                           </TableCell>
@@ -413,6 +446,11 @@ useEffect(() => {
               onClose={() => setOpenDetail(false)}
               order={selectedOrder}
             />
+            <DeleteModal
+                        open={openDelete}
+                        onClose={() => setOpenDelete(false)}
+                        onDelete={handleDelete}
+                      />
     </DashboardLayout>
   )
 }

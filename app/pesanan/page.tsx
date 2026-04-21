@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Users,
   Eye,
+  Trash2,
   Database,
 } from "lucide-react"
 import { AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area } from "recharts"
@@ -33,6 +34,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import OrderDetailModal from "@/components/ui/order-detail"
 import OrderCreateModal from "@/components/ui/order-create"
+import DeleteModal from "@/components/ui/DeleteModal"
 import { PieChart, Pie, Cell, Legend } from "recharts"
 import {
   DropdownMenu,
@@ -109,6 +111,7 @@ export default function AnalyticsPage() {
         startIndex,
         startIndex + itemsPerPage
       )
+      
 
       const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
 
@@ -144,6 +147,7 @@ export default function AnalyticsPage() {
       2: "bg-blue-100 text-blue-600",     // Diproses
       3: "bg-green-100 text-green-600",   // Selesai
     }
+    
 
 const fetchOrders = () => {
   fetch("http://127.0.0.1:8000/api/orders")
@@ -153,6 +157,30 @@ const fetchOrders = () => {
     })
     .catch((err) => console.error(err))
 }
+
+  const [openDelete, setOpenDelete] = useState(false)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+
+  const handleDelete = async () => {
+    if (!selectedId) return
+
+    try {
+      await fetch(`http://127.0.0.1:8000/api/orders/${selectedId}`, {
+        method: "DELETE",
+      })
+
+      console.log("Data kehapus")
+
+      // refresh data
+      fetchOrders()
+
+      // reset
+      setOpenDelete(false)
+      setSelectedId(null)
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
 useEffect(() => {
   fetchOrders()
@@ -281,8 +309,14 @@ useEffect(() => {
                               >
                                 <Eye className="w-5 h-5" />
                               </button>
-                              <button className="text-gray-400 hover:text-red-500 transition-colors">
-                                <XCircle className="w-5 h-5" />
+                              <button  
+                               onClick={() => {
+                                  setSelectedId(order.id)
+                                  setOpenDelete(true)
+                                }}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 className="w-5 h-5" />
                               </button>
                             </div>
                           </TableCell>
@@ -348,7 +382,12 @@ useEffect(() => {
                 setCurrentPage(1)
               }}
             />
-      </div>
+            <DeleteModal
+              open={openDelete}
+              onClose={() => setOpenDelete(false)}
+              onDelete={handleDelete}
+            />
+                  </div>
     </DashboardLayout>
   )
 }

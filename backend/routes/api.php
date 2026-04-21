@@ -9,6 +9,7 @@ Route::get('/', function () {
     return view('welcome');
 });
 Route::get('/customers', [CustomerController::class, 'index']);
+Route::post('/customers', [CustomerController::class, 'store']);
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/orders', [OrderController::class, 'index']); 
 Route::post('/orders', [OrderController::class, 'store']);

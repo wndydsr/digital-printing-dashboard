@@ -88,22 +88,29 @@ export default function AnalyticsPage() {
       const [selectedOrder, setSelectedOrder] = useState<any>(null)
       const [openDetail, setOpenDetail] = useState(false)
       const [timeRange, setTimeRange] = useState("30d")
+      const [search, setSearch] = useState("")
 
       const [currentPage, setCurrentPage] = useState(1)
       const itemsPerPage = 10
 
-      const sortedOrders = [...orders].sort(
-        (a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime()
+      const filteredOrders = orders.filter((order) => {
+      const keyword = search.toLowerCase()
+
+      return (
+        order.order_code?.toLowerCase().includes(keyword) ||
+        order.customer?.name?.toLowerCase().includes(keyword) ||
+        order.product?.name?.toLowerCase().includes(keyword)
       )
+    })
 
       const startIndex = (currentPage - 1) * itemsPerPage
 
-      const currentData = sortedOrders.slice(
+      const currentData = filteredOrders.slice(
         startIndex,
         startIndex + itemsPerPage
       )
 
-      const totalPages = Math.ceil(sortedOrders.length / itemsPerPage)
+      const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
 
       const [openCreate, setOpenCreate] = useState(false)
       
@@ -151,6 +158,11 @@ useEffect(() => {
   fetchOrders()
 }, [])
 
+// FILTER SEARCH
+  const filtered = orders.filter(c =>
+    c.customer?.name.toLowerCase().includes(search.toLowerCase())
+  )
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -184,17 +196,16 @@ useEffect(() => {
             </Button>
           </div>
         </div>
+          {/* SEARCH */}
+        <Input
+          placeholder="Cari nama pelanggan..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
+        />
         {/* Workflow Status Table */}
               <div className="mt-8"></div>
-              <Card className="w-full border-gray-200">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg font-semibold">Recent Workflow Runs</CardTitle>
-                      <CardDescription>Monitor your workflow executions and performance</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
+              <Card className="w-full border-gray-200">    
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>

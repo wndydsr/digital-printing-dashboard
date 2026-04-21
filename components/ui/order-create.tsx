@@ -29,7 +29,35 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
   const [formData, setFormData] = useState<any>({})
   const [customers, setCustomers] = useState<any[]>([])
   const [isNewCustomer, setIsNewCustomer] = useState(false)
+
+  const calculateTotal = () => {
+  if (!selectedProduct) return 0
+
+  const price = Number(selectedProduct.price) || 0
+  const qty = Number(formData.qty) || 1
+
+  // 🔥 Banner (pakai luas)
+  if (selectedProduct.name.toLowerCase().includes("banner")) {
+    const lebar = Number(formData.lebar) || 0
+    const tinggi = Number(formData.tinggi) || 0
+
+    const luas = (lebar / 100) * (tinggi / 100) // cm → meter
+    return luas * price * qty
+  }
+
+  // 🔥 Default (kaos, dll)
+  return price * qty
+}
+  const calculatedTotal = calculateTotal()
   
+  useEffect(() => {
+  if (!open) {
+    setSelectedProduct(null)
+    setFormData({})
+    setIsNewCustomer(false)
+  }
+}, [open])
+
   const { 
     customer_id, 
     customer_name, 
@@ -70,7 +98,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         current_stage_id: 1,       // 🔥 default: Butuh Desain
         created_by: 1,   
         order_date: formData.order_date,
-        total_price: formData.total_price,
+        total_price: Math.round(calculatedTotal),
         notes: JSON.stringify(customFields),
       }
 
@@ -94,7 +122,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl rounded-xl">
+      <DialogContent className="max-w-3xl rounded-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tambah Pesanan</DialogTitle>
         </DialogHeader>
@@ -133,16 +161,37 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
             <div key={index}>
               <label className="text-sm">{field.label}</label>
 
-              <Input
-                type={field.type}
-                placeholder={field.label}
-                value={formData[field.name] || ""}
-                onChange={(e) =>
-                  handleChange(field.name, e.target.value)
+              {field.type === "select" ? (
+              <Select
+                onValueChange={(value) =>
+                  handleChange(field.name, value)
                 }
-              />
-            </div>
-          ))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={`Pilih ${field.label}`} />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {field.options?.map((opt: string, i: number) => (
+                    <SelectItem key={i} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+
+                      <Input
+                        type={field.type}
+                        placeholder={field.label}
+                        value={formData[field.name] || ""}
+                        onChange={(e) =>
+                          handleChange(field.name, e.target.value)
+                        }
+                      />
+                  )}
+                    </div>
+                  ))}
 
           {/* FIELD UMUM */}
           {selectedProduct && (
@@ -188,10 +237,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                 <label className="text-sm">Total</label>
                 <Input
                   type="number"
-                  placeholder="Contoh: 50000"
-                  onChange={(e) =>
-                    handleChange("total_price", e.target.value)
-                  }
+                  value={Math.round(calculatedTotal)}
+                  readOnly
                 />
               </div>
 

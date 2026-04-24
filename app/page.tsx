@@ -445,11 +445,11 @@ useEffect(() => {
               onClose={() => setOpenDetail(false)}
               order={selectedOrder}
             />
-            {/* <DeleteModal
+            { <DeleteModal
                         open={openDelete}
                         onClose={() => setOpenDelete(false)}
                         onDelete={handleDelete}
-                      /> */}
+                      />}
     </DashboardLayout>
   )
 }

@@ -8,11 +8,15 @@ use App\Models\Customer;
 
 class CustomerController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $customers = Customer::all();
-        return response()->json($customers);
-        
+        $query = Customer::query();
+
+        if ($request->phone) {
+            $query->where('phone', $request->phone);
+        }
+
+        return response()->json($query->get());
     }
 
     public function store(Request $request)
@@ -51,6 +55,34 @@ class CustomerController extends Controller
 
 
     $customer->update([
+        'name' => $request->name,
+        'phone' => $request->phone,
+        'email' => $request->email,
+        'address' => $request->address,
+    ]);
+
+    return response()->json($customer);
+}
+
+public function findOrCreate(Request $request)
+{
+    $request->validate([
+        'name' => 'required',
+        'phone' => 'required',
+        'email' => 'nullable|email',
+        'address' => 'nullable',
+    ]);
+
+    // 🔍 cek berdasarkan phone
+    $customer = Customer::where('phone', $request->phone)->first();
+
+    if ($customer) {
+        // ✅ kalau sudah ada → return existing
+        return response()->json($customer);
+    }
+
+    // ❌ kalau belum → create baru
+    $customer = Customer::create([
         'name' => $request->name,
         'phone' => $request->phone,
         'email' => $request->email,

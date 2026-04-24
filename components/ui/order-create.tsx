@@ -90,11 +90,31 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
   // 🔥 submit (sementara console dulu)
   const handleSubmit = async () => {
-    try {
+     try {
+    let customerId = formData.customer_id
+
+    // 🔥 kalau customer baru → create dulu
+    if (isNewCustomer) {
+  const res = await fetch("http://127.0.0.1:8000/api/customers/find-or-create", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: formData.customer_name,
+      phone: formData.customer_phone,
+      email: formData.customer_email,
+      address: formData.customer_address,
+    }),
+  })
+
+  const customer = await res.json()
+  customerId = customer.id
+}
+
       const payload = {
         product_id: selectedProduct?.id,
-        customer_id: isNewCustomer ? null : formData.customer_id,
-        customer_name: isNewCustomer ? formData.customer_name : null,// 🔥 WAJIB ADA
+        customer_id: customerId,// 🔥 WAJIB ADA
         current_stage_id: 1,       // 🔥 default: Butuh Desain
         created_by: 1,   
         order_date: formData.order_date,
@@ -225,13 +245,33 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                 </Select>
               </div>
                 {isNewCustomer && (
-                <Input
-                  placeholder="Masukkan nama customer"
-                  onChange={(e) =>
-                    handleChange("customer_name", e.target.value)
-                  }
-                />
-              )}
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Nama Customer"
+                      onChange={(e) =>
+                        handleChange("customer_name", e.target.value)
+                      }
+                    />
+                    <Input
+                      placeholder="Email"
+                      onChange={(e) =>
+                        handleChange("customer_email", e.target.value)
+                      }
+                    />
+                    <Input
+                      placeholder="No HP"
+                      onChange={(e) =>
+                        handleChange("customer_phone", e.target.value)
+                      }
+                    />
+                    <Input
+                      placeholder="Alamat"
+                      onChange={(e) =>
+                        handleChange("customer_address", e.target.value)
+                      }
+                    />
+                  </div>
+                )}
 
               <div>
                 <label className="text-sm">Total</label>

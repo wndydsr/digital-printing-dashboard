@@ -10,6 +10,7 @@ Route::get('/', function () {
 });
 Route::get('/customers', [CustomerController::class, 'index']);
 Route::post('/customers', [CustomerController::class, 'store']);
+Route::post('/customers/find-or-create', [CustomerController::class, 'findOrCreate']);
 Route::put('/customers/{id}', [CustomerController::class, 'update']);
 Route::delete('/customers/{id}', [CustomerController::class, 'destroy']);
 Route::get('/products', [ProductController::class, 'index']);

@@ -251,14 +251,14 @@ useEffect(() => {
                     <TableBody>
                       {currentData.map((order) => (
                         <TableRow key={order.id} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100">
-                          {/* No Pesanan dengan warna biru khas link */}
+                          
                           <TableCell className="text-blue-500 font-medium">{order.order_code}</TableCell>
                           
-                          {/* Pelanggan & Produk */}
-                          <TableCell className="text-gray-700">{order.customer?.name}</TableCell> {/* Nanti bisa ambil dari order.customer.name */}
+                         
+                          <TableCell className="text-gray-700">{order.customer?.name}</TableCell>
                           <TableCell className="text-gray-700">{order.product?.name || "-"}</TableCell>
                           
-                          {/* Harga & Tanggal */}
+                 
                           <TableCell className="font-medium text-gray-900">
                             Rp {Number(order.total_price).toLocaleString('id-ID')}
                           </TableCell>
@@ -271,7 +271,7 @@ useEffect(() => {
                             })}
                           </TableCell>
 
-                          {/* Tahap (Badge Outline Lembut) */}
+                        
                           <TableCell>
                             <Badge variant="outline" className={`
                               rounded-md px-3 py-1 font-normal border
@@ -287,7 +287,7 @@ useEffect(() => {
                             </Badge>
                           </TableCell>
 
-                          {/* Status (Badge Solid Soft) */}
+                     
                           <TableCell>
                             <Badge className={`
                               rounded-md px-4 py-1 border-none font-medium shadow-none
@@ -297,7 +297,7 @@ useEffect(() => {
                             </Badge>
                           </TableCell>
 
-                          {/* Ikon Aksi (Eye & Trash) */}
+                         
                           <TableCell>
                             <div className="flex items-center justify-center gap-3">
                               <button
@@ -387,7 +387,7 @@ useEffect(() => {
               onClose={() => setOpenDelete(false)}
               onDelete={handleDelete}
             />
-                  </div>
+            </div>
     </DashboardLayout>
   )
 }

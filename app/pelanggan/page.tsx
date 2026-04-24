@@ -221,7 +221,8 @@ export default function CustomerPage() {
           open={openDetail}
           onClose={() => setOpenDetail(false)}
           customer={selectedCustomer}
-       />
+          onSuccess={fetchCustomers}
+        />
 
          <DeleteModal
                   open={openDelete}

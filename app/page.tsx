@@ -389,27 +389,26 @@ useEffect(() => {
 
                           {/* Tahap (Badge Outline Lembut) */}
                           <TableCell>
-                            <Badge variant="outline" className={`
-                              rounded-md px-3 py-1 font-normal border
-                                rounded-md px-3 py-1 font-normal border
-                                  ${
-                                    stageColorByName[
-                                      order.stage?.name?.toLowerCase() || ''
-                                    ] || 'text-gray-500 border-gray-200 bg-gray-50'
-                                  }
-                                `}
-                              >
-                              {order.stage?.name || '-'}
+                            <Badge
+                              variant="outline"
+                              className={`rounded-md px-3 py-1 font-normal border ${
+                                stageColorByName[order.stage?.name?.toLowerCase() || ""] ||
+                                "text-gray-500 border-gray-200 bg-gray-50"
+                              }`}
+                            >
+                              {order.stage?.name || "-"}
                             </Badge>
                           </TableCell>
 
                           {/* Status (Badge Solid Soft) */}
-                          <TableCell>
-                            <Badge className={`
-                              rounded-md px-4 py-1 border-none font-medium shadow-none
-                              ${statusColorMap[order.stage?.status?.id || 0] || 'bg-gray-100 text-gray-500'}
-                            `}>
-                              {order.stage?.status?.name || '-'}
+                         <TableCell>
+                            <Badge
+                              className={`rounded-md px-4 py-1 border-none font-medium shadow-none ${
+                                statusColorMap[order.stage?.status?.id || 0] ||
+                                "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {order.stage?.status?.name || "-"}
                             </Badge>
                           </TableCell>
 
@@ -446,11 +445,11 @@ useEffect(() => {
               onClose={() => setOpenDetail(false)}
               order={selectedOrder}
             />
-            <DeleteModal
+            {/* <DeleteModal
                         open={openDelete}
                         onClose={() => setOpenDelete(false)}
                         onDelete={handleDelete}
-                      />
+                      /> */}
     </DashboardLayout>
   )
 }

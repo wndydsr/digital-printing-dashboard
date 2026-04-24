@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 
 interface Props {
   open: boolean
@@ -28,12 +29,16 @@ export default function CustomerCreateModal({
     address: "",
   })
 
+  const [errors, setErrors] = useState<any>({})
+
   const handleChange = (field: string, value: string) => {
     setFormData({
       ...formData,
       [field]: value,
     })
   }
+
+  const { toast } = useToast()
 
   const handleSubmit = async () => {
     try {
@@ -49,13 +54,45 @@ export default function CustomerCreateModal({
       const text = await res.text()
       console.log("RESPONSE:", text)
 
+      let data: any = {}
+      try {
+        data = JSON.parse(text)
+      } catch {
+        // kalau bukan JSON, biarin kosong
+      }
+
       if (!res.ok) {
-        console.error("Gagal kirim data")
+        setErrors(data.errors || {})
+
+        let firstError = "Terjadi kesalahan"
+
+        if (data?.errors) {
+          const errorsArr = Object.values(data.errors) as string[][]
+          firstError = errorsArr[0][0]
+
+          // 🔥 custom biar lebih user-friendly
+          if (data.errors.phone) {
+            firstError = "Nomor telepon sudah terdaftar"
+          }
+        } else if (data?.message) {
+          firstError = data.message
+        }
+
+        toast({
+          title: "Gagal",
+          description: firstError,
+          variant: "destructive",
+        })
+
         return
       }
 
-      const data = JSON.parse(text)
-      console.log("SUCCESS:", data)
+      toast({
+        title: "Berhasil",
+        description: "Data pelanggan berhasil ditambahkan",
+      })
+
+      setErrors({})
 
       onSuccess()
       onClose()
@@ -88,7 +125,9 @@ export default function CustomerCreateModal({
               placeholder="Nama pelanggan"
               value={formData.name}
               onChange={(e) => handleChange("name", e.target.value)}
+              className={errors.name ? "border-red-500" : ""}
             />
+            {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name[0]}</p>}
           </div>
 
           <div>
@@ -97,7 +136,9 @@ export default function CustomerCreateModal({
               placeholder="08xxxx"
               value={formData.phone}
               onChange={(e) => handleChange("phone", e.target.value)}
+              className={errors.phone ? "border-red-500" : ""}
             />
+            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone[0]}</p>}
           </div>
 
           <div>

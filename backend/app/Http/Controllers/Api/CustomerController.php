@@ -16,8 +16,41 @@ class CustomerController extends Controller
     }
 
     public function store(Request $request)
-{
-    $customer = Customer::create([
+    {
+        $request->validate([
+            'name' => 'required',
+            'phone' => 'required|unique:customers,phone',
+            'email' => 'nullable|email',
+            'address' => 'nullable',
+        ]);
+
+        $customer = Customer::create([
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'email' => $request->email,
+            'address' => $request->address,
+        ]);
+
+        return response()->json($customer);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $customer = Customer::find($id);
+
+        if (!$customer) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        $request->validate([
+            'name' => 'required',
+            'phone' => 'required|unique:customers,phone,' . $id,
+            'email' => 'nullable|email',
+            'address' => 'nullable',
+        ]);
+
+
+    $customer->update([
         'name' => $request->name,
         'phone' => $request->phone,
         'email' => $request->email,
@@ -26,6 +59,7 @@ class CustomerController extends Controller
 
     return response()->json($customer);
 }
+
  public function destroy($id)
     {
         $customer = Customer::find($id);

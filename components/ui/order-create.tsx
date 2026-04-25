@@ -63,7 +63,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
     customer_name, 
     total_price, 
     order_date, 
-    product_id, // 🔥 TAMBAH INI
+    product_id,
+    qty, // 🔥 TAMBAH INI
     ...customFields 
   } = formData
 
@@ -119,6 +120,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         created_by: 1,   
         order_date: formData.order_date,
         total_price: Math.round(calculatedTotal),
+        qty: Number(formData.qty),
         notes: JSON.stringify(customFields),
       }
 
@@ -139,6 +141,17 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
       console.error("ERROR:", err)
     }
   }
+
+  const parsedFields = (() => {
+  try {
+      if (typeof selectedProduct?.fields === "string") {
+        return JSON.parse(selectedProduct.fields)
+      }
+      return selectedProduct?.fields || []
+    } catch {
+      return []
+    }
+  })()
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -177,7 +190,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           </div>
 
           {/* 🔥 FORM DINAMIS */}
-          {selectedProduct?.fields?.map((field: any, index: number) => (
+          {parsedFields.map((field: any, index: number) => (
             <div key={index}>
               <label className="text-sm">{field.label}</label>
 
@@ -272,6 +285,16 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                     />
                   </div>
                 )}
+
+                <div>
+                  <label className="text-sm">Jumlah</label>
+                  <Input
+                    type="number"
+                    placeholder="Masukkan jumlah"
+                    value={formData.qty || ""}
+                    onChange={(e) => handleChange("qty", e.target.value)}
+                  />
+                </div>
 
               <div>
                 <label className="text-sm">Total</label>

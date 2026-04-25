@@ -39,6 +39,7 @@ class OrderController extends Controller
                 'notes' => $request->notes,
                 'created_by' => 1,
                 'current_stage_id' => 1,
+                'qty' => $request->qty,
             ]);
 
             return response()->json($order);

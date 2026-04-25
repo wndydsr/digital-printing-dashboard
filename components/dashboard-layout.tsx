@@ -21,6 +21,7 @@ const navigation = [
   { name: "Overview", href: "/", icon: Home },
   { name: "Pesanan", href: "/pesanan", icon: Workflow },
   { name: "Pelanggan", href: "/pelanggan", icon: Users },
+  { name: "Produk", href: "/produk", icon: Database },
   { name: "Workflows", href: "/workflows", icon: Workflow },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Templates", href: "/templates", icon: Database },

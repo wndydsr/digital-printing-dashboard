@@ -165,7 +165,7 @@ useEffect(() => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Pesanan</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Produk</h1>
           </div>
           <div className="flex items-center gap-3">
             <Select value={timeRange} onValueChange={setTimeRange}>
@@ -194,7 +194,7 @@ useEffect(() => {
         </div>
           {/* SEARCH */}
         <Input
-          placeholder="Cari nama pelanggan..."
+          placeholder="Cari nama produk..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
@@ -227,7 +227,11 @@ useEffect(() => {
                           {/* FOTO */}
                           <TableCell>
                             <img
-                              src={product.photo || "/placeholder.png"}
+                              src={
+                                product.photo
+                                  ? `http://127.0.0.1:8000/storage/${product.photo}`
+                                  : "/placeholder.png"
+                              }
                               className="w-10 h-10 rounded object-cover"
                             />
                           </TableCell>

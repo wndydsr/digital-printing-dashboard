@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
+import { useEffect } from "react"
 
 interface Props {
   open: boolean
@@ -13,6 +14,7 @@ interface Props {
   product: any
   onSuccess?: (updated: any) => void
 }
+
 
 export default function ProductDetailModal({ open, onClose, product, onSuccess }: Props) {
   const parsedFields = (() => {
@@ -29,7 +31,7 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
   const productId = `PR${String(product?.id ?? 0).padStart(2, "0")}`
   const [openEdit, setOpenEdit] = useState(false)
   const [isEdit, setIsEdit] = useState(false)
-    const [formData, setFormData] = useState<any>({})
+  const [formData, setFormData] = useState<any>({})
 
   const handleEdit = () => {
     setIsEdit(true)
@@ -43,32 +45,44 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
     })
     }
 
+    useEffect(() => {
+      if (product) {
+        setFormData({})
+        setIsEdit(false)
+      }
+    }, [product])
+
     const handleSubmit = async () => {
-        
-    try {
+      try {
+        const form = new FormData()
+
+        form.append("name", formData.name)
+        form.append("price", formData.price)
+        form.append("estimated_duration", formData.estimated_duration)
+        form.append("description", formData.description || "")
+        form.append("status", formData.status)
+        form.append("fields", JSON.stringify(formData.fields))
+        form.append("_method", "PUT")
+
+        // 🔥 ini buat foto
+        if (formData.photo instanceof File) {
+          form.append("photo", formData.photo)
+        }
+
         const res = await fetch(`http://127.0.0.1:8000/api/products/${product.id}`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            ...formData,
-            _method: "PUT",
-            estimated_duration: Number(formData.estimated_duration),
-            price: Number(formData.price),
-            fields: JSON.stringify(formData.fields),
-        }),
+          method: "POST",
+          body: form,
         })
 
+        const json = await res.json()
+        const updated = json.data
 
-            const json = await res.json()
-            const updated = json.data 
-            setIsEdit(false)
-            onSuccess?.(updated)
-        } catch (err) {
-            console.error(err)
-        }
-        }
+        setIsEdit(false)
+        onSuccess?.(updated)
+      } catch (err) {
+        console.error(err)
+      }
+    }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -130,11 +144,37 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Thumbnail</p>
                     <div className="relative">
                       <img
-                        src={product.photo || "/placeholder.png"}
-                        alt={product.name}
-                        className="w-full h-44 object-cover rounded-lg bg-gray-50"
+                         src={
+                          formData?.previewPhoto
+                            ? formData.previewPhoto
+                            : product.photo
+                            ? product.photo.startsWith("http")
+                              ? product.photo
+                              : `http://127.0.0.1:8000/storage/${product.photo}`
+                            : "/placeholder.png"
+                        }
+                        className="w-full h-44 object-cover rounded-lg"
                       />
-                      
+                       {isEdit && (
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+
+                            if (file) {
+                              const preview = URL.createObjectURL(file)
+
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                photo: file,
+                                previewPhoto: preview,
+                              }))
+                            }
+                          }}
+                          className="mt-2 text-sm"
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -238,9 +278,25 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">Deskripsi</label>
                       <div className="border border-gray-200 rounded-lg overflow-hidden">                    
-                        <div className="px-3 py-3 min-h-[72px] text-sm text-gray-600 bg-white">
-                          {product.description || (
-                            <span className="text-gray-300 italic">Tidak ada deskripsi</span>
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                          {isEdit ? (
+                            <textarea
+                              className="w-full p-3 text-sm border-0 focus:outline-none"
+                              placeholder="Masukkan deskripsi..."
+                              value={formData.description || ""}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  description: e.target.value,
+                                })
+                              }
+                            />
+                          ) : (
+                            <div className="px-3 py-3 min-h-[72px] text-sm text-gray-600 bg-white">
+                              {product.description || (
+                                <span className="text-gray-300 italic">Tidak ada deskripsi</span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>

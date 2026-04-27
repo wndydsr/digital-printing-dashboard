@@ -55,11 +55,17 @@ class ProductController extends Controller
             'fields' => $request->fields,
         ]);
 
-        return response()->json([
-            'message' => 'Product updated successfully',
-            'data' => $product
-        ]);
-    }
+        if ($request->hasFile('photo')) {
+                $path = $request->file('photo')->store('products', 'public');
+                $product->photo = $path;
+                $product->save();
+            }
+
+            return response()->json([
+                'message' => 'Product updated successfully',
+                'data' => $product
+            ]);
+        }
 
     public function destroy($id)
     {

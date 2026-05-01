@@ -90,57 +90,59 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
   }
 
   // 🔥 submit (sementara console dulu)
-  const handleSubmit = async () => {
-     try {
-    let customerId = formData.customer_id
+    const handleSubmit = async () => {
+      try {
+        let customerId = formData.customer_id
 
-    // 🔥 kalau customer baru → create dulu
-    if (isNewCustomer) {
-  const res = await fetch("http://127.0.0.1:8000/api/customers/find-or-create", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: formData.customer_name,
-      phone: formData.customer_phone,
-      email: formData.customer_email,
-      address: formData.customer_address,
-    }),
-  })
+        // 🔥 kalau customer baru
+        if (isNewCustomer) {
+          const res = await fetch("http://127.0.0.1:8000/api/customers/find-or-create", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: formData.customer_name,
+              phone: formData.customer_phone,
+              email: formData.customer_email,
+              address: formData.customer_address,
+            }),
+          })
 
-  const customer = await res.json()
-  customerId = customer.id
-}
+          const customer = await res.json()
+          customerId = customer.id
+        }
 
-      const payload = {
-        product_id: selectedProduct?.id,
-        customer_id: customerId,// 🔥 WAJIB ADA
-        current_stage_id: 1,       // 🔥 default: Butuh Desain
-        created_by: 1,   
-        order_date: formData.order_date,
-        total_price: Math.round(calculatedTotal),
-        qty: Number(formData.qty),
-        notes: JSON.stringify(customFields),
+        // 🔥 BARU bikin FormData
+        const form = new FormData()
+
+        form.append("product_id", String(selectedProduct?.id))
+        form.append("customer_id", String(customerId))
+        form.append("total_price", String(Math.round(calculatedTotal)))
+        form.append("qty", String(formData.qty))
+        form.append("order_date", formData.order_date)
+
+        form.append("notes", JSON.stringify(customFields))
+
+        // 🔥 file
+        if (formData.file) {
+          form.append("design", formData.file)
+        }
+
+        const res = await fetch("http://127.0.0.1:8000/api/orders", {
+          method: "POST",
+          body: form,
+        })
+
+        const data = await res.json()
+        console.log("SUCCESS:", data)
+
+        onSuccess()
+        onClose()
+      } catch (err) {
+        console.error(err)
       }
-
-      const res = await fetch("http://127.0.0.1:8000/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
-
-      const data = await res.json()
-      console.log("SUCCESS:", data)
-
-      onSuccess()
-      onClose()
-    } catch (err) {
-      console.error("ERROR:", err)
     }
-  }
 
   const parsedFields = (() => {
   try {

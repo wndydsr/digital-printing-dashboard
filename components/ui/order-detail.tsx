@@ -45,12 +45,14 @@ export default function OrderDetailModal({ open, onClose, order }: OrderDetailMo
           <Field label="Produk" value={order.product?.name || "-"} />
 
           {/* 🔥 Dynamic fields */}
-          {Object.entries(parsed).map(([key, value]) => (
-            <Field
-              key={key}
-              label={formatLabel(key)}
-              value={value || "-"}
-            />
+          {Object.entries(parsed)
+            .filter(([key]) => key !== "file") // 🚫 buang file
+            .map(([key, value]) => (
+              <Field
+                key={key}
+                label={formatLabel(key)}
+                value={value}
+              />
           ))}
         </div>
 
@@ -66,8 +68,12 @@ export default function OrderDetailModal({ open, onClose, order }: OrderDetailMo
           <div>
             <label className="text-sm text-gray-500">Desain</label>
             <div className="border rounded-lg p-4 bg-gray-50 flex justify-center">
-              <img
-                src={order.design_url || "/placeholder.png"}
+             <img
+                src={
+                  order.design_url
+                    ? `http://127.0.0.1:8000/storage/${order.design_url}`
+                    : "https://via.placeholder.com/150"
+                }
                 alt="desain"
                 className="rounded-md max-h-[200px]"
               />
@@ -96,11 +102,28 @@ function formatLabel(key: string) {
 }
 
 function Field({ label, value }: { label: string; value: any }) {
+  let display = "-"
+
+  if (value !== null && value !== undefined) {
+    if (typeof value === "object") {
+      // kalau array
+      if (Array.isArray(value)) {
+        display = value.join(", ")
+      } 
+      // kalau object
+      else {
+        display = Object.values(value).join(", ")
+      }
+    } else {
+      display = value
+    }
+  }
+
   return (
     <div>
       <label className="text-sm text-gray-500">{label}</label>
       <div className="border rounded-md p-2 bg-gray-50">
-        {value}
+        {display}
       </div>
     </div>
   )

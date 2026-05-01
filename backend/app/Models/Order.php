@@ -11,7 +11,7 @@ class Order extends Model
 {
     protected $fillable = [
         'order_code', 'customer_id', 'order_date', 'product_id',
-        'total_price', 'status_id', 'created_by', 'notes',  'current_stage_id',
+        'total_price', 'status_id', 'created_by', 'notes',  'current_stage_id', 'qty', 'design_url'
     ];
     public function customer()
     {

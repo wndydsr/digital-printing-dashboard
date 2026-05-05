@@ -69,8 +69,13 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
           form.append("photo", formData.photo)
         }
 
+        const token = localStorage.getItem("token")
+
         const res = await fetch(`http://127.0.0.1:8000/api/products/${product.id}`, {
           method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`, // 🔥 WAJIB
+          },
           body: form,
         })
 

@@ -2,50 +2,19 @@
 
 import { useEffect, useState } from "react"
 import {
-  Search,
-  Bell,
-  Home,
-  Workflow,
-  BarChart3,
-  Settings,
-  AlertTriangle,
-  RefreshCw,
-  MoreHorizontal,
-  Filter,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  CheckCircle,
-  XCircle,
   Plus,
-  ArrowRight,
-  Users,
   Eye,
   Trash2,
-  Database,
 } from "lucide-react"
-import { AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Download } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import ProductCreateModal from "@/components/ui/product-create"
 import DeleteModal from "@/components/ui/DeleteModal"
 import ProductDetailModal from "@/components/ui/product-detail"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
@@ -56,6 +25,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+import { apiFetch } from "@/lib/api"
+
 
 interface Product {
   id: number
@@ -93,18 +64,12 @@ export default function ProductPage() {
       const [openDetail, setOpenDetail] = useState(false)
       const [selectedProduct, setSelectedProduct] = useState<any>(null)
 
-      const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
+      const totalPages = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage))
 
       const [openCreate, setOpenCreate] = useState(false)
       const [fields, setFields] = useState<any[]>([])
     
     
-      const statusColorMap: Record<number, string> = {
-      1: "bg-yellow-100 text-yellow-600", // Pending
-      2: "bg-blue-100 text-blue-600",     // Diproses
-      3: "bg-green-100 text-green-600",   // Selesai
-    }
-
     const addField = () => {
       setFields([
         ...fields,
@@ -122,14 +87,14 @@ export default function ProductPage() {
       setFields(fields.filter((_, i) => i !== index))
     }
 
-const fetchProducts = () => {
-  fetch("http://127.0.0.1:8000/api/products")
-    .then((res) => res.json())
-    .then((data: Product[]) => {
-      setProducts(data)
-    })
-    .catch((err) => console.error(err))
-}
+   const fetchProducts = async () => {
+      try {
+        const data = await apiFetch("/products")
+        setProducts(Array.isArray(data) ? data : data.data || [])
+      } catch (err) {
+        console.error(err)
+      }
+    }
 
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -138,16 +103,11 @@ const fetchProducts = () => {
     if (!selectedId) return
 
     try {
-      await fetch(`http://127.0.0.1:8000/api/products/${selectedId}`, {
+      await apiFetch(`/products/${selectedId}`, {
         method: "DELETE",
       })
 
-      console.log("Data kehapus")
-
-      // refresh data
       fetchProducts()
-
-      // reset
       setOpenDelete(false)
       setSelectedId(null)
     } catch (err) {

@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 const navigation = [
-  { name: "Overview", href: "/", icon: Home },
-  { name: "Pesanan", href: "/pesanan", icon: Workflow },
-  { name: "Pelanggan", href: "/pelanggan", icon: Users },
-  { name: "Produk", href: "/produk", icon: Database },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
-  { name: "Workflows", href: "/workflows", icon: Workflow },
+  { name: "Overview", href: "/admin", icon: Home },
+  { name: "Pesanan", href: "/admin/pesanan", icon: Workflow },
+  { name: "Pelanggan", href: "/admin/pelanggan", icon: Users },
+  { name: "Produk", href: "/admin/produk", icon: Database },
+  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { name: "Workflows", href: "/admin/workflows", icon: Workflow },
   { name: "Templates", href: "/templates", icon: Database },
   { name: "Team", href: "/team", icon: Users },
   { name: "Settings", href: "/settings", icon: Settings },

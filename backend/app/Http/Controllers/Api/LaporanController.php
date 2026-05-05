@@ -8,52 +8,62 @@ use Illuminate\Http\Request;
 class LaporanController extends Controller
 {
     public function index()
-    {
-        $totalPendapatan = Order::whereHas('stage.status', function ($q) {
-            $q->where('name', 'selesai');
-        })->sum('total_price');
+{
+    $tahunIni = now()->year;
 
-        $totalPesanan = Order::count();
+    $totalPendapatan = Order::whereHas('stage.status', function ($q) {
+        $q->whereRaw('LOWER(name) = ?', ['selesai']);
+    })->sum('total_price');
 
-        $pesananSelesai = Order::whereHas('stage.status', function ($q) {
-            $q->where('name', 'selesai');
-        })->count();
+    $totalPesanan = Order::whereHas('stage')->count();  
 
-        $pesananPending = Order::whereHas('stage.status', function ($q) {
-            $q->where('name', 'pending');
-        })->count();
-        
-        $pendapatanPerBulan = Order::selectRaw('MONTH(created_at) as bulan, SUM(total_price) as total')
-            ->groupBy('bulan')
-            ->get();
+    $pesananSelesai = Order::whereHas('stage.status', function ($q) {
+        $q->whereRaw('LOWER(name) = ?', ['selesai']);
+    })->count();
 
-        $pesananPerBulan = Order::selectRaw('MONTH(created_at) as bulan, COUNT(*) as total')
-            ->groupBy('bulan')
-            ->get();
+    $pesananPending = Order::whereHas('stage.status', function ($q) {
+    $q->whereRaw('LOWER(name) = ?', ['pending']);
+})->count();
 
-        return response()->json([
-            'pendapatan_chart' => $pendapatanPerBulan,
-            'pesanan_chart' => $pesananPerBulan,
-            'total_pendapatan' => $totalPendapatan,
-            'total_pesanan' => $totalPesanan,
-            'pesanan_selesai' => $pesananSelesai,
-            'pesanan_pending' => $pesananPending,
+    $pendapatanPerBulan = Order::selectRaw('MONTH(created_at) as bulan, SUM(total_price) as total')
+        ->whereYear('created_at', $tahunIni)
+        ->groupBy('bulan')
+        ->orderBy('bulan')
+        ->get();
 
-            'transactions' => Order::with(['customer', 'stage.status', 'product'])
-            ->latest()
-            ->take(10)
-            ->get()
-            ->map(function ($o) {
-                return [
-                    'id' => $o->id, // ✅ WAJIB
-                    'invoice' => $o->invoice_number ?? 'INV-' . $o->id,
-                    'customer' => $o->customer->name ?? '-',
-                    'product' => $o->product->name ?? '-',
-                    'status' => $o->stage->status->name ?? '-',
-                    'total' => $o->total_price,
-                    'date' => $o->created_at->format('Y-m-d'),
-                ];
-            }),
-        ]);
-    }
+    $pesananPerBulan = Order::selectRaw('MONTH(created_at) as bulan, COUNT(*) as total')
+        ->whereYear('created_at', $tahunIni)
+        ->groupBy('bulan')
+        ->orderBy('bulan')
+        ->get();
+
+    $transactions = Order::with(['customer', 'stage.status', 'product'])
+        ->whereHas('stage.status', function ($q) {
+            $q->whereRaw('LOWER(name) = ?', ['selesai']);
+        })
+        ->latest()
+        ->take(10)
+        ->get()
+        ->map(function ($o) {
+            return [
+                'id'       => $o->id,
+                'invoice'  => $o->invoice_number ?? 'INV-' . $o->id,
+                'customer' => optional($o->customer)->name ?? '-',
+                'product'  => optional($o->product)->name ?? '-',
+                'status'   => $o->stage?->status?->name ?? '-',
+                'total'    => $o->total_price ?? 0,
+                'date'     => optional($o->created_at)->format('Y-m-d'),
+            ];
+        });
+
+    return response()->json([
+        'pendapatan_chart' => $pendapatanPerBulan,
+        'pesanan_chart'    => $pesananPerBulan,
+        'total_pendapatan' => $totalPendapatan,
+        'total_pesanan'    => $totalPesanan,
+        'pesanan_selesai'  => $pesananSelesai,
+        'pesanan_pending'  => $pesananPending,
+        'transactions'     => $transactions,
+    ]);
+}
 }

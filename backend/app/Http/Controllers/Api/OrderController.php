@@ -12,8 +12,14 @@ class OrderController extends Controller
 {
     public function index()
     {
-        $orders = Order::with(['customer', 'stage.status', 'product'])
-         ->orderBy('created_at', 'desc')
+        $orders = Order::with([
+            'customer:id,name',
+            'product:id,name',
+            'stage:id,name,status_id',
+            'stage.status:id,name'
+        ])
+        ->select('id','order_code','customer_id','product_id','total_price','order_date','current_stage_id', 'design_url')
+        ->orderBy('created_at', 'desc')
         ->get();
 
     return response()->json($orders);
@@ -66,6 +72,16 @@ class OrderController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+
+    protected $appends = ['design_full_url'];
+
+    public function getDesignFullUrlAttribute()
+    {
+        return $this->design_url
+            ? asset('storage/' . $this->design_url)
+            : null;
     }
 
     public function destroy($id)

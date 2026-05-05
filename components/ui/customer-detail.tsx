@@ -29,15 +29,17 @@ export default function CustomerDetailModal({ open, onClose, customer, onSuccess
 
    const handleSave = async () => {
     try {
+     const token = localStorage.getItem("token")
+
       const res = await fetch(`http://127.0.0.1:8000/api/customers/${customer.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
+          Authorization: `Bearer ${token}`, // 🔥 WAJIB
         },
         body: JSON.stringify(form),
       })
-
       const text = await res.text()
       console.log("RESPONSE:", text)
 

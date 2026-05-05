@@ -42,14 +42,17 @@ export default function CustomerCreateModal({
 
   const handleSubmit = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/customers", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-        body: JSON.stringify(formData),
-      })
+      const token = localStorage.getItem("token")
+
+  const res = await fetch("http://127.0.0.1:8000/api/customers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      Authorization: `Bearer ${token}`, // 🔥 INI WAJIB
+    },
+    body: JSON.stringify(formData),
+  })
 
       const text = await res.text()
       console.log("RESPONSE:", text)

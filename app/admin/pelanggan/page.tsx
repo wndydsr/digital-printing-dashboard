@@ -17,6 +17,7 @@ import {
   Pagination, PaginationContent, PaginationItem,
   PaginationLink, PaginationNext, PaginationPrevious
 } from "@/components/ui/pagination"
+import { apiFetch } from "@/lib/api"
 
 interface Customer {
   id: number
@@ -36,37 +37,34 @@ export default function CustomerPage() {
 
   const itemsPerPage = 10
 
-  const fetchCustomers = () => {
-    fetch("http://127.0.0.1:8000/api/customers")
-      .then(res => res.json())
-      .then(data => setCustomers(data))
-      .catch(err => console.error(err))
-
-     }
-
-  const [openDelete, setOpenDelete] = useState(false)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-
-  const handleDelete = async () => {
-    if (!selectedId) return
-
+  const fetchCustomers = async () => {
     try {
-      await fetch(`http://127.0.0.1:8000/api/customers/${selectedId}`, {
-        method: "DELETE",
-      })
-
-      console.log("Data kehapus")
-
-      // refresh data
-      fetchCustomers()
-
-      // reset
-      setOpenDelete(false)
-      setSelectedId(null)
+      const data = await apiFetch("/customers")
+      setCustomers(Array.isArray(data) ? data : data.data || [])
     } catch (err) {
       console.error(err)
     }
   }
+     
+
+  const [openDelete, setOpenDelete] = useState(false)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+
+ const handleDelete = async () => {
+  if (!selectedId) return
+
+  try {
+    await apiFetch(`/customers/${selectedId}`, {
+      method: "DELETE",
+    })
+
+    fetchCustomers()
+    setOpenDelete(false)
+    setSelectedId(null)
+  } catch (err) {
+    console.error(err)
+  }
+}
 
   useEffect(() => {
     fetchCustomers()
@@ -74,7 +72,7 @@ export default function CustomerPage() {
 
   // FILTER SEARCH
   const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+    c.name?.toLowerCase().includes(search.toLowerCase())
   )
 
 
@@ -153,7 +151,7 @@ export default function CustomerPage() {
                           <Eye className="w-5 h-5" />
                         </button>
                         <button onClick={() => {
-                                  setSelectedId(customers.find((cust) => cust.id === c.id)?.id || null)
+                                 setSelectedId(c.id)
                                   setOpenDelete(true)
                                 }}
                                 className="text-gray-400 hover:text-red-500 transition-colors"

@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { apiFetch } from "@/lib/api"
 
 interface Props {
   open: boolean
@@ -70,16 +71,20 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
   // 🔥 fetch produk
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/products")
-      .then((res) => res.json())
-      .then((data) => setProducts(data))
+    apiFetch("/products")
+      .then((data) => {
+        setProducts(Array.isArray(data) ? data : data.data || [])
+      })
+      .catch(console.error)
   }, [])
 
-  useEffect(() => {
-  fetch("http://127.0.0.1:8000/api/customers")
-    .then((res) => res.json())
-    .then((data) => setCustomers(data))
-}, [])
+ useEffect(() => {
+    apiFetch("/customers")
+      .then((data) => {
+        setCustomers(Array.isArray(data) ? data : data.data || [])
+      })
+      .catch(console.error)
+  }, [])
 
   // 🔥 handle input dynamic
   const handleChange = (name: string, value: any) => {
@@ -129,10 +134,15 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           form.append("design", formData.file)
         }
 
+        const token = localStorage.getItem("token")
+
         const res = await fetch("http://127.0.0.1:8000/api/orders", {
-          method: "POST",
-          body: form,
-        })
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`, // 🔥 ini yang bikin berhasil
+            },
+            body: form,
+          })
 
         const data = await res.json()
         console.log("SUCCESS:", data)

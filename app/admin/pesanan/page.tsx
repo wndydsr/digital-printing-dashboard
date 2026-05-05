@@ -35,6 +35,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import OrderDetailModal from "@/components/ui/order-detail"
 import OrderCreateModal from "@/components/ui/order-create"
 import DeleteModal from "@/components/ui/DeleteModal"
+import { apiFetch } from "@/lib/api"
 import { PieChart, Pie, Cell, Legend } from "recharts"
 import {
   DropdownMenu,
@@ -93,7 +94,7 @@ export default function AnalyticsPage() {
       const [search, setSearch] = useState("")
 
       const [currentPage, setCurrentPage] = useState(1)
-      const itemsPerPage = 10
+      
 
       const filteredOrders = orders.filter((order) => {
       const keyword = search.toLowerCase()
@@ -105,15 +106,15 @@ export default function AnalyticsPage() {
       )
     })
 
-      const startIndex = (currentPage - 1) * itemsPerPage
+      const itemsPerPage = 10
+
+     const startIndex = (currentPage - 1) * itemsPerPage
 
       const currentData = filteredOrders.slice(
         startIndex,
         startIndex + itemsPerPage
       )
-      
 
-      const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
 
       const [openCreate, setOpenCreate] = useState(false)
       
@@ -147,25 +148,33 @@ export default function AnalyticsPage() {
       2: "bg-blue-100 text-blue-600",     // Diproses
       3: "bg-green-100 text-green-600",   // Selesai
     }
-    
 
-const fetchOrders = () => {
-  fetch("http://127.0.0.1:8000/api/orders")
-    .then((res) => res.json())
-    .then((data: Order[]) => {
-      setOrders(data)
-    })
-    .catch((err) => console.error(err))
-}
+  // const [totalData, setTotalData] = useState(0)
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+
+  const fetchOrders = () => {
+    apiFetch(`/orders`)
+      .then((data) => {
+        const result = Array.isArray(data)
+          ? data
+          : Array.isArray(data.data)
+          ? data.data
+          : []
+
+        setOrders(result)
+      })
+      .catch(console.error)
+  }
 
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
+  
   const handleDelete = async () => {
     if (!selectedId) return
 
     try {
-      await fetch(`http://127.0.0.1:8000/api/orders/${selectedId}`, {
+      await apiFetch(`/orders/${selectedId}`, {
         method: "DELETE",
       })
 
@@ -182,14 +191,9 @@ const fetchOrders = () => {
     }
   }
 
-useEffect(() => {
-  fetchOrders()
-}, [])
-
-// FILTER SEARCH
-  const filtered = orders.filter(c =>
-    c.customer?.name.toLowerCase().includes(search.toLowerCase())
-  )
+ useEffect(() => {
+    fetchOrders()
+  }, [])
 
   return (
     <DashboardLayout>
@@ -329,7 +333,7 @@ useEffect(() => {
                       
                       {/* INFO */}
                       <span className="text-sm text-gray-500">
-                        {startIndex + 1} - {Math.min(startIndex + itemsPerPage, orders.length)} of {orders.length} Pages
+                        {startIndex + 1} - {Math.min(startIndex + itemsPerPage, orders.length)} of {orders.length} items
                       </span>
 
                       {/* PAGINATION */}

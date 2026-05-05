@@ -1,26 +1,22 @@
 "use client"
 
 import { useEffect, useState, } from "react"
-import { TrendingUp, TrendingDown, BarChart3, Activity, Clock, CheckCircle, XCircle, Download } from "lucide-react"
+import { BarChart3, Activity, Clock, CheckCircle, XCircle, Download } from "lucide-react"
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   BarChart,
   Bar,
   PieChart as RechartsPieChart,
-  Cell,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Pie,
 } from "recharts"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -32,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { apiFetch } from "@/lib/api"
 
 
 export default function AnalyticsPage() {
@@ -40,10 +37,9 @@ export default function AnalyticsPage() {
   const [orderData, setOrderData] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
 
-  const latestOrders = transactions
-    .filter((item) => item.status?.toLowerCase() === "selesai")
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 5)
+  const latestOrders = (transactions || [])
+  .sort((a: any, b: any) => b.id - a.id)
+  .slice(0, 5)
 
   const [kpi, setKpi] = useState<any>({
     total_pendapatan: 0,
@@ -52,36 +48,46 @@ export default function AnalyticsPage() {
     pesanan_pending: 0,
   })
 
-  useEffect(() => {
-    fetch("http://localhost:8000/api/laporan")
-      .then(res => res.json())
-      .then((data: any) => {
-        const bulan = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"]
+ useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await apiFetch("/laporan")
+        console.log("TRANSACTIONS:", data.transactions)
+
+        const bulan = [
+          "Jan","Feb","Mar","Apr","Mei","Jun",
+          "Jul","Agu","Sep","Okt","Nov","Des"
+        ]
 
         setRevenueData(
-          data.pendapatan_chart.map((item: any) => ({
+          (data.pendapatan_chart || []).map((item: any) => ({
             name: bulan[item.bulan - 1],
             total: item.total
           }))
         )
 
         setOrderData(
-          data.pesanan_chart.map((item: any) => ({
+          (data.pesanan_chart || []).map((item: any) => ({
             name: bulan[item.bulan - 1],
             total: item.total
           }))
         )
 
-       setTransactions(data.transactions)
+        setTransactions(data.transactions || [])
 
-        // ✅ KPI dari backend
         setKpi({
-          total_pendapatan: data.total_pendapatan,
-          total_pesanan: data.total_pesanan,
-          pesanan_selesai: data.pesanan_selesai,
-          pesanan_pending: data.pesanan_pending,
+          total_pendapatan: data.total_pendapatan || 0,
+          total_pesanan: data.total_pesanan || 0,
+          pesanan_selesai: data.pesanan_selesai || 0,
+          pesanan_pending: data.pesanan_pending || 0,
         })
-      })
+
+      } catch (err) {
+        console.error("Laporan error:", err)
+      }
+    }
+
+    load()
   }, [])
 
   return (
@@ -223,30 +229,38 @@ export default function AnalyticsPage() {
                   </TableHeader>
 
                   <TableBody>
-                    {latestOrders.map((order) => (
-                       <TableRow key={order.id}>
-                          <TableCell className="text-blue-500 font-medium">
-                            {order.invoice}
-                          </TableCell>
+                  {latestOrders.map((order) => (
+                    <TableRow key={order.id}>
+                      
+                      <TableCell className="text-blue-500 font-medium">
+                        {order.invoice}
+                      </TableCell>
 
-                          <TableCell className="text-gray-700">{order.customer}</TableCell>
+                      <TableCell>
+                        {order.customer}
+                      </TableCell>
 
-                          <TableCell className="text-gray-700">{order.product}</TableCell>
+                      <TableCell>
+                        {order.product}
+                      </TableCell>
 
-                          <TableCell className="text-gray-700">
-                            Rp {Number(order.total).toLocaleString("id-ID")}
-                          </TableCell>
+                      <TableCell>
+                        Rp {Number(order.total || 0).toLocaleString("id-ID")}
+                      </TableCell>
 
-                          <TableCell className="text-gray-700">{order.date}</TableCell>
+                      <TableCell>
+                        {order.date || "-"}
+                      </TableCell>
 
-                          <TableCell>
-                            <Badge className="bg-green-100 text-green-600">
-                              {order.status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                    ))}
-                  </TableBody>
+                      <TableCell>
+                        <Badge className="bg-green-100 text-green-600">
+                          {order.status}
+                        </Badge>
+                      </TableCell>
+
+                    </TableRow>
+                  ))}
+                </TableBody>
                 </Table>
               </CardContent>
             </Card>

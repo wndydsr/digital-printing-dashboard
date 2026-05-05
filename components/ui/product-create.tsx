@@ -72,10 +72,17 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
         formData.append("photo", photo)
       }
 
-      await fetch("http://127.0.0.1:8000/api/products", {
+
+    const token = localStorage.getItem("token")
+
+       await fetch("http://127.0.0.1:8000/api/products", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`, // 🔥 WAJIB
+        },
         body: formData,
       })
+
 
       onSuccess()
       onClose()

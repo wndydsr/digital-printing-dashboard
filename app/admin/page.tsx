@@ -2,34 +2,18 @@
 
 import { useState, useEffect } from "react"
 import {
-  Search,
-  Bell,
-  Home,
   Workflow,
-  BarChart3,
-  Settings,
-  AlertTriangle,
-  RefreshCw,
-  MoreHorizontal,
-  Filter,
   Clock,
   CheckCircle,
-  XCircle,
   ChevronDown,
-  Plus,
-  ArrowRight,
-  Users,
   Eye,
   Trash2,
-  Database,
 } from "lucide-react"
 import { AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import OrderDetailModal from "@/components/ui/order-detail"
 import { PieChart, Pie, Cell, Legend } from "recharts"
 import DeleteModal from "@/components/ui/DeleteModal"
@@ -38,14 +22,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { apiFetch } from "@/lib/api"
 
 
 interface Order {
@@ -118,19 +97,12 @@ export default function Dashboard() {
     if (!selectedId) return
 
     try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/api/orders/${selectedId}`,
-        { method: "DELETE" }
-      )
+     await apiFetch(`/orders/${selectedId}`, {
+        method: "DELETE",
+      })
 
-      if (!res.ok) {
-        console.error("Delete gagal")
-        return
-      }
-
-      fetch("http://127.0.0.1:8000/api/orders")
-        .then(res => res.json())
-        .then(setOrders)
+      apiFetch("/orders")
+       .then(setOrders)
 
       setOpenDelete(false)
       setSelectedId(null)
@@ -180,36 +152,36 @@ export default function Dashboard() {
   ]
 
 useEffect(() => {
-  fetch("http://127.0.0.1:8000/api/orders")
-    .then((res) => res.json())
-    .then((data: Order[]) => {
-      console.log("DATA:", data)
-        data.forEach(o => {
-          console.log("STATUS:", o.stage?.status?.name)
-        })
-      setOrders(data)
+  const load = async () => {
+    try {
+      const data = await apiFetch("/orders")
+
+      const orders = Array.isArray(data)
+        ? data
+        : data.data || []
+
+      setOrders(orders)
 
       const months = [
         "Jan","Feb","Mar","Apr","May","Jun",
         "Jul","Aug","Sep","Oct","Nov","Dec"
       ]
 
-      const monthlyData = months.map((monthName, index) => {
-        const total = data.filter((order) => {
-          const date = new Date(order.order_date.replace(" ", "T"))
-          return date.getMonth() === index
+      const monthlyData = months.map((m, i) => ({
+        name: m,
+        total: orders.filter((o: Order) => {
+          const date = new Date(o.order_date.replace(" ", "T"))
+          return date.getMonth() === i
         }).length
-
-        return {
-          name: monthName,
-          total: total
-        }
-      })
-
-       console.log("chartData:", monthlyData)
+      }))
 
       setChartData(monthlyData)
-    })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  load()
 }, [])
 
   return (
@@ -317,9 +289,9 @@ useEffect(() => {
                   outerRadius={80}
                   label
                 >
-                  <Cell fill="#facc15" /> {/* Pending */}
-                  <Cell fill="#1b93de" /> {/* Completed */}
-                  <Cell fill="#44ef55" /> {/* Cancelled */}
+                  <Cell fill="#facc15" /> {/* Menunggu */}
+                  <Cell fill="#1b93de" /> {/* Diproses */}
+                  <Cell fill="#44ef55" /> {/* Selesai */}
                 </Pie>
 
                 <Tooltip />

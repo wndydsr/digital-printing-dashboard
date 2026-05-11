@@ -21,9 +21,11 @@ export default function OrderDetailModal({ open, onClose, order }: OrderDetailMo
     }
   })()
 
+  const referenceFiles = order.reference_file || []
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl rounded-xl">
+      <DialogContent className="max-w-4xl rounded-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
             Detail Pesanan
@@ -60,25 +62,66 @@ export default function OrderDetailModal({ open, onClose, order }: OrderDetailMo
           <div>
             <label className="text-sm text-gray-500">Catatan</label>
             <div className="border rounded-md p-3 bg-gray-50 min-h-[100px]">
-              {parsed.catatan || "-"}
+              {order.catatan || "-"}
             </div>
           </div>
 
-          {/* Desain */}
-          <div>
-            <label className="text-sm text-gray-500">Desain</label>
-            <div className="border rounded-lg p-4 bg-gray-50 flex justify-center">
-             <img
-                src={
-                  order.design_url
-                    ? `http://127.0.0.1:8000/storage/${order.design_url}`
-                    : "https://via.placeholder.com/150"
-                }
-                alt="desain"
-                className="rounded-md max-h-[200px]"
-              />
+          {/* FILE DESAIN */}
+          {order.design_url && (
+            <div>
+              <label className="text-sm text-gray-500">
+                File Desain
+              </label>
+
+              <div className="border rounded-lg p-4 bg-gray-50 flex justify-center">
+                <img
+                  src={`http://127.0.0.1:8000/storage/${order.design_url}`}
+                  alt="desain"
+                  className="rounded-md max-h-[250px]"
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* FILE PENDUKUNG */}
+          {referenceFiles.length > 0 && (
+            <div>
+              <label className="text-sm text-gray-500">
+                File Pendukung
+              </label>
+
+              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+
+                {referenceFiles.map(
+                  (file: string, index: number) => (
+
+                    <div
+                      key={index}
+                      className="border rounded-md p-3 bg-white"
+                    >
+
+                      <img
+                        src={`http://127.0.0.1:8000/storage/${file}`}
+                        alt={`reference-${index}`}
+                        className="rounded-md max-h-[250px] mx-auto"
+                      />
+
+                      <a
+                        href={`http://127.0.0.1:8000/storage/${file}`}
+                        target="_blank"
+                        className="text-blue-600 underline text-sm block mt-2 text-center"
+                      >
+                        Download File {index + 1}
+                      </a>
+
+                    </div>
+
+                  )
+                )}
+
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4">

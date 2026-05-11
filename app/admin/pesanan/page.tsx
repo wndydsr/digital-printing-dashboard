@@ -2,52 +2,20 @@
 
 import { useState, useEffect } from "react"
 import {
-  Search,
-  Bell,
-  Home,
-  Workflow,
-  BarChart3,
-  Settings,
-  AlertTriangle,
-  RefreshCw,
-  MoreHorizontal,
-  Filter,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  CheckCircle,
-  XCircle,
   Plus,
-  ArrowRight,
-  Users,
   Eye,
   Trash2,
-  Database,
 } from "lucide-react"
-import { AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area } from "recharts"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent,} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Download } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import OrderDetailModal from "@/components/ui/order-detail"
 import OrderCreateModal from "@/components/ui/order-create"
 import DeleteModal from "@/components/ui/DeleteModal"
 import { apiFetch } from "@/lib/api"
-import { PieChart, Pie, Cell, Legend } from "recharts"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {

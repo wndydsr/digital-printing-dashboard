@@ -30,7 +30,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 🔹 SEMUA ROLE BOLEH
     Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::post('/orders', [OrderController::class, 'store']);
+    Route::put('/orders/{id}', [OrderController::class, 'update']);
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
 
     Route::get('/customers', [CustomerController::class, 'index']);
@@ -45,37 +47,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/laporan', [LaporanController::class, 'index']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | ROLE: ADMIN
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/admin/dashboard', function () {
-            return 'Ini dashboard ADMIN';
-        });
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | ROLE: DESAIN
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('role:desain')->group(function () {
-        Route::get('/desain/dashboard', function () {
-            return 'Ini dashboard DESAIN';
-        });
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | ROLE: OPERATOR
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('role:operator')->group(function () {
-        Route::get('/operator/dashboard', function () {
-            return 'Ini dashboard OPERATOR';
-        });
-    });
+    Route::middleware(['auth:sanctum', 'role:admin'])->get('/admin', fn() => 'Admin');
+    Route::middleware(['auth:sanctum', 'role:desainer'])->get('/desainer', fn() => 'Desainer');
+    Route::middleware(['auth:sanctum', 'role:operator'])->get('/operator', fn() => 'Operator');
 
 });

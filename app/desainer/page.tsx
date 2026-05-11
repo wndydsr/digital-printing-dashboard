@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Eye,
   Trash2,
+  MessageCircle,
 } from "lucide-react"
 import { AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area } from "recharts"
 import { Button } from "@/components/ui/button"
@@ -15,16 +16,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import OrderDetailModal from "@/components/ui/order-detail"
-import { PieChart, Pie, Cell, Legend } from "recharts"
-import DeleteModal from "@/components/ui/DeleteModal"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { DashboardLayout } from "@/components/dashboard-layout"
+import { useRouter } from "next/navigation"
 import { apiFetch } from "@/lib/api"
+import { DesainerLayout } from "@/components/layout/DesainerLayout"
 
 
 interface Order {
@@ -66,7 +66,12 @@ export default function Dashboard() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [openDetail, setOpenDetail] = useState(false)
   const [timeRange, setTimeRange] = useState("30d")
-
+  
+  const statusColor: Record<string, string> = {
+    baru: "bg-blue-100 text-blue-600",
+    revisi: "bg-red-100 text-red-600",
+    selesai: "bg-green-100 text-green-600",
+  }
   const latestOrders = [...orders]
   .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   .slice(0, 5)
@@ -112,62 +117,78 @@ export default function Dashboard() {
     }
   }
 
+  const router = useRouter()
+  
+  const handleStartDesign = async (id: number) => {
+    try {
+      await apiFetch(`/orders/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          stage: "desain"
+        })
+      })
+
+      // reload data
+      const updated = await apiFetch("/orders")
+      setOrders(updated.data || updated)
+
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const statusLabel = {
   1: "Menunggu",
   2: "Proses",
   3: "Selesai",
 }
-  const statusColorMap: Record<number, string> = {
-  1: "bg-yellow-100 text-yellow-600", // Pending
-  2: "bg-blue-100 text-blue-600",     // Diproses
-  3: "bg-green-100 text-green-600",   // Selesai
-}
 
- const pieData = [
-  { name: "Menunggu", value: menunggu },
-  { name: "Diproses", value: diproses },
-  { name: "Selesai", value: selesai },
-]
+  const revisi = orders.filter(
+    o => o.stage?.status?.name?.toLowerCase() === 'revisi'
+  ).length
 
   const metricsData = [
-    { 
-      label: "Total Pesanan", 
-      value: orders.length.toString(), // Benar: Mengambil jumlah data asl 
-      icon: Workflow 
-    },
-    { 
-    label: "Pesanan Diproses", 
-    value: diproses.toString(), 
-    icon: Clock 
-  },
-  { 
-    label: "Pesanan Menunggu", 
-    value: menunggu.toString(),
-    icon: Clock 
-  },
-  { 
-    label: "Pesanan Selesai", 
-    value: selesai.toString(), 
-    icon: CheckCircle 
-  },
-  ]
+  { label: "Antrian", value: menunggu.toString(), icon: Clock },
+  { label: "Dikerjakan", value: diproses.toString(), icon: Workflow },
+  { label: "Revisi", value: revisi.toString(), icon: Clock },
+  { label: "Selesai", value: selesai.toString(), icon: CheckCircle },
+]
+
+
 
 useEffect(() => {
-  const role = localStorage.getItem("role");
+  const role = localStorage.getItem("role")
 
-  if (role !== "admin") {
-    window.location.href = "/login";
+  if (!role) {
+    window.location.href = "/login"
+    return
+  }
+
+  if (role === "admin") {
+    window.location.href = "/admin"
+    return
+  }
+
+  if (role === "operator") {
+    window.location.href = "/operator"
+    return
   }
   
   const load = async () => {
     try {
-      const data = await apiFetch("/orders")
+     const data = await apiFetch("/orders")
 
-      const orders = Array.isArray(data)
-        ? data
-        : data.data || []
+    const orders = Array.isArray(data) ? data : data.data || []
 
-      setOrders(orders)
+    // 🔥 filter hanya yang relevan buat desainer
+    const filtered = orders.filter((o: Order) => {
+      const stage = o.stage?.name?.toLowerCase()
+      return stage === "butuh desain" || stage === "desain" || stage === "revisi"
+    })
+
+    setOrders(filtered)
+    
+    const status = (orders.stage?.status?.name || "").toLowerCase()
 
       const months = [
         "Jan","Feb","Mar","Apr","May","Jun",
@@ -192,14 +213,14 @@ useEffect(() => {
 }, [])
 
   return (
- 
-  <DashboardLayout>
+  
+<DesainerLayout>
     <div className="space-y-8">
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Dashboard Overview</h1>
+                <h1 className="text-2xl font-semibold text-gray-900">Dashboard Desainer</h1>
                 <p className="text-gray-600 mt-1">Monitor your workflows and system performance</p>
               </div>
               <div className="flex items-center gap-3">
@@ -238,78 +259,6 @@ useEffect(() => {
 
           <div className="grid grid-cols-3 gap-8">
             {/* Main Content Area */}
-            <div className="col-span-2 space-y-8">
-              {/* Charts Section */}
-              <Card className="border-gray-200">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg font-semibold">Statistik Pesanan</CardTitle>
-                      <CardDescription>Jumlah pesanan per bulan</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                 <div style={{ width: "100%", height: 300 }}>
-                    <ResponsiveContainer>
-                      <AreaChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-
-                        <Area
-                          type="monotone"
-                          dataKey="total"
-                          stroke="#ef4444"
-                          fill="#ef4444"
-                          fillOpacity={0.2}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>             
-            </div>            
-                      
-            {/* Right Sidebar */}
-            <div className="space-y-6"> 
-              {/* Recent Activity */}
-              <Card className="border-gray-200">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg font-semibold">
-                    Distribusi Pesanan
-                  </CardTitle>
-                </CardHeader>
-
-        <CardContent>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label
-                >
-                  <Cell fill="#facc15" /> {/* Menunggu */}
-                  <Cell fill="#1b93de" /> {/* Diproses */}
-                  <Cell fill="#44ef55" /> {/* Selesai */}
-                </Pie>
-
-                <Tooltip />
-                <Legend />
-
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-            </div>
           </div>
 
            {/* Workflow Status Table */}
@@ -318,7 +267,7 @@ useEffect(() => {
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-lg font-semibold">Recent Workflow Runs</CardTitle>
+                      <CardTitle className="text-lg font-semibold">Antrian Tugas</CardTitle>
                       <CardDescription>Monitor your workflow executions and performance</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -336,7 +285,7 @@ useEffect(() => {
                       <TableHead className="font-medium text-gray-600">No Pesanan</TableHead>
                       <TableHead className="font-medium text-gray-600">Pelanggan</TableHead>
                       <TableHead className="font-medium text-gray-600">Produk</TableHead>
-                      <TableHead className="font-medium text-gray-600">Total</TableHead>
+                      <TableHead className="font-medium text-gray-600">Deadline</TableHead>
                       <TableHead className="font-medium text-gray-600">Tanggal</TableHead>
                       <TableHead className="font-medium text-gray-600">Tahap</TableHead>
                       <TableHead className="font-medium text-gray-600">Status</TableHead>
@@ -353,9 +302,8 @@ useEffect(() => {
                           <TableCell className="text-gray-700">{order.customer?.name}</TableCell> {/* Nanti bisa ambil dari order.customer.name */}
                           <TableCell className="text-gray-700">{order.product?.name || "-"}</TableCell>
                           
-                          {/* Harga & Tanggal */}
-                          <TableCell className="font-medium text-gray-900">
-                            Rp {Number(order.total_price).toLocaleString('id-ID')}
+                          <TableCell>
+                            {new Date(order.order_date).toLocaleString()}
                           </TableCell>
 
                           <TableCell className="text-gray-500 text-sm">
@@ -383,7 +331,7 @@ useEffect(() => {
                          <TableCell>
                             <Badge
                               className={`rounded-md px-4 py-1 border-none font-medium shadow-none ${
-                                statusColorMap[order.stage?.status?.id || 0] ||
+                                statusColor[order.stage?.status?.name?.toLowerCase() || ""] ||
                                 "bg-gray-100 text-gray-500"
                               }`}
                             >
@@ -393,26 +341,37 @@ useEffect(() => {
 
                           {/* Ikon Aksi (Eye & Trash) */}
                           <TableCell>
-                            <div className="flex items-center justify-center gap-3">
-                              <button
-                                onClick={() => {
-                                  setSelectedOrder(order)
-                                  setOpenDetail(true)
-                                }}
-                                className="text-gray-400 hover:text-gray-600 transition-colors"
-                              >
-                                <Eye className="w-5 h-5" />
-                              </button>
-                              <button onClick={() => {
-                                  setSelectedId(order.id)
-                                  setOpenDelete(true)
-                                }}
-                                className="text-gray-400 hover:text-red-500 transition-colors"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
-                            </div>
-                          </TableCell>
+                          <div className="flex items-center justify-center gap-3">
+                            {(() => {
+                              const status = (order.stage?.status?.name || "").toLowerCase()
+
+                              if (status === "pending" || status === "revisi") {
+                                return (
+                                  <button
+                                    className="bg-blue-600 text-white px-3 py-1 rounded-lg"
+                                    onClick={() => {
+                                      handleStartDesign(order.id)
+                                      router.push(`/desainer/order/${order.id}`)
+                                    }}
+                                  >
+                                    Kerjakan
+                                  </button>
+                                )
+                              }
+
+                              return null
+                            })()}
+
+                            {/* 🔹 BUTTON CHAT */}
+                            <button
+                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg flex items-center gap-1"
+                              onClick={() => router.push(`/desainer/chat/${order.id}`)}
+                            >
+                              <MessageCircle size={14} />
+                              Chat
+                            </button>
+                          </div>
+                        </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -424,11 +383,6 @@ useEffect(() => {
               onClose={() => setOpenDetail(false)}
               order={selectedOrder}
             />
-            { <DeleteModal
-                        open={openDelete}
-                        onClose={() => setOpenDelete(false)}
-                        onDelete={handleDelete}
-                      />}
-    </DashboardLayout>
+    </DesainerLayout>
   )
 }

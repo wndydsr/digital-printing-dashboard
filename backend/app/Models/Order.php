@@ -11,11 +11,18 @@ class Order extends Model
 {
     protected $fillable = [
         'order_code', 'customer_id', 'order_date', 'product_id',
-        'total_price', 'status_id', 'created_by', 'notes',  'current_stage_id', 'qty', 'design_url'
+        'total_price', 'status_id', 'created_by', 'notes', 'catatan', 'current_stage_id', 'qty', 'design_url', 'reference_file'
     ];
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function getDesignFullUrlAttribute()
+    {
+        return $this->design_url
+            ? asset('storage/' . $this->design_url)
+            : null;
     }
      public function status(): BelongsTo
     {
@@ -29,6 +36,11 @@ class Order extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    protected $casts = [
+        'reference_file' => 'array',
+    ];
+    
     protected static function booted()
     {
         static::created(function ($order) {

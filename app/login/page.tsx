@@ -26,9 +26,16 @@ export default function LoginPage() {
         return;
       }
 
-      localStorage.setItem("token", data.token);
+     localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.user.role);
 
-      window.location.href = "/admin";
+      if (data.user.role === "admin") {
+        window.location.href = "/admin";
+      } else if (data.user.role === "desainer") {
+        window.location.href = "/desainer";
+      } else if (data.user.role === "operator") {
+        window.location.href = "/operator";
+      }
 
     } catch (error) {
       console.error(error);

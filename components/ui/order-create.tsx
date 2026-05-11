@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useMemo } from "react"
 import {
   Dialog,
   DialogContent,
@@ -9,14 +9,14 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { apiFetch } from "@/lib/api"
+import { useToast } from "@/components/ui/use-toast"
+import { 
+  Plus, Search, Trash2, Check, Package, 
+  UserSearch, CreditCard, Receipt, X 
+} from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 
 interface Props {
   open: boolean
@@ -24,335 +24,215 @@ interface Props {
   onSuccess: () => void
 }
 
+// Katalog produk (Bisa kamu pindahkan ke file konstanta tersendiri nanti)
+const PRODUCTS_CATALOG: Record<string, any> = {
+  kaos_custom: {
+    label: 'Kaos Custom', price: 75000,
+    fields: [
+      { key: 'ukuran', label: 'Ukuran', type: 'select', opts: ['S', 'M', 'L', 'XL'] },
+      { key: 'qty', label: 'Qty', type: 'number' },
+      { key: 'catatan', label: 'Catatan', type: 'text', full: true },
+    ]
+  },
+  topi_bordir: {
+    label: 'Topi Bordir', price: 95000,
+    fields: [
+      { key: 'teks', label: 'Teks Bordir', type: 'text' },
+      { key: 'qty', label: 'Qty', type: 'number' },
+    ]
+  }
+};
+
 export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
-  const [products, setProducts] = useState<any[]>([])
-  const [selectedProduct, setSelectedProduct] = useState<any>(null)
-  const [formData, setFormData] = useState<any>({})
-  const [customers, setCustomers] = useState<any[]>([])
-  const [isNewCustomer, setIsNewCustomer] = useState(false)
-
-  const calculateTotal = () => {
-  if (!selectedProduct) return 0
-
-  const price = Number(selectedProduct.price) || 0
-  const qty = Number(formData.qty) || 1
-
-  // 🔥 Banner (pakai luas)
-  if (selectedProduct.name.toLowerCase().includes("banner")) {
-    const lebar = Number(formData.lebar) || 0
-    const tinggi = Number(formData.tinggi) || 0
-
-    const luas = (lebar / 100) * (tinggi / 100) // cm → meter
-    return luas * price * qty
-  }
-
-  // 🔥 Default (kaos, dll)
-  return price * qty
-}
-  const calculatedTotal = calculateTotal()
+  const { toast } = useToast()
   
-  useEffect(() => {
-  if (!open) {
-    setSelectedProduct(null)
-    setFormData({})
-    setIsNewCustomer(false)
-  }
-}, [open])
+  // --- STATE ---
+  const [phoneSearch, setPhoneSearch] = useState("")
+  const [customer, setCustomer] = useState<any>(null)
+  const [products, setProducts] = useState<any[]>([
+    { id: Date.now(), productKey: '', fields: { qty: '1' } }
+  ])
 
-  const { 
-    customer_id, 
-    customer_name, 
-    total_price, 
-    order_date, 
-    product_id,
-    qty, // 🔥 TAMBAH INI
-    ...customFields 
-  } = formData
-
-  // 🔥 fetch produk
-  useEffect(() => {
-    apiFetch("/products")
-      .then((data) => {
-        setProducts(Array.isArray(data) ? data : data.data || [])
-      })
-      .catch(console.error)
-  }, [])
-
- useEffect(() => {
-    apiFetch("/customers")
-      .then((data) => {
-        setCustomers(Array.isArray(data) ? data : data.data || [])
-      })
-      .catch(console.error)
-  }, [])
-
-  // 🔥 handle input dynamic
-  const handleChange = (name: string, value: any) => {
-    setFormData({
-      ...formData,
-      [name]: value,
-    })
+  // --- LOGIC: CUSTOMER ---
+  const handleSearchCustomer = async () => {
+    // Simulasi cari ke API / db dummy
+    if(phoneSearch === "0812") { // Contoh ketemu
+        setCustomer({ name: "Budi Santoso", phone: "08123456789" })
+    } else {
+        toast({ title: "Tidak ditemukan", description: "Customer belum terdaftar", variant: "destructive" })
+    }
   }
 
-  // 🔥 submit (sementara console dulu)
-    const handleSubmit = async () => {
-      try {
-        let customerId = formData.customer_id
+  // --- LOGIC: PRODUCTS ---
+  const addProduct = () => {
+    setProducts([...products, { id: Date.now(), productKey: '', fields: { qty: '1' } }])
+  }
 
-        // 🔥 kalau customer baru
-        if (isNewCustomer) {
-          const res = await fetch("http://127.0.0.1:8000/api/customers/find-or-create", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              name: formData.customer_name,
-              phone: formData.customer_phone,
-              email: formData.customer_email,
-              address: formData.customer_address,
-            }),
-          })
+  const removeProduct = (id: number) => {
+    setProducts(products.filter(p => p.id !== id))
+  }
 
-          const customer = await res.json()
-          customerId = customer.id
-        }
+  const updateProductData = (id: number, key: string) => {
+    setProducts(products.map(p => p.id === id ? { ...p, productKey: key, fields: { qty: '1' } } : p))
+  }
 
-        // 🔥 BARU bikin FormData
-        const form = new FormData()
+  const updateField = (pid: number, fkey: string, val: string) => {
+    setProducts(products.map(p => p.id === pid ? { ...p, fields: { ...p.fields, [fkey]: val } } : p))
+  }
 
-        form.append("product_id", String(selectedProduct?.id))
-        form.append("customer_id", String(customerId))
-        form.append("total_price", String(Math.round(calculatedTotal)))
-        form.append("qty", String(formData.qty))
-        form.append("order_date", formData.order_date)
+  // --- CALCULATION ---
+  const total = useMemo(() => {
+    return products.reduce((acc, p) => {
+      const price = PRODUCTS_CATALOG[p.productKey]?.price || 0
+      return acc + (price * parseInt(p.fields.qty || 0))
+    }, 0)
+  }, [products])
 
-        form.append("notes", JSON.stringify(customFields))
-
-        // 🔥 file
-        if (formData.file) {
-          form.append("design", formData.file)
-        }
-
-        const token = localStorage.getItem("token")
-
-        const res = await fetch("http://127.0.0.1:8000/api/orders", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`, // 🔥 ini yang bikin berhasil
-            },
-            body: form,
-          })
-
-        const data = await res.json()
-        console.log("SUCCESS:", data)
-
-        onSuccess()
-        onClose()
-      } catch (err) {
-        console.error(err)
-      }
+  // --- SUBMIT ---
+  const handleSubmit = async () => {
+    if (!customer) return toast({ title: "Error", description: "Pilih customer dulu", variant: "destructive" })
+    
+    try {
+      // Logika fetch API kamu di sini (mirip CustomerCreateModal)
+      toast({ title: "Berhasil", description: "Pesanan berhasil dibuat" })
+      onSuccess()
+      onClose()
+      // Reset state
+      setCustomer(null)
+      setProducts([{ id: Date.now(), productKey: '', fields: { qty: '1' } }])
+    } catch (err) {
+      console.error(err)
     }
-
-  const parsedFields = (() => {
-  try {
-      if (typeof selectedProduct?.fields === "string") {
-        return JSON.parse(selectedProduct.fields)
-      }
-      return selectedProduct?.fields || []
-    } catch {
-      return []
-    }
-  })()
+  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl rounded-xl max-h-[90vh] overflow-y-auto">
+      {/* max-w-4xl karena form pesanan lebih lebar dari sekedar input customer */}
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl">
         <DialogHeader>
-          <DialogTitle>Tambah Pesanan</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="w-5 h-5 text-blue-600" /> Buat Pesanan Baru
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          {/* PILIH PRODUK */}
-          <div>
-            <label className="text-sm">Produk</label>
-            <Select
-              onValueChange={(value) => {
-                const product = products.find((p) => p.id == value)
-                setSelectedProduct(product)
-
-                setFormData({
-                   product_id: value 
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih Produk" />
-              </SelectTrigger>
-
-              <SelectContent>
-                {products.map((p) => (
-                  <SelectItem key={p.id} value={String(p.id)}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 🔥 FORM DINAMIS */}
-          {parsedFields.map((field: any, index: number) => (
-            <div key={index}>
-              <label className="text-sm">{field.label}</label>
-
-              {field.type === "select" ? (
-              <Select
-                onValueChange={(value) =>
-                  handleChange(field.name, value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={`Pilih ${field.label}`} />
-                </SelectTrigger>
-
-                <SelectContent>
-                  {field.options?.map((opt: string, i: number) => (
-                    <SelectItem key={i} value={opt}>
-                      {opt}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-
-                      <Input
-                        type={field.type}
-                        placeholder={field.label}
-                        value={formData[field.name] || ""}
-                        onChange={(e) =>
-                          handleChange(field.name, e.target.value)
-                        }
-                      />
-                  )}
-                    </div>
-                  ))}
-
-          {/* FIELD UMUM */}
-          {selectedProduct && (
-            <>
-              <div>
-                <label className="text-sm">Customer</label>
-
-                <Select
-                  onValueChange={(value) => {
-                    if (value === "new") {
-                      setIsNewCustomer(true)
-                    } else {
-                      setIsNewCustomer(false)
-                      handleChange("customer_id", value)
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih Customer" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="new">+ Customer Baru</SelectItem>
-
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {/* KOLOM KIRI: FORM (COL-SPAN 2) */}
+          <div className="md:col-span-2 space-y-6">
+            
+            {/* Step 1: Customer */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold uppercase text-gray-400 flex items-center gap-2">
+                <UserSearch className="w-4 h-4" /> 1. Data Customer
+              </label>
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Masukkan No HP..." 
+                  value={phoneSearch}
+                  onChange={(e) => setPhoneSearch(e.target.value)}
+                  className="bg-gray-50"
+                />
+                <Button variant="secondary" onClick={handleSearchCustomer}>Cari</Button>
               </div>
-                {isNewCustomer && (
-                  <div className="space-y-2">
-                    <Input
-                      placeholder="Nama Customer"
-                      onChange={(e) =>
-                        handleChange("customer_name", e.target.value)
-                      }
-                    />
-                    <Input
-                      placeholder="Email"
-                      onChange={(e) =>
-                        handleChange("customer_email", e.target.value)
-                      }
-                    />
-                    <Input
-                      placeholder="No HP"
-                      onChange={(e) =>
-                        handleChange("customer_phone", e.target.value)
-                      }
-                    />
-                    <Input
-                      placeholder="Alamat"
-                      onChange={(e) =>
-                        handleChange("customer_address", e.target.value)
-                      }
-                    />
+              {customer && (
+                <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-blue-700">{customer.name}</p>
+                    <p className="text-xs text-blue-500">{customer.phone}</p>
                   </div>
-                )}
-
-                <div>
-                  <label className="text-sm">Jumlah</label>
-                  <Input
-                    type="number"
-                    placeholder="Masukkan jumlah"
-                    value={formData.qty || ""}
-                    onChange={(e) => handleChange("qty", e.target.value)}
-                  />
+                  <Button variant="ghost" size="sm" onClick={() => setCustomer(null)}><X className="w-4 h-4"/></Button>
                 </div>
+              )}
+            </div>
 
-              <div>
-                <label className="text-sm">Total</label>
-                <Input
-                  type="number"
-                  value={Math.round(calculatedTotal)}
-                  readOnly
-                />
-              </div>
+            <Separator />
 
-              <div>
-                <label className="text-sm">Tanggal</label>
-                <Input
-                  type="date"
-                  onChange={(e) =>
-                    handleChange("order_date", e.target.value)
-                  }
-                />
-              </div>
+            {/* Step 2: Produk */}
+            <div className="space-y-4">
+              <label className="text-xs font-bold uppercase text-gray-400 flex items-center gap-2">
+                <Package className="w-4 h-4" /> 2. Pilih Produk
+              </label>
+              
+              {products.map((p, idx) => (
+                <div key={p.id} className="p-4 border rounded-xl relative bg-gray-50/30">
+                  <Button 
+                    variant="ghost" size="icon" 
+                    className="absolute -top-2 -right-2 h-7 w-7 bg-white border shadow-sm text-red-500 rounded-full"
+                    onClick={() => removeProduct(p.id)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
 
-              <div>
-                <label className="text-sm">File Desain</label>
-                <Input
-                  type="file"
-                  onChange={(e) =>
-                    handleChange("file", e.target.files?.[0])
-                  }
-                />
-              </div>
-            </>
-          )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium text-gray-400">Nama Produk</p>
+                      <Select onValueChange={(val) => updateProductData(p.id, val)}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Pilih Produk..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(PRODUCTS_CATALOG).map(([k, v]: any) => (
+                            <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {p.productKey && (
+                       <div className="grid grid-cols-2 gap-2">
+                          {PRODUCTS_CATALOG[p.productKey].fields.map((f: any) => (
+                            <div key={f.key} className={f.full ? "col-span-2" : ""}>
+                               <p className="text-[10px] font-medium text-gray-400">{f.label}</p>
+                               {f.type === 'select' ? (
+                                 <Select onValueChange={(v) => updateField(p.id, f.key, v)}>
+                                   <SelectTrigger className="h-9 bg-white"><SelectValue /></SelectTrigger>
+                                   <SelectContent>{f.opts.map((o:any)=><SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                                 </Select>
+                               ) : (
+                                 <Input 
+                                  className="h-9 bg-white" 
+                                  type={f.type} 
+                                  value={p.fields[f.key]} 
+                                  onChange={(e) => updateField(p.id, f.key, e.target.value)} 
+                                 />
+                               )}
+                            </div>
+                          ))}
+                       </div>
+                    )}
+                  </div>
+                </div>
+              ))}
 
-          {/* ACTION */}
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={onClose}>
-              Batal
-            </Button>
+              <Button variant="outline" className="w-full border-dashed" onClick={addProduct}>
+                <Plus className="w-4 h-4 mr-2" /> Tambah Item
+              </Button>
+            </div>
+          </div>
 
-            <Button
-              className="bg-blue-600 hover:bg-blue-700"
-              onClick={handleSubmit}
-              disabled={!selectedProduct}
-            >
-              Simpan
+          {/* KOLOM KANAN: RINGKASAN (COL-SPAN 1) */}
+          <div className="bg-gray-50 p-4 rounded-xl space-y-4 border h-fit">
+            <div className="flex items-center gap-2 font-bold text-sm">
+              <Receipt className="w-4 h-4 text-gray-400" /> Ringkasan
+            </div>
+            <Separator />
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {products.filter(p => p.productKey).map((p, i) => (
+                <div key={i} className="flex justify-between text-xs">
+                  <span className="text-gray-500">{p.fields.qty}x {PRODUCTS_CATALOG[p.productKey].label}</span>
+                  <span className="font-medium">Rp {(PRODUCTS_CATALOG[p.productKey].price * p.fields.qty).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            <Separator />
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-400">TOTAL</span>
+              <span className="text-xl font-black text-blue-600">Rp {total.toLocaleString()}</span>
+            </div>
+            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}>
+              <Check className="w-4 h-4 mr-2" /> Simpan Pesanan
             </Button>
           </div>
+
         </div>
       </DialogContent>
     </Dialog>

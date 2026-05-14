@@ -10,8 +10,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Order extends Model
 {
     protected $fillable = [
-        'order_code', 'customer_id', 'order_date', 'product_id',
-        'total_price', 'status_id', 'created_by', 'notes', 'catatan', 'current_stage_id', 'qty', 'design_url', 'reference_file'
+        'order_code',
+        'customer_id',
+        'order_date',
+        'total_price',
+        'status_id',
+        'created_by',
+        'notes',
+        'current_stage_id',
     ];
     public function customer()
     {
@@ -32,14 +38,10 @@ class Order extends Model
     {
         return $this->belongsTo(Stage::class, 'current_stage_id');
     }
-    public function product()
+    public function items()
     {
-        return $this->belongsTo(Product::class);
+        return $this->hasMany(OrderItem::class);
     }
-
-    protected $casts = [
-        'reference_file' => 'array',
-    ];
     
     protected static function booted()
     {

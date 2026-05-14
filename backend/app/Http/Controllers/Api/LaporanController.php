@@ -37,24 +37,47 @@ class LaporanController extends Controller
         ->orderBy('bulan')
         ->get();
 
-    $transactions = Order::with(['customer', 'stage.status', 'product'])
-        ->whereHas('stage.status', function ($q) {
-            $q->whereRaw('LOWER(name) = ?', ['selesai']);
-        })
-        ->latest()
-        ->take(10)
-        ->get()
-        ->map(function ($o) {
-            return [
-                'id'       => $o->id,
-                'invoice'  => $o->invoice_number ?? 'INV-' . $o->id,
-                'customer' => optional($o->customer)->name ?? '-',
-                'product'  => optional($o->product)->name ?? '-',
-                'status'   => $o->stage?->status?->name ?? '-',
-                'total'    => $o->total_price ?? 0,
-                'date'     => optional($o->created_at)->format('Y-m-d'),
-            ];
-        });
+    $transactions = Order::with([
+        'customer',
+        'items.product',
+        'stage.status'
+    ])
+    ->whereHas('stage.status', function ($q) {
+        $q->whereRaw('LOWER(name) = ?', ['selesai']);
+    })
+    ->latest()
+    ->take(10)
+    ->get()
+    ->map(function ($o) {
+
+        return [
+            'id' => $o->id,
+
+            'invoice' => $o->order_code ?? 'INV-' . $o->id,
+
+            'customer' => [
+                'name' => optional($o->customer)->name,
+                'phone' => optional($o->customer)->phone,
+                'address' => optional($o->customer)->address,
+            ],
+
+            'products' => $o->items->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'product_name' => optional($item->product)->name,
+                    'quantity' => $item->quantity,
+                    'price' => $item->price,
+                ];
+            }),
+
+            'status' => $o->stage?->status?->name ?? '-',
+
+            'total' => $o->total_price ?? 0,
+
+            'date' => optional($o->created_at)
+                ->format('Y-m-d'),
+        ];
+    });
 
     return response()->json([
         'pendapatan_chart' => $pendapatanPerBulan,

@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\AuthController;
 
-
 /*
 |--------------------------------------------------------------------------
 | PUBLIC (tidak perlu login)
@@ -42,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);
+    Route::get('/products/active', [ProductController::class, 'active']);
     Route::put('/products/{id}', [ProductController::class, 'update']);
     Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 
@@ -50,5 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['auth:sanctum', 'role:admin'])->get('/admin', fn() => 'Admin');
     Route::middleware(['auth:sanctum', 'role:desainer'])->get('/desainer', fn() => 'Desainer');
     Route::middleware(['auth:sanctum', 'role:operator'])->get('/operator', fn() => 'Operator');
+
+    Route::get('/download/design/{filename}', [OrderController::class, 'downloadDesign']);
 
 });

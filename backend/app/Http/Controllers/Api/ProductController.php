@@ -67,13 +67,18 @@ class ProductController extends Controller
             ]);
         }
 
-    public function destroy($id)
-    {
-        $product = Product::findOrFail($id);
-        $product->delete();
+        public function active()
+        {
+            return Product::where('status', 1)->get();
+        }
 
-        return response()->json([
-            'message' => 'Produk berhasil dihapus'
-        ]);
-    }
+        public function destroy($id)
+        {
+            $product = Product::findOrFail($id);
+            $product->delete();
+
+            return response()->json([
+                'message' => 'Produk berhasil dihapus'
+            ]);
+        }
 }

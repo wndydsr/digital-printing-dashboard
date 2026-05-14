@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, } from "react"
-import { BarChart3, Activity, Clock, CheckCircle, XCircle, Download } from "lucide-react"
+import { BarChart3, Activity, Clock, CheckCircle, Download, FileText } from "lucide-react"
 import {
   AreaChart,
   Area,
@@ -20,6 +20,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import InvoiceOrder from "@/components/ui/invoice-order"
 import {
   Table,
   TableBody,
@@ -29,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { apiFetch } from "@/lib/api"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 
 export default function AnalyticsPage() {
@@ -36,6 +38,11 @@ export default function AnalyticsPage() {
   const [revenueData, setRevenueData] = useState<any[]>([])
   const [orderData, setOrderData] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
+  const [selectedInvoice, setSelectedInvoice] =
+    useState<any>(null)
+
+  const [showInvoice, setShowInvoice] =
+    useState(false)
 
   const latestOrders = (transactions || [])
   .sort((a: any, b: any) => b.id - a.id)
@@ -225,6 +232,7 @@ export default function AnalyticsPage() {
                       <TableHead className="font-medium text-gray-600">Total</TableHead>
                       <TableHead className="font-medium text-gray-600">Tanggal</TableHead>
                       <TableHead className="font-medium text-gray-600">Status</TableHead>
+                      <TableHead className="font-medium text-gray-600 text-center">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
 
@@ -237,11 +245,21 @@ export default function AnalyticsPage() {
                       </TableCell>
 
                       <TableCell>
-                        {order.customer}
+                         {order.customer?.name}
                       </TableCell>
 
-                      <TableCell>
-                        {order.product}
+                    
+                        <TableCell>
+                        <div className="space-y-1">
+                          {order.products?.map((item: any, index: number) => (
+                            <div
+                              key={index}
+                              className="text-sm"
+                            >
+                              {item.product_name}
+                            </div>
+                          ))}
+                        </div>
                       </TableCell>
 
                       <TableCell>
@@ -258,6 +276,20 @@ export default function AnalyticsPage() {
                         </Badge>
                       </TableCell>
 
+                      <TableCell className="text-center">
+
+                        <button
+                          onClick={() => {
+                            setSelectedInvoice(order)
+                            setShowInvoice(true)
+                          }}
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg border hover:bg-gray-100 transition"
+                        >
+                          <FileText className="w-4 h-4 text-blue-600" />
+                        </button>
+
+                      </TableCell>
+
                     </TableRow>
                   ))}
                 </TableBody>
@@ -266,6 +298,31 @@ export default function AnalyticsPage() {
             </Card>
           </TabsContent>
         </Tabs>
+        <Dialog
+  open={showInvoice}
+  onOpenChange={setShowInvoice}
+>
+  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
+
+    <DialogHeader>
+      <DialogTitle>
+        Invoice Order
+      </DialogTitle>
+    </DialogHeader>
+
+    {selectedInvoice && (
+    <InvoiceOrder
+      orderId={selectedInvoice.invoice}
+      customer={selectedInvoice.customer}
+      products={selectedInvoice.products}
+      total={selectedInvoice.total}
+      deliveryMethod="delivery"
+      paymentMethod="cash"
+    />
+  )}
+
+  </DialogContent>
+</Dialog>
       </div>
     </DashboardLayout>
   )

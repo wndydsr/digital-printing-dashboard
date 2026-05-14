@@ -1,14 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Upload, FileText, Loader2 } from "lucide-react"
+import { Upload, FileText, Loader2, ArrowLeft } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { DesainerLayout } from "@/components/layout/DesainerLayout"
-import { useRouter } from "next/navigation"
-import { useParams } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 
 export default function DetailPesananPage() {
@@ -17,35 +16,30 @@ export default function DetailPesananPage() {
   const [showRevisi, setShowRevisi] = useState(false)
 
   const router = useRouter()
+  const params = useParams()
 
- const [order, setOrder] = useState<any>(null)
+  const [order, setOrder] = useState<any>(null)
 
- const parsed = (() => {
-    try {
-      return JSON.parse(order?.notes || "{}")
-    } catch {
-      return {}
-    }
-  })()
+  const designFiles =
+  order?.items?.flatMap((item: any) => {
+    const designFile = item.design?.design_file ? [item.design.design_file] : []
+    const referenceFiles = item.design?.reference_files || []
 
- const params = useParams()
+    return [...designFile, ...referenceFiles]
+  }) || []
 
- useEffect(() => {
-
+  useEffect(() => {
     const fetchOrder = async () => {
       try {
-
         const data = await apiFetch(`/orders/${params.id}`)
-
+        console.log("ORDER DETAIL RESPONSE:", data)
         setOrder(data)
-
       } catch (err) {
         console.error(err)
       }
     }
 
     fetchOrder()
-
   }, [])
 
   if (!order) {
@@ -64,16 +58,35 @@ export default function DetailPesananPage() {
       .replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
+  // 🔥 FIX: ambil semua reference_files dari semua item
+  const referenceFiles =
+  order?.items?.flatMap((item: any) =>
+    item.design?.reference_files || []
+  ) || []
+
   return (
     <DesainerLayout>
       <div className="space-y-6">
 
         {/* HEADER */}
-        <div>
-          <h1 className="text-2xl font-semibold">Detail Pesanan</h1>
-          <p className="text-sm text-gray-500">
-            Informasi lengkap dan proses desain
-          </p>
+        <div className="flex items-center gap-3">
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => router.push("/desainer/antrian")}
+          >
+            <ArrowLeft size={18} />
+          </Button>
+
+          <div>
+            <h1 className="text-2xl font-semibold">Detail Pesanan</h1>
+
+            <p className="text-sm text-gray-500">
+              Informasi lengkap dan proses desain
+            </p>
+          </div>
+
         </div>
 
         {/* GRID */}
@@ -84,7 +97,8 @@ export default function DetailPesananPage() {
             <CardHeader>
               <CardTitle>Informasi Pesanan</CardTitle>
             </CardHeader>
-           <CardContent className="space-y-4 text-sm">
+
+            <CardContent className="space-y-4 text-sm">
 
               <div className="flex justify-between">
                 <span>No Pesanan</span>
@@ -98,53 +112,18 @@ export default function DetailPesananPage() {
 
               <div className="flex justify-between">
                 <span>Produk</span>
-                <span>{order?.product?.name}</span>
+                <span>
+                  {order?.items?.map((i: any) => i.product?.name).join(", ")}
+                </span>
               </div>
 
               <div className="flex justify-between">
                 <span>Tanggal</span>
                 <span>
-                  {
-                    order?.order_date
-                      ? new Date(order.order_date).toLocaleString()
-                      : "-"
-                  }
+                  {order?.order_date
+                    ? new Date(order.order_date).toLocaleString()
+                    : "-"}
                 </span>
-              </div>
-
-              {/* 🔥 Dynamic Fields */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-
-                {Object.entries(parsed)
-                  .filter(
-                    ([key]) =>
-                      ![
-                        "file",
-                        "catatan",
-                        "reference_file",
-                        "reference_files",
-                      ].includes(key)
-                  )
-                  .map(([key, value]) => (
-
-                    <div key={key}>
-                      <label className="text-xs text-gray-500">
-                        {formatLabel(key)}
-                      </label>
-
-                      <div className="border rounded-md p-2 bg-gray-50 mt-1">
-
-                        {Array.isArray(value)
-                          ? value.join(", ")
-                          : typeof value === "object"
-                          ? Object.values(value as object).join(", ")
-                          : String(value)}
-
-                      </div>
-                    </div>
-
-                  ))}
-
               </div>
 
             </CardContent>
@@ -155,8 +134,9 @@ export default function DetailPesananPage() {
             <CardHeader>
               <CardTitle>Brief Pelanggan</CardTitle>
             </CardHeader>
+
             <CardContent className="text-sm text-gray-600 whitespace-pre-line">
-              {order?.catatan || "Tidak ada brief pelanggan"}
+              {order?.notes || "Tidak ada brief pelanggan"}
             </CardContent>
           </Card>
 
@@ -165,59 +145,53 @@ export default function DetailPesananPage() {
         {/* FILE PENDUKUNG */}
         <Card>
           <CardHeader>
-            <CardTitle>File Pendukung</CardTitle>
+            <CardTitle>File Desain</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-2">
+            {designFiles.length > 0 ? (
+              <div className="space-y-2">
+  {designFiles.map((file: string, i: number) => (
+    <div
+      key={i}
+      className="flex items-center justify-between p-2 border rounded-lg bg-white"
+    >
+      {/* kiri: nama file */}
+      <div className="flex items-center gap-2 min-w-0">
+        <FileText size={16} className="text-gray-500" />
 
-            {order?.reference_file?.length > 0 ? (
+        <span className="text-sm truncate max-w-[300px]">
+          {file.split("/").pop()}
+        </span>
+      </div>
 
-              order.reference_file.map(
-                (file: string, index: number) => (
-
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-2 border rounded"
-                  >
-
-                    <div className="flex items-center gap-2">
-                      <FileText size={16} />
-
-                      <span className="text-sm">
-                        {file.split("/").pop()}
-                      </span>
-                    </div>
-
-                    <a
-                      href={`http://127.0.0.1:8000/storage/${file}`}
-                      target="_blank"
-                    >
-                      <Button size="sm" variant="outline">
-                        Download
-                      </Button>
-                    </a>
-
-                  </div>
-
-                )
-              )
-
+      {/* kanan: tombol download */}
+      <a
+        href={`http://127.0.0.1:8000/api/download/design/${file.split("/").pop()}`}
+        target="_blank"
+      >
+        <Button size="sm" variant="outline" className="gap-1">
+          <Upload size={14} />
+          Unduh
+        </Button>
+      </a>
+    </div>
+  ))}
+</div>
             ) : (
-
               <p className="text-sm text-gray-500">
-                Tidak ada file pendukung
+                Tidak ada file desain
               </p>
-
             )}
-
           </CardContent>
         </Card>
 
-        {/* UPLOAD */}
+        {/* UPLOAD DESAIN */}
         <Card>
           <CardHeader>
             <CardTitle>Upload Desain</CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-4">
 
             <Input

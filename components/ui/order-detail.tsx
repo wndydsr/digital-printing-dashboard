@@ -9,133 +9,124 @@ interface OrderDetailModalProps {
   order: any
 }
 
-
-export default function OrderDetailModal({ open, onClose, order }: OrderDetailModalProps) {
+export default function OrderDetailModal({
+  open,
+  onClose,
+  order,
+}: OrderDetailModalProps) {
   if (!order) return null
-
-  const parsed = (() => {
-    try {
-      return JSON.parse(order.notes)
-    } catch {
-      return {}
-    }
-  })()
-
-  const referenceFiles = order.reference_file || []
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl rounded-xl max-h-[90vh] overflow-y-auto">
+
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">
-            Detail Pesanan
-          </DialogTitle>
+          <DialogTitle>Detail Pesanan</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Nama */}
+        <div className="space-y-6">
+
+          {/* CUSTOMER */}
           <div>
-            <label className="text-sm text-gray-500">Nama Pelanggan</label>
+            <label className="text-sm text-gray-500">Customer</label>
             <div className="border rounded-md p-2 bg-gray-50">
-              {order.customer?.name}
+              {order.customer?.name || "-"}
             </div>
           </div>
 
-          {/* Grid */}
-        <div className="grid grid-cols-4 gap-4">
-          {/* Produk tetap */}
-          <Field label="Produk" value={order.product?.name || "-"} />
-
-          {/* 🔥 Dynamic fields */}
-          {Object.entries(parsed)
-            .filter(([key]) => key !== "file") // 🚫 buang file
-            .map(([key, value]) => (
-              <Field
-                key={key}
-                label={formatLabel(key)}
-                value={value}
-              />
-          ))}
-        </div>
-
-          {/* Catatan */}
+          {/* ORDER CODE */}
           <div>
-            <label className="text-sm text-gray-500">Catatan</label>
-            <div className="border rounded-md p-3 bg-gray-50 min-h-[100px]">
-              {order.catatan || "-"}
+            <label className="text-sm text-gray-500">No Pesanan</label>
+            <div className="border rounded-md p-2 bg-gray-50">
+              {order.order_code || "-"}
             </div>
           </div>
 
-          {/* FILE DESAIN */}
-          {order.design_url && (
-            <div>
-              <label className="text-sm text-gray-500">
-                File Desain
-              </label>
+          {/* ITEMS */}
+          {order.items?.map((item: any, i: number) => (
+            <div key={i} className="border rounded-lg p-4 space-y-3">
 
-              <div className="border rounded-lg p-4 bg-gray-50 flex justify-center">
-                <img
-                  src={`http://127.0.0.1:8000/storage/${order.design_url}`}
-                  alt="desain"
-                  className="rounded-md max-h-[250px]"
-                />
-              </div>
-            </div>
-          )}
+              <h3 className="font-semibold text-sm text-gray-700">
+                Item {i + 1}
+              </h3>
 
-          {/* FILE PENDUKUNG */}
-          {referenceFiles.length > 0 && (
-            <div>
-              <label className="text-sm text-gray-500">
-                File Pendukung
-              </label>
+              {/* PRODUK */}
+              <Field label="Produk" value={item.product?.name} />
 
-              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+              {/* QTY */}
+              <Field label="Qty" value={item.quantity} />
 
-                {referenceFiles.map(
-                  (file: string, index: number) => (
+              {/* CATATAN */}
+              <Field label="Catatan" value={item.catatan || "-"} />
 
-                    <div
-                      key={index}
-                      className="border rounded-md p-3 bg-white"
-                    >
-
-                      <img
-                        src={`http://127.0.0.1:8000/storage/${file}`}
-                        alt={`reference-${index}`}
-                        className="rounded-md max-h-[250px] mx-auto"
-                      />
-
-                      <a
-                        href={`http://127.0.0.1:8000/storage/${file}`}
-                        target="_blank"
-                        className="text-blue-600 underline text-sm block mt-2 text-center"
-                      >
-                        Download File {index + 1}
-                      </a>
-
-                    </div>
-
+              {/* DYNAMIC FIELDS */}
+              {item.details &&
+                Object.entries(parseJSON(item.details)).map(
+                  ([key, value]: any) => (
+                    <Field
+                      key={key}
+                      label={formatLabel(key)}
+                      value={value}
+                    />
                   )
                 )}
 
-              </div>
-            </div>
-          )}
+              {/* DESIGN FILE */}
+              {item.design?.design_file && (
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-500">
+                    File Desain
+                  </label>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4">
+                  <img
+                    src={`http://127.0.0.1:8000/storage/${item.design.design_file}`}
+                    className="rounded-md max-h-[220px] border"
+                  />
+                </div>
+              )}
+
+              {/* REFERENCE FILES */}
+              {item.design?.reference_files?.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-500">
+                    File Pendukung
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {item.design.reference_files.map((file: string, idx: number) => (
+                      <img
+                        key={idx}
+                        src={`http://127.0.0.1:8000/storage/${file}`}
+                        className="rounded-md max-h-[180px] border"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* ACTION */}
+          <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={onClose}>
-              Batal
-            </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              Download Desain
+              Tutup
             </Button>
           </div>
+
         </div>
       </DialogContent>
     </Dialog>
   )
+}
+
+/* ================= HELPERS ================= */
+
+function parseJSON(data: any) {
+  try {
+    return typeof data === "string" ? JSON.parse(data) : data || {}
+  } catch {
+    return {}
+  }
 }
 
 function formatLabel(key: string) {
@@ -144,21 +135,18 @@ function formatLabel(key: string) {
     .replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
+/* ================= FIELD COMPONENT ================= */
+
 function Field({ label, value }: { label: string; value: any }) {
   let display = "-"
 
   if (value !== null && value !== undefined) {
     if (typeof value === "object") {
-      // kalau array
-      if (Array.isArray(value)) {
-        display = value.join(", ")
-      } 
-      // kalau object
-      else {
-        display = Object.values(value).join(", ")
-      }
+      display = Array.isArray(value)
+        ? value.join(", ")
+        : Object.values(value).join(", ")
     } else {
-      display = value
+      display = String(value)
     }
   }
 

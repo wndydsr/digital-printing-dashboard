@@ -22,7 +22,11 @@
     order_code: string
     customer?: { name: string }
     order_date: string
-    product?: { name: string }
+    items?: {
+        product?: {
+          name: string
+        }
+      }[]
     stage?: {
       name: string
       status?: {
@@ -80,7 +84,7 @@
       return (
         order.order_code?.toLowerCase().includes(keyword) ||
         order.customer?.name?.toLowerCase().includes(keyword) ||
-        order.product?.name?.toLowerCase().includes(keyword)
+        order.items?.some((item) => item.product?.name?.toLowerCase().includes(keyword))
       )
     })
 
@@ -153,7 +157,9 @@
                         </TableCell>
 
                         <TableCell>{order.customer?.name}</TableCell>
-                        <TableCell>{order.product?.name || "-"}</TableCell>
+                        <TableCell>
+                          {order.items?.map((item) => item.product?.name).join(", ") || "-"}
+                        </TableCell>
 
                         <TableCell>
                           {new Date(order.order_date).toLocaleString()}

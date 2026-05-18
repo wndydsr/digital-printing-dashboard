@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\MessageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,10 +48,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/laporan', [LaporanController::class, 'index']);
 
-    Route::middleware(['auth:sanctum', 'role:admin'])->get('/admin', fn() => 'Admin');
-    Route::middleware(['auth:sanctum', 'role:desainer'])->get('/desainer', fn() => 'Desainer');
-    Route::middleware(['auth:sanctum', 'role:operator'])->get('/operator', fn() => 'Operator');
+    Route::middleware('role:admin')->get('/admin', fn() => 'Admin');
+    Route::middleware('role:desainer')->get('/desainer', fn() => 'Desainer');
+    Route::middleware('role:operator')->get('/operator', fn() => 'Operator');
 
-    Route::get('/download/design/{filename}', [OrderController::class, 'downloadDesign']);
+    Route::get('/download/design/{filename}', [OrderController::class, 'downloadDesign'])
+    ->where('filename', '.*');
+
+    Route::get('/orders/{id}/messages', [MessageController::class, 'index'] );
+    Route::post('/orders/{id}/messages', [MessageController::class, 'store'] );
 
 });

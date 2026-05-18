@@ -28,29 +28,35 @@ import { DesainerLayout } from "@/components/layout/DesainerLayout"
 
 
 interface Order {
-  id: number;
-  order_code: string;    // ORD-001
-  customer?: { name: string }; // 'Windy Destiana'
-  order_date: string;
-  total_price: number;   // 50000
-  current_stage_id: number
-  product?: {
     id: number
-    name: string
-  }
-  stage?: {
-    id: number
-    name: string
-    status?: {
-      id: number
-    name: string
-  }
+    order_code: string
+    customer?: {
+      name: string
+    }
+    order_date: string
+    total_price: number
+    current_stage_id: number
 
-}      // 'pending' atau 'completed'
-  created_by: number;
-  notes: string;         // 'Cetak banner'
-  created_at: string;  
-}
+    items?: {
+      product?: {
+        id: number
+        name: string
+      }
+    }[]
+
+    stage?: {
+      id: number
+      name: string
+      status?: {
+        id: number
+        name: string
+      }
+    }
+
+    created_by: number
+    notes: string
+    created_at: string
+  }
 
 
 type ChartData = {
@@ -68,7 +74,8 @@ export default function Dashboard() {
   const [timeRange, setTimeRange] = useState("30d")
   
   const statusColor: Record<string, string> = {
-    baru: "bg-blue-100 text-blue-600",
+    pending: "bg-yellow-100 text-yellow-600",
+    diproses: "bg-blue-100 text-blue-600",
     revisi: "bg-red-100 text-red-600",
     selesai: "bg-green-100 text-green-600",
   }
@@ -187,8 +194,6 @@ useEffect(() => {
     })
 
     setOrders(filtered)
-    
-    const status = (orders.stage?.status?.name || "").toLowerCase()
 
       const months = [
         "Jan","Feb","Mar","Apr","May","Jun",
@@ -293,14 +298,17 @@ useEffect(() => {
                     </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {latestOrders.map((order) => (
+                      {latestOrders.map((order) => {
+                        const status = order.stage?.status?.name?.toLowerCase() || ""
+
+                        return (
                         <TableRow key={order.id} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100">
                           {/* No Pesanan dengan warna biru khas link */}
                           <TableCell className="text-blue-500 font-medium">{order.order_code}</TableCell>
                           
                           {/* Pelanggan & Produk */}
                           <TableCell className="text-gray-700">{order.customer?.name}</TableCell> {/* Nanti bisa ambil dari order.customer.name */}
-                          <TableCell className="text-gray-700">{order.product?.name || "-"}</TableCell>
+                         <TableCell className="text-gray-700"> {order.items?.map((item) => item.product?.name).join(", ") || "-"}</TableCell>
                           
                           <TableCell>
                             {new Date(order.order_date).toLocaleString()}
@@ -330,7 +338,8 @@ useEffect(() => {
                           {/* Status (Badge Solid Soft) */}
                          <TableCell>
                             <Badge
-                              className={`rounded-md px-4 py-1 border-none font-medium shadow-none ${
+                                variant="outline"
+                                className={`rounded-md px-3 py-1 font-normal border ${
                                 statusColor[order.stage?.status?.name?.toLowerCase() || ""] ||
                                 "bg-gray-100 text-gray-500"
                               }`}
@@ -341,39 +350,46 @@ useEffect(() => {
 
                           {/* Ikon Aksi (Eye & Trash) */}
                           <TableCell>
-                          <div className="flex items-center justify-center gap-3">
-                            {(() => {
-                              const status = (order.stage?.status?.name || "").toLowerCase()
+                          <div className="flex items-center justify-center gap-2">
 
-                              if (status === "pending" || status === "revisi") {
-                                return (
-                                  <button
-                                    className="bg-blue-600 text-white px-3 py-1 rounded-lg"
-                                    onClick={() => {
-                                      handleStartDesign(order.id)
-                                      router.push(`/desainer/order/${order.id}`)
-                                    }}
-                                  >
-                                    Kerjakan
-                                  </button>
-                                )
-                              }
-
-                              return null
-                            })()}
-
-                            {/* 🔹 BUTTON CHAT */}
-                            <button
-                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg flex items-center gap-1"
-                              onClick={() => router.push(`/desainer/chat/${order.id}`)}
+                          {(status === "pending" || status === "revisi") && (
+                            <Button
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700"
+                              onClick={() => {
+                                handleStartDesign(order.id)
+                              }}
                             >
-                              <MessageCircle size={14} />
-                              Chat
-                            </button>
-                          </div>
+                              Kerjakan
+                            </Button>
+                          )}
+
+                          {status === "diproses" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-1"
+                              onClick={() => router.push(`/desainer/order/${order.id}`)}
+                            >
+                              <Eye size={14} />
+                              Detail
+                            </Button>
+                          )}
+
+                          <Button
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 flex items-center gap-1"
+                            onClick={() => router.push(`/desainer/chat/${order.id}`)}
+                          >
+                            <MessageCircle size={14} />
+                            Chat
+                          </Button>
+
+                        </div>
                         </TableCell>
                         </TableRow>
-                      ))}
+                       )
+                })}
                     </TableBody>
                   </Table>
                 </CardContent>

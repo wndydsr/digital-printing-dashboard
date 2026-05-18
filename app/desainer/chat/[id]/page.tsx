@@ -10,6 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useRouter, useParams } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Sender = "desainer" | "customer";
@@ -17,11 +19,10 @@ type Sender = "desainer" | "customer";
 interface Message {
   id: number;
   sender: Sender;
-  name: string;
-  time: string;
-  text?: string;
-  image?: string;
-  isDesainSubmission?: boolean;
+  message?: string;
+  file?: string;
+  is_design?: boolean;
+  created_at: string;
 }
 
 // ─── Static Data ─────────────────────────────────────────────────────────────
@@ -29,56 +30,72 @@ const DESAINER = { name: "Guy Hawkins", initials: "GH", role: "Desainer" };
 const CUSTOMER = { name: "Windy Destiana", initials: "WD" };
 
 export default function DiskusiDesainPolesan() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      sender: "customer",
-      name: CUSTOMER.name,
-      time: "10:15 AM",
-      text: "Halo, saya sudah upload logo dan referensi desain yang ingin saya gunakan. Terima kasih.",
-    },
-    {
-      id: 2,
-      sender: "desainer",
-      name: DESAINER.name,
-      time: "10:20 PM",
-      text: "Baik kak, siap. Saya akan mulai proses desainnya.",
-    },
-    {
-      id: 3,
-      sender: "desainer",
-      name: DESAINER.name,
-      time: "02:45 PM",
-      image: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=500&q=80",
-      text: "Ini adalah hasil desain awalnya, mohon dicek ya kak 😄",
-      isDesainSubmission: true,
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const [inputText, setInputText] = useState("");
   const [showRevisi, setShowRevisi] = useState(false);
   const [revisiNote, setRevisiNote] = useState("");
   const [approvedId, setApprovedId] = useState<number | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const params = useParams();
+  const router = useRouter();
   
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    fetchMessages()
+  }, [])
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-    const newMsg: Message = {
-      id: Date.now(),
-      sender: "customer", // Biasanya customer yang balas di sini
-      name: CUSTOMER.name,
-      time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-      text: inputText,
-    };
-    setMessages([...messages, newMsg]);
-    setInputText("");
-  };
+  const fetchMessages = async () => {
+    try {
+      const data = await apiFetch(`/orders/${params.id}/messages`);
+
+      setMessages(data.reverse());
+
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  const handleSend = async () => {
+
+  try {
+
+    const formData = new FormData()
+
+    formData.append("sender", "desainer")
+
+    formData.append("message", inputText)
+
+    if (fileInputRef.current?.files?.[0]) {
+      formData.append(
+        "file",
+        fileInputRef.current.files[0]
+      )
+    }
+
+    await apiFetch(
+      `/orders/${params.id}/messages`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    )
+
+    setInputText("")
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+
+    fetchMessages()
+
+  } catch (err) {
+    console.error(err)
+  }
+}
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans">
@@ -112,6 +129,13 @@ export default function DiskusiDesainPolesan() {
             <div className="space-y-6">
               {messages.map((msg) => {
                 const isDesainer = msg.sender === "desainer";
+                const time = new Date(msg.created_at).toLocaleTimeString(
+                  "id-ID",
+                  {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }
+                );
                 return (
                   <div key={msg.id} className={`flex gap-3 ${isDesainer ? "flex-row-reverse" : "flex-row"}`}>
                     <Avatar className="h-9 w-9 border-2 border-white shadow-sm">
@@ -122,16 +146,17 @@ export default function DiskusiDesainPolesan() {
 
                     <div className={`flex flex-col max-w-[70%] ${isDesainer ? "items-end" : "items-start"}`}>
                       <div className={`flex items-baseline gap-2 mb-1 ${isDesainer ? "flex-row-reverse" : "flex-row"}`}>
-                        <span className="text-xs font-bold text-slate-700">{msg.name}</span>
+                        <span className="text-xs font-bold text-slate-700">{isDesainer ? "Desainer" : "Customer"}</span>
                         {isDesainer && <span className="text-[10px] font-medium text-slate-400">(Desainer)</span>}
-                        <span className="text-[10px] text-slate-400">{msg.time}</span>
+                        <span className="text-[10px] text-slate-400">{time}</span>
                       </div>
 
-                      {msg.isDesainSubmission ? (
+                      {msg.file ? (
                         <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl rounded-tl-sm">
-                          <img src={msg.image} alt="Desain" className="w-full h-48 object-cover border-b border-slate-100" />
+                          <img
+                             src={`http://127.0.0.1:8000/storage/${msg.file}`} alt="Desain" className="w-full h-48 object-cover border-b border-slate-100" />
                           <CardContent className="p-4">
-                            <p className="text-sm text-slate-600 leading-relaxed mb-4">{msg.text}</p>
+                            <p className="text-sm text-slate-600 leading-relaxed mb-4">{msg.message}</p>
                             {approvedId === msg.id ? (
                               <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none py-1.5 px-4 rounded-full flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4" />
@@ -155,7 +180,7 @@ export default function DiskusiDesainPolesan() {
                             ? "bg-indigo-50 text-indigo-900 border border-indigo-100 rounded-2xl rounded-tr-sm" 
                             : "bg-white text-slate-700 border border-slate-200 rounded-2xl rounded-tl-sm"
                           }`}>
-                          {msg.text}
+                          {msg.message}
                         </div>
                       )}
                     </div>
@@ -187,7 +212,18 @@ export default function DiskusiDesainPolesan() {
               <Button className="bg-indigo-600 hover:bg-indigo-700 px-6 rounded-xl font-bold transition-all active:scale-95" onClick={handleSend}>
                 Kirim
               </Button>
-              <input ref={fileInputRef} type="file" className="hidden" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+
+                  if (file) {
+                    setSelectedFile(file);
+                  }
+                }}
+              />
             </div>
           </footer>
         </section>

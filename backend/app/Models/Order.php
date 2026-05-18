@@ -42,6 +42,11 @@ class Order extends Model
     {
         return $this->hasMany(OrderItem::class);
     }
+
+    public function messages()
+    {
+        return $this->hasMany(Message::class);
+    }
     
     protected static function booted()
     {
@@ -50,5 +55,5 @@ class Order extends Model
                 'order_code' => 'ORD-' . str_pad($order->id, 4, '0', STR_PAD_LEFT)
             ]);
         });
-        }
+    }
 }

@@ -28,6 +28,59 @@ export default function DetailPesananPage() {
     return [...designFile, ...referenceFiles]
   }) || []
 
+  const handleDownload = async (filepath: string) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/download/design/${filepath}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error("Gagal download file")
+      }
+
+      const blob = await response.blob()
+
+      const url = window.URL.createObjectURL(blob)
+
+      const a = document.createElement("a")
+      a.href = url
+      a.download = filepath.split("/").pop() || "download"
+
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+      window.URL.revokeObjectURL(url)
+
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleUploadDesign = async () => {
+    if (!file) return
+
+    const formData = new FormData()
+
+    formData.append("file", file)
+    formData.append("message", "Berikut hasil desain terbaru")
+    formData.append("sender", "desainer")
+
+    await fetch(`http://127.0.0.1:8000/api/orders/${params.id}/messages`, {
+      method: "POST",
+      body: formData,
+    })
+
+    router.push(`/desainer/chat/${params.id}`)
+  }
+
   useEffect(() => {
     const fetchOrder = async () => {
       try {
@@ -145,39 +198,39 @@ export default function DetailPesananPage() {
         {/* FILE PENDUKUNG */}
         <Card>
           <CardHeader>
-            <CardTitle>File Desain</CardTitle>
+            <CardTitle>File Pendukung</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-2">
             {designFiles.length > 0 ? (
               <div className="space-y-2">
-  {designFiles.map((file: string, i: number) => (
-    <div
-      key={i}
-      className="flex items-center justify-between p-2 border rounded-lg bg-white"
-    >
-      {/* kiri: nama file */}
-      <div className="flex items-center gap-2 min-w-0">
-        <FileText size={16} className="text-gray-500" />
+          {designFiles.map((file: string, i: number) => (
+            <div
+              key={i}
+              className="flex items-center justify-between p-2 border rounded-lg bg-white"
+            >
+              {/* kiri: nama file */}
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText size={16} className="text-gray-500" />
 
-        <span className="text-sm truncate max-w-[300px]">
-          {file.split("/").pop()}
-        </span>
-      </div>
+                <span className="text-sm truncate max-w-[300px]">
+                  {file.split("/").pop()}
+                </span>
+              </div>
 
-      {/* kanan: tombol download */}
-      <a
-        href={`http://127.0.0.1:8000/api/download/design/${file.split("/").pop()}`}
-        target="_blank"
-      >
-        <Button size="sm" variant="outline" className="gap-1">
-          <Upload size={14} />
-          Unduh
-        </Button>
-      </a>
-    </div>
-  ))}
-</div>
+              {/* kanan: tombol download */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={() => handleDownload(file)}
+              >
+                <Upload size={14} />
+                Unduh
+              </Button>
+            </div>
+          ))}
+        </div>
             ) : (
               <p className="text-sm text-gray-500">
                 Tidak ada file desain
@@ -214,7 +267,10 @@ export default function DetailPesananPage() {
                 Tandai Revisi
               </Button>
 
-              <Button className="bg-purple-600 hover:bg-purple-700">
+              <Button
+                className="bg-purple-600 hover:bg-purple-700"
+                onClick={handleUploadDesign}
+              >
                 <Upload size={16} className="mr-2" />
                 Upload Desain
               </Button>

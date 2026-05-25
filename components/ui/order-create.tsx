@@ -679,7 +679,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
     {/* 🔥 DYNAMIC FIELDS */}
     <div className="grid grid-cols-2 gap-2">
       {normalizeFields(getProduct(p.product_id)?.fields).map((f: any) => (
-        <div key={f.key}>
+        <div key={f.label}>
           <p className="text-[10px] text-gray-400">
             {f.label}
           </p>
@@ -687,7 +687,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           {f.type === "select" ? (
             <Select
               onValueChange={(val) =>
-                updateDynamicField(p.id, f.key, val)
+                updateDynamicField(p.id, f.label, val)
               }
             >
               <SelectTrigger className="h-9 bg-white">
@@ -707,7 +707,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
               onChange={(e) =>
                 updateDynamicField(
                   p.id,
-                  f.key,
+                  f.label,
                   e.target.value
                 )
               }

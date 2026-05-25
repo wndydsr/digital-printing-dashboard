@@ -20,6 +20,10 @@ class OrderItem extends Model
 
     ];
 
+    protected $casts = [
+        'details' => 'array',
+    ];
+
     public function design()
     {
         return $this->hasOne(OrderItemDesign::class, 'order_item_id', 'id');

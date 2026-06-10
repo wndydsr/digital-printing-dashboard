@@ -104,4 +104,26 @@ public function findOrCreate(Request $request)
 
         return response()->json(['message' => 'Deleted']);
     }
+
+    public function updateProfile(Request $request)
+    {
+        $customer = $request->user();
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'phone' => 'nullable|string|max:20',
+            'address' => 'nullable|string',
+        ]);
+
+        $customer->update([
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'address' => $request->address,
+        ]);
+
+        return response()->json([
+            'message' => 'Profile berhasil diperbarui',
+            'customer' => $customer->fresh()
+        ]);
+    }
 }

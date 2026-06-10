@@ -8,14 +8,27 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MessageController;
+use App\Http\Controllers\Api\ProductAttributeController;
+use App\Http\Controllers\Api\ProductAttributeValueController;
+use App\Http\Controllers\Api\CategoryController;
 
 /*
 |--------------------------------------------------------------------------
 | PUBLIC (tidak perlu login)
 |--------------------------------------------------------------------------
 */
-Route::post('/login', [AuthController::class, 'login']);
 
+Route::get('/public/products', [ProductController::class, 'active']);
+
+Route::post('/customer/register', [AuthController::class, 'registerCustomer']);
+Route::post('/customer/login', [AuthController::class, 'loginCustomer']);
+
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::post('/categories', [CategoryController::class, 'store']);
+
+
+
+Route::post('/login', [AuthController::class, 'login']);
 /*
 |--------------------------------------------------------------------------
 | HARUS LOGIN
@@ -28,6 +41,8 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
+    Route::post('/logout', [AuthController::class, 'logout']);
+
     // 🔹 SEMUA ROLE BOLEH
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
@@ -39,12 +54,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/customers', [CustomerController::class, 'store']);
     Route::put('/customers/{id}', [CustomerController::class, 'update']);
     Route::delete('/customers/{id}', [CustomerController::class, 'destroy']);
+    Route::put('/customer/profile', [CustomerController::class, 'updateProfile']);
 
     Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);
     Route::get('/products/active', [ProductController::class, 'active']);
     Route::put('/products/{id}', [ProductController::class, 'update']);
     Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+
+    Route::get('/products/{id}', [ProductController::class, 'show']);
+
+    Route::post('/product-attributes', [ProductAttributeController::class, 'store']);
+    Route::delete('/product-attributes/{id}', [ProductAttributeController::class, 'destroy']);
+
+    Route::post('/product-attribute-values', [ProductAttributeValueController::class, 'store']);
+    Route::delete('/product-attribute-values/{id}', [ProductAttributeValueController::class, 'destroy']);
 
     Route::get('/laporan', [LaporanController::class, 'index']);
 

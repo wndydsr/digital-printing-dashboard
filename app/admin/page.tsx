@@ -25,47 +25,51 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { apiFetch } from "@/lib/api"
-
+import { useToast } from "@/components/ui/use-toast"
 
 interface Order {
   id: number;
-  order_code: string;    // ORD-001
-  customer?: { name: string }; // 'Windy Destiana'
+  order_code: string;
+  customer?: { name: string };
   order_date: string;
-  total_price: number;   // 50000
-  current_stage_id: number
+  total_price: number;
+  current_stage_id: number;
+  designer_id?: number;  // ID Desainer
+  designer?: {           // Data Desainer
+    id: number;
+    name: string;
+  };
   product?: {
-    id: number
-    name: string
-  }
+    id: number;
+    name: string;
+  };
   stage?: {
-    id: number
-    name: string
+    id: number;
+    name: string;
     status?: {
-      id: number
-    name: string
-  }
-
-}      // 'pending' atau 'completed'
+      id: number;
+      name: string;
+    };
+  };
   created_by: number;
-  notes: string;         // 'Cetak banner'
+  notes: string;
   created_at: string;  
 }
-
 
 type ChartData = {
   name: string
   total: number
 }
 
-
 export default function Dashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("Last 30 days")
   const [orders, setOrders] = useState<Order[]>([])
+  const [designers, setDesigners] = useState<any[]>([]) // State List Desainer
   const [chartData, setChartData] = useState<ChartData[]>([])
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [openDetail, setOpenDetail] = useState(false)
   const [timeRange, setTimeRange] = useState("30d")
+  const { toast } = useToast()
 
   const latestOrders = [...orders]
   .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -84,6 +88,7 @@ export default function Dashboard() {
   ).length
 
   const stageColorByName: Record<string, string> = {
+    "antrean desain": "text-purple-500 border-purple-200 bg-purple-50/30",
     "butuh desain": "text-red-500 border-red-200 bg-red-50/30",
     "siap cetak": "text-yellow-500 border-yellow-200 bg-yellow-50/30",
     "cetak": "text-blue-500 border-blue-200 bg-blue-50/30",
@@ -102,13 +107,39 @@ export default function Dashboard() {
         method: "DELETE",
       })
 
-      apiFetch("/orders")
-       .then(setOrders)
+      apiFetch("/orders").then(setOrders)
 
       setOpenDelete(false)
       setSelectedId(null)
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  // Fungsi Assign / Ganti Desainer
+  const handleAssignDesigner = async (orderId: number, designerId: string) => {
+    try {
+      await apiFetch(`/orders/${orderId}/assign-designer`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ designer_id: designerId })
+      })
+
+      toast({
+        title: "Berhasil",
+        description: "Desainer berhasil diperbarui.",
+      })
+
+      // Refresh data
+      const data = await apiFetch("/orders")
+      setOrders(Array.isArray(data) ? data : data.data || [])
+    } catch (err) {
+      console.error(err)
+      toast({
+        title: "Gagal",
+        description: "Terjadi kesalahan saat menugaskan desainer.",
+        variant: "destructive"
+      })
     }
   }
 
@@ -132,7 +163,7 @@ export default function Dashboard() {
   const metricsData = [
     { 
       label: "Total Pesanan", 
-      value: orders.length.toString(), // Benar: Mengambil jumlah data asl 
+      value: orders.length.toString(), 
       icon: Workflow 
     },
     { 
@@ -161,13 +192,13 @@ useEffect(() => {
   
   const load = async () => {
     try {
-      const data = await apiFetch("/orders")
+      const orderData = await apiFetch("/orders")
+      const parsedOrders = Array.isArray(orderData) ? orderData : orderData.data || []
+      setOrders(parsedOrders)
 
-      const orders = Array.isArray(data)
-        ? data
-        : data.data || []
-
-      setOrders(orders)
+      // Fetch list desainer
+      const designerData = await apiFetch("/users")
+      setDesigners(Array.isArray(designerData) ? designerData : designerData.data || [])
 
       const months = [
         "Jan","Feb","Mar","Apr","May","Jun",
@@ -176,7 +207,7 @@ useEffect(() => {
 
       const monthlyData = months.map((m, i) => ({
         name: m,
-        total: orders.filter((o: Order) => {
+        total: parsedOrders.filter((o: Order) => {
           const date = new Date(o.order_date.replace(" ", "T"))
           return date.getMonth() === i
         }).length
@@ -336,6 +367,7 @@ useEffect(() => {
                       <TableHead className="font-medium text-gray-600">No Pesanan</TableHead>
                       <TableHead className="font-medium text-gray-600">Pelanggan</TableHead>
                       <TableHead className="font-medium text-gray-600">Produk</TableHead>
+                      <TableHead className="font-medium text-gray-600 text-center">Desainer</TableHead> {/* Kolom Desainer Baru */}
                       <TableHead className="font-medium text-gray-600">Total</TableHead>
                       <TableHead className="font-medium text-gray-600">Tanggal</TableHead>
                       <TableHead className="font-medium text-gray-600">Tahap</TableHead>
@@ -344,15 +376,79 @@ useEffect(() => {
                     </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {latestOrders.map((order) => (
+                      {latestOrders.map((order) => {
+                        const stageName = order.stage?.name?.toLowerCase() || "";
+                        
+                        return (
                         <TableRow key={order.id} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100">
-                          {/* No Pesanan dengan warna biru khas link */}
+                          {/* No Pesanan */}
                           <TableCell className="text-blue-500 font-medium">{order.order_code}</TableCell>
                           
                           {/* Pelanggan & Produk */}
-                          <TableCell className="text-gray-700">{order.customer?.name}</TableCell> {/* Nanti bisa ambil dari order.customer.name */}
+                          <TableCell className="text-gray-700">{order.customer?.name}</TableCell>
                           <TableCell className="text-gray-700">{order.product?.name || "-"}</TableCell>
                           
+                         {/* KOLOM DESAINER */}
+                          <TableCell className="text-center">
+                            {(() => {
+                              const stage = stageName.trim()
+
+                              // 1. ANTREAN DESAIN: Paksa nilai dropdown menjadi kosong ("") agar muncul "Belum ditugaskan"
+                              if (stage === "antrean desain") {
+                                return (
+                                  <select
+                                    value="" // 🔥 Harus pakai value="", bukan defaultValue
+                                    onChange={(e) => handleAssignDesigner(order.id, e.target.value)}
+                                    className="h-8 w-full min-w-[140px] rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none text-red-600 font-medium cursor-pointer"
+                                  >
+                                    <option value="" disabled>Belum ditugaskan</option>
+                                    {designers.map(d => (
+                                      <option key={d.id} value={d.id} className="text-black">{d.name}</option>
+                                    ))}
+                                  </select>
+                                );
+                              }
+
+                              // 2. BUTUH DESAIN: Tampilkan desainer yang terpilih, bisa diganti
+                              if (stage === "butuh desain") {
+                                // Fallback ke "" jika designer_id belum ada, agar memicu <option disabled>
+                                const currentValue = order.designer_id ? String(order.designer_id) : ""; 
+                                return (
+                                  <select
+                                    value={currentValue} // 🔥 Menggunakan currentValue
+                                    onChange={(e) => handleAssignDesigner(order.id, e.target.value)}
+                                    className="h-8 w-full min-w-[140px] rounded-md border border-gray-300 bg-white px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none font-medium cursor-pointer"
+                                  >
+                                    <option value="" disabled>Pilih Desainer</option>
+                                    {designers.map(d => (
+                                      <option key={d.id} value={String(d.id)}>{d.name}</option>
+                                    ))}
+                                  </select>
+                                );
+                              }
+
+                              // 3. DESAIN: Sedang dikerjakan (Teks mati)
+                              if (stage === "desain") {
+                                return (
+                                  <span className="font-medium text-gray-700 bg-gray-100 px-3 py-1 rounded-md text-xs border">
+                                    {order.designer?.name || "-"}
+                                  </span>
+                                );
+                              }
+
+                              // 4. CETAK & SELESAI
+                              if (["siap cetak", "cetak", "selesai"].includes(stage)) {
+                                return (
+                                  <span className="text-gray-400 italic text-xs bg-gray-50 px-2 py-1 rounded border border-dashed">
+                                    File siap cetak
+                                  </span>
+                                );
+                              }
+                              
+                              return <span>-</span>;
+                            })()}
+                          </TableCell>
+
                           {/* Harga & Tanggal */}
                           <TableCell className="font-medium text-gray-900">
                             Rp {Number(order.total_price).toLocaleString('id-ID')}
@@ -366,32 +462,30 @@ useEffect(() => {
                             })}
                           </TableCell>
 
-                          {/* Tahap (Badge Outline Lembut) */}
+                          {/* Tahap */}
                           <TableCell>
                             <Badge
                               variant="outline"
                               className={`rounded-md px-3 py-1 font-normal border ${
-                                stageColorByName[order.stage?.name?.toLowerCase() || ""] ||
-                                "text-gray-500 border-gray-200 bg-gray-50"
+                                stageColorByName[stageName] || "text-gray-500 border-gray-200 bg-gray-50"
                               }`}
                             >
                               {order.stage?.name || "-"}
                             </Badge>
                           </TableCell>
 
-                          {/* Status (Badge Solid Soft) */}
+                          {/* Status */}
                          <TableCell>
                             <Badge
                               className={`rounded-md px-4 py-1 border-none font-medium shadow-none ${
-                                statusColorMap[order.stage?.status?.id || 0] ||
-                                "bg-gray-100 text-gray-500"
+                                statusColorMap[order.stage?.status?.id || 0] || "bg-gray-100 text-gray-500"
                               }`}
                             >
                               {order.stage?.status?.name || "-"}
                             </Badge>
                           </TableCell>
 
-                          {/* Ikon Aksi (Eye & Trash) */}
+                          {/* Ikon Aksi */}
                           <TableCell>
                             <div className="flex items-center justify-center gap-3">
                               <button
@@ -414,7 +508,8 @@ useEffect(() => {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </CardContent>

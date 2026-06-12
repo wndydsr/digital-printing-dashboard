@@ -379,69 +379,71 @@ export default function PaymentModal({
 
     </div>
   )
-
-  // =========================
+// =========================
   // SUMMARY
   // =========================
 
-  const SummarySection = () => (
-    <div className="bg-gray-50 border rounded-2xl p-5 space-y-4">
+  const SummarySection = () => {
+    // Sekarang console.log ada di dalam kurung kurawal pembuka, ini baru valid
+    console.log("Cek isi data products:", products);
 
-      <div>
-        <h2 className="font-bold">
-          Order Summary
-        </h2>
+    return (
+      <div className="bg-gray-50 border rounded-2xl p-5 space-y-4">
 
-        <p className="text-sm text-gray-400">
-          #{Date.now()}
-        </p>
+        <div>
+          <h2 className="font-bold">
+            Order Summary
+          </h2>
+
+          <p className="text-sm text-gray-400">
+            #{Date.now()}
+          </p>
+        </div>
+
+        <div className="space-y-3">
+
+          {products
+            .filter((p) => p.product_id)
+            .map((item) => (
+
+              <div
+                key={item.id}
+                className="flex justify-between text-sm"
+              >
+
+                <span className="text-gray-500">
+                  {item.quantity}x {item.product_name}
+                </span>
+
+                <span className="font-medium">
+                  {/* Perhitungan harga disesuaikan dengan safety check Number() */}
+                  Rp {((Number(item.price) || 0) * (Number(item.quantity) || 0)).toLocaleString("id-ID")}
+                </span>
+
+              </div>
+            ))}
+
+        </div>
+
+        <div className="border-t pt-4 flex justify-between items-center">
+
+          <span className="font-semibold">
+            Total
+          </span>
+
+          <span className="text-2xl font-black text-blue-600">
+            Rp {total.toLocaleString("id-ID")}
+          </span>
+
+        </div>
+
       </div>
-
-      <div className="space-y-3">
-
-        {products
-          .filter((p) => p.product_id)
-          .map((item) => (
-
-            <div
-              key={item.id}
-              className="flex justify-between text-sm"
-            >
-
-              <span className="text-gray-500">
-                {item.quantity}x {item.product_name}
-              </span>
-
-              <span className="font-medium">
-                Rp {(
-                  item.price * item.quantity
-                ).toLocaleString("id-ID")}
-              </span>
-
-            </div>
-          ))}
-
-      </div>
-
-      <div className="border-t pt-4 flex justify-between items-center">
-
-        <span className="font-semibold">
-          Total
-        </span>
-
-        <span className="text-2xl font-black text-blue-600">
-          Rp {total.toLocaleString("id-ID")}
-        </span>
-
-      </div>
-
-    </div>
-  )
-
+    )
+  }
   // =========================
   // RENDER
   // =========================
-
+  
   return (
     <>
 

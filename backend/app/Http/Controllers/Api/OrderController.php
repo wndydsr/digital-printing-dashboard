@@ -17,13 +17,35 @@ class OrderController extends Controller
 {
     public function index()
     {
+        
         $orders = Order::with([
             'customer:id,name',
             'items.product:id,name',
             'items.design:id,order_item_id,design_file,reference_files,design_notes',
             'stage:id,name,status_id',
-            'stage.status:id,name'
+            'stage.status:id,name',
+            'designer'
         ])
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+        return response()->json($orders);
+    }
+
+    public function designerOrders(Request $request)
+    {
+        $user = $request->user();
+
+        // Ambil orders yang didelegasikan ke ID desainer yang sedang login
+        $orders = Order::with([
+            'customer:id,name',
+            'items.product:id,name',
+            'items.design:id,order_item_id,design_file,reference_files,design_notes',
+            'stage:id,name,status_id',
+            'stage.status:id,name',
+            'designer'
+        ])
+        ->where('designer_id', $user->id) // Mengunci data hanya milik desainer ini
         ->orderBy('created_at', 'desc')
         ->get();
 
@@ -50,7 +72,7 @@ class OrderController extends Controller
             // =========================
             // CREATE ORDER
             // =========================
-            $defaultStageId = 1;
+            $defaultStageId = 6;
 
             $order = Order::create([
                 'customer_id' => $customerId,
@@ -287,5 +309,33 @@ class OrderController extends Controller
         }
 
         return response()->download($path);
+    }
+
+    public function assignDesigner(Request $request, $id)
+    {
+        $request->validate([
+            'designer_id' => 'required|exists:users,id'
+        ]);
+
+        $order = Order::find($id);
+
+        if (!$order) {
+            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+        }
+
+        $order->designer_id = $request->designer_id;
+
+        // 🔥 Logika otomatis: Jika sebelumnya di 'Antrean Desain' (misal ID 6), 
+        // ubah menjadi 'Butuh Desain' (misal ID 1) setelah ditugaskan
+        if ($order->current_stage_id == 6) {
+            $order->current_stage_id = 1;
+        }
+
+        $order->save();
+
+        return response()->json([
+            'message' => 'Desainer berhasil ditugaskan',
+            'data' => $order
+        ]);
     }
 }

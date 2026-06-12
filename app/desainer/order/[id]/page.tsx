@@ -86,6 +86,16 @@ export default function DetailPesananPage() {
       try {
         const data = await apiFetch(`/orders/${params.id}`)
         console.log("ORDER DETAIL RESPONSE:", data)
+        console.log(
+  "ITEM PERTAMA:",
+  JSON.stringify(data.items?.[0], null, 2)
+)
+
+console.log(
+  "DETAILS:",
+  JSON.stringify(data.items?.[0]?.details, null, 2)
+)
+        console.log("DETAILS:", data.items?.[0]?.details)
         setOrder(data)
       } catch (err) {
         console.error(err)
@@ -194,6 +204,57 @@ export default function DetailPesananPage() {
           </Card>
 
         </div>
+
+        {/* SPESIFIKASI PRODUK */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Spesifikasi Produk</CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {order?.items?.map((item: any, idx: number) => {
+
+              const details =
+                typeof item.details === "string"
+                  ? JSON.parse(item.details)
+                  : item.details || {}
+
+              return (
+                <div
+                  key={idx}
+                  className="border rounded-lg p-4 space-y-2"
+                >
+                  <p className="font-medium text-sm">
+                    {item.product?.name}
+                  </p>
+
+                  {Object.keys(details).length > 0 ? (
+                    Object.entries(details).map(
+                      ([key, value]: any) => (
+                        <div
+                          key={key}
+                          className="flex justify-between text-sm border-b pb-1"
+                        >
+                          <span className="text-gray-500">
+                            {formatLabel(key)}
+                          </span>
+
+                          <span className="font-medium">
+                            {String(value)}
+                          </span>
+                        </div>
+                      )
+                    )
+                  ) : (
+                    <p className="text-sm text-gray-400">
+                      Tidak ada spesifikasi
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
 
         {/* FILE PENDUKUNG */}
         <Card>

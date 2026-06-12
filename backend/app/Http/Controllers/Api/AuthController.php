@@ -93,5 +93,15 @@ public function logout(Request $request)
         'message' => 'Logout berhasil'
     ]);
 }
+    public function getDesigners(Request $request)
+    {
+        // Mengambil semua user yang kolom rolenya bernilai 'desainer'
+        $designers = User::where('role', 'desainer')->get(['id', 'name', 'email']);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $designers
+        ]);
+    }
 
 }

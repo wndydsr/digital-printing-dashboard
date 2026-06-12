@@ -1,12 +1,13 @@
 "use client"
+
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { useState } from "react"
-import { useEffect } from "react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Props {
   open: boolean
@@ -15,23 +16,34 @@ interface Props {
   onSuccess?: (updated: any) => void
 }
 
-
 export default function ProductDetailModal({ open, onClose, product, onSuccess }: Props) {
-  const parsedFields = (() => {
-    try {
-      if (typeof product?.fields === "string") {
-        return JSON.parse(product.fields)
-      }
-      return product?.fields || []
-    } catch {
-      return []
-    }
-  })()
-
   const productId = `PR${String(product?.id ?? 0).padStart(2, "0")}`
-  const [openEdit, setOpenEdit] = useState(false)
   const [isEdit, setIsEdit] = useState(false)
   const [formData, setFormData] = useState<any>({})
+  
+  // State untuk menampung master kategori dari database
+  const [categories, setCategories] = useState<any[]>([])
+
+  // Ambil data kategori saat modal dibuka
+  useEffect(() => {
+    if (open) {
+      const fetchCategories = async () => {
+        try {
+          const token = localStorage.getItem("token")
+          const res = await fetch("http://127.0.0.1:8000/api/categories", {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (res.ok) {
+            const data = await res.json()
+            setCategories(data)
+          }
+        } catch (err) {
+          console.error("Gagal memuat kategori:", err)
+        }
+      }
+      fetchCategories()
+    }
+  }, [open])
 
   const handleEdit = () => {
     setIsEdit(true)
@@ -41,101 +53,88 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
         estimated_duration: product.estimated_duration,
         description: product.description,
         status: product.status,
-        fields: parsedFields,
+        category_id: String(product.category_id || ""), 
+        is_custom: product.is_custom ? 1 : 0, // 👈 1. Inisialisasi nilai is_custom saat tombol edit diklik
+        attributes: product.attributes || []
     })
+  }
+
+  useEffect(() => {
+    if (product) {
+      setFormData({})
+      setIsEdit(false)
     }
+  }, [product])
 
-    useEffect(() => {
-      if (product) {
-        setFormData({})
-        setIsEdit(false)
+  const handleSubmit = async () => {
+    try {
+      const form = new FormData()
+
+      form.append("name", formData.name)
+      form.append("price", formData.price)
+      form.append("estimated_duration", formData.estimated_duration)
+      form.append("description", formData.description || "")
+      form.append("status", formData.status)
+      form.append("category_id", formData.category_id) 
+      form.append("is_custom", formData.is_custom == 1 ? "1" : "0") // 👈 2. Kirim status is_custom baru ke Laravel
+      form.append("attributes", JSON.stringify(formData.attributes || []))
+      form.append("_method", "PUT")
+
+      if (formData.photo instanceof File) {
+        form.append("photo", formData.photo)
       }
-    }, [product])
 
-    const handleSubmit = async () => {
-      try {
-        const form = new FormData()
+      const token = localStorage.getItem("token")
 
-        form.append("name", formData.name)
-        form.append("price", formData.price)
-        form.append("estimated_duration", formData.estimated_duration)
-        form.append("description", formData.description || "")
-        form.append("status", formData.status)
-        form.append("fields", JSON.stringify(formData.fields))
-        form.append("_method", "PUT")
+      const res = await fetch(`http://127.0.0.1:8000/api/products/${product.id}`, {
+        method: "POST", // Tetap POST karena membawa file + _method PUT
+        headers: {
+          Authorization: `Bearer ${token}`, 
+        },
+        body: form,
+      })
 
-        // 🔥 ini buat foto
-        if (formData.photo instanceof File) {
-          form.append("photo", formData.photo)
-        }
+      const json = await res.json()
+      const updated = json.data
 
-        const token = localStorage.getItem("token")
-
-        const res = await fetch(`http://127.0.0.1:8000/api/products/${product.id}`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`, // 🔥 WAJIB
-          },
-          body: form,
-        })
-
-        const json = await res.json()
-        const updated = json.data
-
-        setIsEdit(false)
-        onSuccess?.(updated)
-      } catch (err) {
-        console.error(err)
-      }
+      setIsEdit(false)
+      onSuccess?.(updated)
+    } catch (err) {
+      console.error(err)
     }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      {/* Suppress default DialogContent padding/rounding to take full control */}
       <DialogContent className="p-0 max-w-5xl w-full h-[80vh] overflow-hidden rounded-2xl border-0 shadow-2xl bg-white">
-
-        <DialogTitle className="sr-only">
-            Detail Produk
-        </DialogTitle>
+        <DialogTitle className="sr-only">Detail Produk</DialogTitle>
         
-        {/* ── MAIN CONTENT CARD ── */}
         <div className="bg-[#f5f6fa] p-6 h-full overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
 
-            {/* Page heading + action buttons */}
+            {/* Heading + Action Buttons */}
             <div className="flex items-start justify-between px-8 pt-7 pb-5">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Detail Produk</h1>
               </div>
               <div className="flex items-center gap-3">
                 {!isEdit ? (
-                <button
-                    onClick={handleEdit}
-                    className="px-5 py-2 rounded-lg bg-indigo-600 text-sm text-white"
-                >
+                  <button onClick={handleEdit} className="px-5 py-2 rounded-lg bg-indigo-600 text-sm text-white">
                     Edit Produk
-                </button>
+                  </button>
                 ) : (
-                <>
-                    <button
-                    onClick={() => setIsEdit(false)}
-                    className="px-5 py-2 rounded-lg border text-sm"
-                    >
-                    Batal
+                  <>
+                    <button onClick={() => setIsEdit(false)} className="px-5 py-2 rounded-lg border text-sm">
+                      Batal
                     </button>
-
-                    <button
-                    onClick={handleSubmit}
-                    className="px-5 py-2 rounded-lg bg-green-600 text-sm text-white"
-                    >
-                    Simpan
+                    <button onClick={handleSubmit} className="px-5 py-2 rounded-lg bg-green-600 text-sm text-white">
+                      Simpan
                     </button>
-                </>
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Divider */}
             <div className="border-t border-gray-100 mx-8" />
 
             {product && (
@@ -143,13 +142,11 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
 
                 {/* ── LEFT COLUMN: Thumbnail + Status + Details ── */}
                 <div className="w-64 shrink-0 flex flex-col gap-4">
-
-                  {/* Thumbnail card */}
                   <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Thumbnail</p>
                     <div className="relative">
                       <img
-                         src={
+                        src={
                           formData?.previewPhoto
                             ? formData.previewPhoto
                             : product.photo
@@ -160,16 +157,14 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                         }
                         className="w-full h-44 object-cover rounded-lg"
                       />
-                       {isEdit && (
+                      {isEdit && (
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => {
                             const file = e.target.files?.[0]
-
                             if (file) {
                               const preview = URL.createObjectURL(file)
-
                               setFormData((prev: any) => ({
                                 ...prev,
                                 photo: file,
@@ -183,47 +178,29 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                     </div>
                   </div>
 
-                  {/* Status card */}
+                  {/* Status */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                        Status
-                    </label>
-
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Status</label>
                     {isEdit ? (
-                        <select
+                      <select
                         value={formData.status}
-                        onChange={(e) =>
-                            setFormData({
-                            ...formData,
-                            status: Number(e.target.value),
-                            })
-                        }
-                        className="border rounded-lg px-3 py-2 text-sm"
-                        >
+                        onChange={(e) => setFormData({ ...formData, status: Number(e.target.value) })}
+                        className="border rounded-lg px-3 py-2 text-sm w-full bg-white"
+                      >
                         <option value={1}>Aktif</option>
                         <option value={0}>Tidak Aktif</option>
-                        </select>
+                      </select>
                     ) : (
-                        <div
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-                            product.status
-                            ? "bg-green-100 text-green-600"
-                            : "bg-red-100 text-red-500"
-                        }`}
-                        >
-                        <span
-                            className={`w-2 h-2 rounded-full ${
-                            product.status ? "bg-green-500" : "bg-red-500"
-                            }`}
-                        />
+                      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${product.status ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"}`}>
+                        <span className={`w-2 h-2 rounded-full ${product.status ? "bg-green-500" : "bg-red-500"}`} />
                         {product.status ? "Aktif" : "Tidak Aktif"}
-                        </div>
+                      </div>
                     )}
-                    </div>
+                  </div>
 
-                  {/* Product Details mini card */}
+                  {/* Product Details Mini Card */}
                   <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Detail Produk</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Detail Identitas</p>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between py-1.5">
                         <span className="text-xs text-gray-400">ID Produk</span>
@@ -233,186 +210,207 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                       <div className="flex items-center justify-between py-1.5">
                         <span className="text-xs text-gray-400">Estimasi</span>
                         {isEdit ? (
-                        <input
+                          <input
                             type="number"
                             className="border rounded px-2 py-1 text-xs w-20"
                             value={formData.estimated_duration}
-                            onChange={(e) =>
-                            setFormData({
-                                ...formData,
-                                estimated_duration: e.target.value,
-                            })
-                            }
-                        />
+                            onChange={(e) => setFormData({ ...formData, estimated_duration: e.target.value })}
+                          />
                         ) : (
-                        <span className="text-xs font-semibold text-gray-700">
-                            {product.estimated_duration} Hari
-                        </span>
+                          <span className="text-xs font-semibold text-gray-700">{product.estimated_duration} Hari</span>
                         )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* ── RIGHT COLUMN: General + Pricing + Custom Fields ── */}
+                {/* ── RIGHT COLUMN: General + Pricing + Attributes ── */}
                 <div className="flex-1 flex flex-col gap-5">
 
-                  {/* General section */}
-                  <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                    <div className="border-b border-gray-100 mb-4" />
-
-                    {/* Product Name */}
-                    <div className="mb-4">
+                  {/* General Section */}
+                  <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm space-y-4">
+                    
+                    {/* Nama Produk */}
+                    <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">Nama Produk</label>
                       {isEdit ? (
                         <input
-                            className="border rounded p-2 w-full"
-                            value={formData.name}
-                            onChange={(e) =>
-                            setFormData({ ...formData, name: e.target.value })
-                            }
+                          className="border rounded p-2 w-full text-sm"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         />
-                        ) : (
-                        <p className="text-sm font-semibold text-gray-800">
-                            {product.name}
-                        </p>
-                        )}
+                      ) : (
+                        <p className="text-sm font-semibold text-gray-800">{product.name}</p>
+                      )}
                     </div>
 
-                    {/* Description (custom fields used as description here) */}
+                    {/* KATEGORI PRODUK */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Kategori Produk</label>
+                      {isEdit ? (
+                        <Select
+                          value={formData.category_id}
+                          onValueChange={(val) => setFormData({ ...formData, category_id: val })}
+                        >
+                          <SelectTrigger className="w-full bg-white">
+                            <SelectValue placeholder="Pilih Kategori" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((cat) => (
+                              <SelectItem key={cat.id} value={String(cat.id)}>
+                                {cat.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg w-fit">
+                          {product.category?.name || "Tanpa Kategori"}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 👈 3. INPUT BARU: TIPE PERHITUNGAN HARGA (is_custom) */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Tipe Perhitungan Harga</label>
+                      {isEdit ? (
+                        <select
+                          value={formData.is_custom}
+                          onChange={(e) => setFormData({ ...formData, is_custom: Number(e.target.value) })}
+                          className="border rounded-lg px-3 py-2 text-sm w-full bg-white"
+                        >
+                          <option value={0}>Produk Standar (Dihitung Per Pcs / Paket)</option>
+                          <option value={1}>Produk Kustom Meteran (Dihitung Luas P x L)</option>
+                        </select>
+                      ) : (
+                        <p className={`text-sm font-semibold px-3 py-1.5 rounded-lg w-fit ${product.is_custom ? "bg-purple-50 text-purple-600" : "bg-orange-50 text-orange-600"}`}>
+                          {product.is_custom ? "Produk Kustom Meteran (Luas P x L)" : "Produk Standar (Per Pcs / Paket)"}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Deskripsi */}
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">Deskripsi</label>
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">                    
-                        <div className="border border-gray-200 rounded-lg overflow-hidden">
-                          {isEdit ? (
-                            <textarea
-                              className="w-full p-3 text-sm border-0 focus:outline-none"
-                              placeholder="Masukkan deskripsi..."
-                              value={formData.description || ""}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  description: e.target.value,
-                                })
-                              }
-                            />
-                          ) : (
-                            <div className="px-3 py-3 min-h-[72px] text-sm text-gray-600 bg-white">
-                              {product.description || (
-                                <span className="text-gray-300 italic">Tidak ada deskripsi</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        {isEdit ? (
+                          <textarea
+                            className="w-full p-3 text-sm border-0 focus:outline-none"
+                            placeholder="Masukkan deskripsi..."
+                            value={formData.description || ""}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          />
+                        ) : (
+                          <div className="px-3 py-3 min-h-[72px] text-sm text-gray-600 bg-white">
+                            {product.description || <span className="text-gray-300 italic">Tidak ada deskripsi</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Pricing section */}
+                  {/* Pricing Section */}
                   <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                    <div className="mb-4">
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Harga Dasar</label>
-                      {isEdit ? (
-                        <input
-                            type="number"
-                            className="border rounded p-2 w-full"
-                            value={formData.price}
-                            onChange={(e) =>
-                            setFormData({ ...formData, price: e.target.value })
-                            }
-                        />
-                        ) : (
-                        <p className="text-sm font-semibold text-gray-900">
-                            Rp {Number(product.price).toLocaleString("id-ID")}
-                        </p>
-                        )}
-                    </div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Harga Dasar</label>
+                    {isEdit ? (
+                      <input
+                        type="number"
+                        className="border rounded p-2 w-full text-sm"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      />
+                    ) : (
+                      <p className="text-sm font-bold text-gray-950">
+                        Rp {Number(product.price).toLocaleString("id-ID")}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Custom Fields section */}
+                  {/* Product Attributes */}
                   <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                    <p className="text-sm font-bold text-gray-800 mb-4">Custom Fields</p>
-                    <div className="border-b border-gray-100 mb-4" />
-
-                    {parsedFields.length ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        {(isEdit ? formData.fields : parsedFields).map((f: any, i: number) => (
-                          <div
-                            key={i}
-                            className="border border-gray-100 rounded-lg p-3 bg-gray-50 space-y-2"
-                          >
+                    <p className="text-sm font-bold text-gray-800 mb-4">Atribut Produk</p>
+                    {(isEdit ? formData.attributes : product.attributes)?.length ? (
+                      <div className="space-y-4">
+                        {(isEdit ? formData.attributes : product.attributes).map((attribute: any, attrIndex: number) => (
+                          <div key={attrIndex} className="border rounded-lg p-3">
                             {isEdit ? (
-                            <>
-                            {/* BARIS ATAS */}
-                                <div className="grid grid-cols-2 gap-2"></div>
-
-                            {/* LABEL */}
-                            <input
-                                className="border rounded p-2 text-sm w-full"
-                                value={f.label}
+                              <input
+                                className="border rounded p-2 w-full mb-3"
+                                value={attribute.name}
                                 onChange={(e) => {
-                                    const newFields = [...formData.fields]
-                                    newFields[i].label = e.target.value
-                                    setFormData({ ...formData, fields: newFields })
+                                  const attrs = [...formData.attributes]
+                                  attrs[attrIndex].name = e.target.value
+                                  setFormData({ ...formData, attributes: attrs })
                                 }}
-                            />
-
-                            {/* TYPE */}
-                            <select
-                            className="border rounded p-2 text-sm w-full"
-                            value={f.type}
-                            onChange={(e) => {
-                                const newFields = [...formData.fields]
-                                newFields[i].type = e.target.value
-                                setFormData({ ...formData, fields: newFields })
-                            }}
-                            >
-                            <option value="text">Text</option>
-                            <option value="number">Number</option>
-                            <option value="select">Dropdown</option>
-                            </select>
-
-                                 {/* 🔥 INI YANG KAMU TANYA */}
-                            {f.type === "select" && (
-                            <input
-                                className="border rounded p-2 w-full text-sm"
-                                placeholder="Options (pisahkan koma)"
-                                value={f.options?.join(",") || ""}
-                                onChange={(e) => {
-                                const newFields = [...formData.fields]
-                                newFields[i].options = e.target.value
-                                    .split(",")
-                                    .map((opt) => opt.trim())
-
-                                setFormData({ ...formData, fields: newFields })
-                                }}
-                            />
+                              />
+                            ) : (
+                              <p className="font-semibold">{attribute.name}</p>
                             )}
-                        </>
-                        ) : (
-                        <>
-                            {/* MODE VIEW */}
-                            <div className="flex justify-between">
-                            <span className="text-sm font-medium text-gray-700">
-                                {f.label}
-                            </span>
-                            <Badge className="text-xs bg-indigo-50 text-indigo-600">
-                                {f.type}
-                            </Badge>
+
+                            <div className="mt-2 space-y-2">
+                              {attribute.values?.map((value: any, valueIndex: number) => (
+                                <div key={valueIndex} className="flex gap-2 items-center">
+                                  {isEdit ? (
+                                    <>
+                                      <input
+                                        className="border rounded p-2 flex-1"
+                                        value={value.name}
+                                        onChange={(e) => {
+                                          const attrs = [...formData.attributes]
+                                          attrs[attrIndex].values[valueIndex].name = e.target.value
+                                          setFormData({ ...formData, attributes: attrs })
+                                        }}
+                                      />
+                                      <input
+                                        type="number"
+                                        className="border rounded p-2 w-36"
+                                        value={value.additional_price}
+                                        onChange={(e) => {
+                                          const attrs = [...formData.attributes]
+                                          attrs[attrIndex].values[valueIndex].additional_price = Number(e.target.value)
+                                          setFormData({ ...formData, attributes: attrs })
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="px-3 py-2 bg-red-500 text-white rounded"
+                                        onClick={() => {
+                                          const attrs = [...formData.attributes]
+                                          attrs[attrIndex].values.splice(valueIndex, 1)
+                                          setFormData({ ...formData, attributes: attrs })
+                                        }}
+                                      >
+                                        X
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <div className="flex justify-between border rounded p-2 w-full bg-gray-50 text-xs">
+                                      <span>{value.name}</span>
+                                      <span>Rp {Number(value.additional_price).toLocaleString("id-ID")}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
 
-                            {f.type === "select" && (
-                            <p className="text-xs text-gray-400">
-                                {f.options?.join(", ")}
-                            </p>
+                            {isEdit && (
+                              <button
+                                type="button"
+                                className="mt-3 px-3 py-1.5 border text-xs rounded bg-white"
+                                onClick={() => {
+                                  const attrs = [...formData.attributes]
+                                  attrs[attrIndex].values.push({ name: "", additional_price: 0 })
+                                  setFormData({ ...formData, attributes: attrs })
+                                }}
+                              >
+                                + Tambah Value
+                              </button>
                             )}
-                        </>
-                        )}
-                    </div>
-                    ))}
+                          </div>
+                        ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-400 italic">Tidak ada custom field</p>
+                      <p className="text-gray-400 text-xs">Tidak ada atribut</p>
                     )}
                   </div>
 

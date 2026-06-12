@@ -1,9 +1,10 @@
 "use client"
 
 import type React from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Workflow, Search, Bell, History, Layers } from "lucide-react"
+import { Home, Search, Bell, History, Layers, ChevronDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -15,6 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { apiFetch } from "@/lib/api"
 
 const navigation = [
   { name: "Dashboard", href: "/desainer", icon: Home },
@@ -22,12 +24,60 @@ const navigation = [
   { name: "Riwayat", href: "/desainer/riwayat", icon: History },
 ]
 
+interface UserProfile {
+  name: string;
+  email: string;
+}
+
 export function DesainerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  
+  // State untuk menyimpan data profile desainer yang sedang login
+  const [userProfile, setUserProfile] = useState<UserProfile>({
+    name: "Loading...",
+    email: "",
+  })
+
+  useEffect(() => {
+    // Mengambil data user yang sedang login dari endpoint /me (Sanctum)
+    apiFetch("/me")
+      .then((data: any) => {
+        if (data && data.name) {
+          setUserProfile({
+            name: data.name,
+            email: data.email,
+          })
+        }
+      })
+      .catch((err) => {
+        console.error("Gagal memuat profil desainer:", err)
+        setUserProfile({
+          name: "Desainer Panel",
+          email: "",
+        })
+      })
+  }, [])
+
+  // Mengambil 2 huruf pertama dari nama untuk dijadikan inisial avatar fallback
+  const getInitials = (name: string) => {
+    return name ? name.substring(0, 2).toUpperCase() : "DS"
+  }
+
+  // Fungsi logout (bisa disesuaikan dengan handler logout proyekmu)
+  const handleLogout = async () => {
+    try {
+      await apiFetch("/logout", { method: "POST" })
+      localStorage.clear()
+      window.location.href = "/login"
+    } catch (err) {
+      console.error(err)
+      localStorage.clear()
+      window.location.href = "/login"
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white">
-
       {/* Header */}
       <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -57,23 +107,37 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
           </Button>
 
+          {/* Dropdown Menu Profile */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-gray-50 h-10 rounded-md">
                 <Avatar className="w-8 h-8">
                   <AvatarImage src="/placeholder.svg" />
-                  <AvatarFallback>DS</AvatarFallback>
+                  <AvatarFallback>{getInitials(userProfile.name)}</AvatarFallback>
                 </Avatar>
+                {/* Menampilkan nama desainer real di samping avatar */}
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline-block">
+                  {userProfile.name}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:inline-block" />
               </Button>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Desainer</DropdownMenuLabel>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  {/* Menampilkan nama dan email asli di dalam dropdown card */}
+                  <p className="text-sm font-medium leading-none text-gray-900">{userProfile.name}</p>
+                  <p className="text-xs leading-none text-gray-500">{userProfile.email}</p>
+                </div>
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Logout</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
+                Logout
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

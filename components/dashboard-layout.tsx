@@ -25,7 +25,7 @@ const navigation = [
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   // { name: "Workflows", href: "/admin/workflows", icon: Workflow },
   // { name: "Templates", href: "/templates", icon: Database },
-  // { name: "Team", href: "/team", icon: Users },
+  { name: "Karyawan", href: "/admin/karyawan", icon: Users },
   // { name: "Settings", href: "/settings", icon: Settings },
 ]
 
@@ -45,7 +45,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
               <Workflow className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-gray-900">Emmanuel</span>
+            <span className="font-semibold text-gray-900">Tugas Akhir</span>
           </div>
           <div className="text-sm text-gray-500">
             <span>Dashboard</span> <span className="mx-1">/</span>

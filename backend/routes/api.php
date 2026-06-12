@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ProductAttributeController;
 use App\Http\Controllers\Api\ProductAttributeValueController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\ChatBotController;
+use App\Http\Controllers\Api\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,9 +28,12 @@ Route::post('/customer/login', [AuthController::class, 'loginCustomer']);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::post('/categories', [CategoryController::class, 'store']);
 
+Route::post('/chatbot', [ChatBotController::class, 'handleChat']);
+
 
 
 Route::post('/login', [AuthController::class, 'login']);
+
 /*
 |--------------------------------------------------------------------------
 | HARUS LOGIN
@@ -50,11 +55,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/orders/{id}', [OrderController::class, 'update']);
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
 
+   Route::put('orders/{id}/assign-designer', [OrderController::class, 'assignDesigner']);
+    Route::get('/users', [AuthController::class, 'getDesigners']);
+    Route::get('/designer/orders', [OrderController::class, 'designerOrders']);
     Route::get('/customers', [CustomerController::class, 'index']);
     Route::post('/customers', [CustomerController::class, 'store']);
     Route::put('/customers/{id}', [CustomerController::class, 'update']);
     Route::delete('/customers/{id}', [CustomerController::class, 'destroy']);
     Route::put('/customer/profile', [CustomerController::class, 'updateProfile']);
+
+    Route::get('/karyawan', [UserController::class, 'index']);
+    Route::post('/karyawan', [UserController::class, 'store']);
+    Route::put('/karyawan/{id}', [UserController::class, 'update']);
+    Route::delete('/karyawan/{id}', [UserController::class, 'destroy']);
 
     Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);

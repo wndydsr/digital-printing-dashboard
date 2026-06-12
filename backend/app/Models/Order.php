@@ -18,6 +18,7 @@ class Order extends Model
         'created_by',
         'notes',
         'current_stage_id',
+        'designer_id'
     ];
     public function customer()
     {
@@ -56,4 +57,10 @@ class Order extends Model
             ]);
         });
     }
+
+    public function designer()
+{
+    // Menghubungkan designer_id ke model User
+    return $this->belongsTo(User::class, 'designer_id')->select('id', 'name', 'email');
+}
 }

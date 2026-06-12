@@ -182,18 +182,19 @@ useEffect(() => {
   }
   
   const load = async () => {
-    try {
-     const data = await apiFetch("/orders")
+      try {
+        // 🔥 Ganti endpoint ke route baru khusus desainer
+        const data = await apiFetch("/designer/orders")
 
-    const orders = Array.isArray(data) ? data : data.data || []
+        const orders = Array.isArray(data) ? data : data.data || []
 
-    // 🔥 filter hanya yang relevan buat desainer
-    const filtered = orders.filter((o: Order) => {
-      const stage = o.stage?.name?.toLowerCase()
-      return stage === "butuh desain" || stage === "desain" || stage === "revisi"
-    })
+        // Filter status tahap pengerjaan desainer
+        const filtered = orders.filter((o: Order) => {
+          const stage = o.stage?.name?.toLowerCase()
+          return stage === "butuh desain" || stage === "desain" || stage === "revisi"
+        })
 
-    setOrders(filtered)
+        setOrders(filtered)
 
       const months = [
         "Jan","Feb","Mar","Apr","May","Jun",

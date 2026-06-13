@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ProductAttributeValueController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ChatBotController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\CartController;
 
 /*
 |--------------------------------------------------------------------------
@@ -56,6 +57,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
 
    Route::put('orders/{id}/assign-designer', [OrderController::class, 'assignDesigner']);
+   Route::get('/orders/customer/{customer_id}', [App\Http\Controllers\Api\OrderController::class, 'getCustomerOrders']);
+   
     Route::get('/users', [AuthController::class, 'getDesigners']);
     Route::get('/designer/orders', [OrderController::class, 'designerOrders']);
     Route::get('/customers', [CustomerController::class, 'index']);
@@ -94,5 +97,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/orders/{id}/messages', [MessageController::class, 'index'] );
     Route::post('/orders/{id}/messages', [MessageController::class, 'store'] );
+
+    Route::get('/cart/{customer_id}', [CartController::class, 'index']); 
+    Route::post('/cart', [CartController::class, 'store']); 
+    Route::put('/cart/item/{id}', [CartController::class, 'update']);
+    Route::delete('/cart/item/{id}', [CartController::class, 'destroy']); 
+    Route::delete('/cart/clear/{customer_id}', [CartController::class, 'clear']); 
 
 });

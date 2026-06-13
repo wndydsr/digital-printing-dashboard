@@ -31,6 +31,20 @@ class OrderController extends Controller
 
         return response()->json($orders);
     }
+    public function getCustomerOrders($customer_id)
+    {
+        $orders = Order::with([
+            'customer:id,name',
+            'items.product:id,name',
+            'stage:id,name,status_id',
+            'stage.status:id,name'
+        ])
+        ->where('customer_id', $customer_id) // 🔥 Filter berdasarkan customer_id
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+        return response()->json(['data' => $orders]);
+    }
 
     public function designerOrders(Request $request)
     {

@@ -6,17 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\CartItem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CartController extends Controller
 {
     // 1. Mengambil isi keranjang milik customer tertentu
     public function index($customer_id)
     {
-        // Cari keranjang berdasarkan customer_id, jika belum ada otomatis dibuatkan (firstOrCreate)
         $cart = Cart::firstOrCreate(['customer_id' => $customer_id]);
 
-        // Ambil item-item di dalamnya beserta data detail produknya
-        // Pastikan relasi 'product' ada di model CartItem Anda
+        // Muat relasi item dan data produknya
         $cart->load('items.product');
 
         return response()->json([
@@ -25,29 +24,56 @@ class CartController extends Controller
         ]);
     }
 
-    // 2. Menambahkan barang ke dalam keranjang
+    // 2. Menambahkan barang ke dalam keranjang (+ Proses Upload File Desain)
     public function store(Request $request)
     {
+        // Jalankan validasi data termasuk berkas biner
         $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1',
-            // Validasi opsional
             'panjang' => 'nullable|numeric',
             'lebar' => 'nullable|numeric',
-            'selected_options' => 'nullable|array'
+            'need_design' => 'nullable', // flag 1 atau 0
+            'tahapan_order' => 'nullable|string', // 'siap cetak' atau 'antrean desain'
+            'catatan' => 'nullable|string',
+            
+            // Aturan validasi file (Maksimal 50MB per file)
+            'design_file' => 'nullable|file|mimes:pdf,ai,cdr,psd,jpg,jpeg,png,zip,rar|max:51200',
+            'reference_files' => 'nullable|array',
+            'reference_files.*' => 'file|mimes:pdf,ai,cdr,psd,jpg,jpeg,png,zip,rar|max:51200'
         ]);
 
-        // Cari atau buat keranjang untuk customer ini
+        // Cari atau buat keranjang induk untuk customer ini
         $cart = Cart::firstOrCreate(['customer_id' => $request->customer_id]);
 
-        /* * Opsional: Anda bisa membuat logika untuk mengecek apakah produk dengan ukuran 
-         * dan atribut yang SAMA PERSIS sudah ada di keranjang. Jika ada, tinggal update quantity.
-         * Namun untuk percetakan digital (karena banyak custom), lebih aman membuat baris baru 
-         * untuk setiap kali klik "Add to Cart". 
-         */
+        $designFile = null;
+        $referenceFiles = [];
 
-        // Tambahkan item baru ke keranjang
+        // Evaluasi boolean dari parameter 'need_design'
+        $needDesignField = filter_var($request->need_design ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        // --- PROSES UPLOAD FILE ---
+        // Opsi A: Jika user sudah punya desain (Metode: Siap Cetak)
+        if (!$needDesignField && $request->hasFile('design_file')) {
+            $designFile = $request->file('design_file')->store('designs', 'public');
+        }
+
+        // Opsi B: Jika user butuh jasa desainer (Metode: Butuh Desain)
+        if ($needDesignField && $request->hasFile('reference_files')) {
+            foreach ($request->file('reference_files') as $file) {
+                $referenceFiles[] = $file->store('references', 'public');
+            }
+        }
+
+        // Ambil payload selected_options
+        // Jika dari FormData dikirim string JSON, decode dulu atau langsung simpan sesuai cast model
+        $selectedOptions = $request->selected_options;
+        if (is_string($selectedOptions)) {
+            $selectedOptions = json_decode($selectedOptions, true);
+        }
+
+        // Tambahkan baris custom item baru ke keranjang anak (cart_items)
         $cartItem = CartItem::create([
             'cart_id' => $cart->id,
             'product_id' => $request->product_id,
@@ -55,7 +81,11 @@ class CartController extends Controller
             'panjang' => $request->panjang ?? 0,
             'lebar' => $request->lebar ?? 0,
             'catatan' => $request->catatan ?? '',
-            'selected_options' => $request->selected_options ?? null,
+            'need_design' => $needDesignField,
+            'tahapan_order' => $needDesignField ? 'antrean desain' : 'siap cetak',
+            'design_file' => $designFile,
+            'reference_files' => !empty($referenceFiles) ? json_encode($referenceFiles) : null,
+            'selected_options' => $selectedOptions,
         ]);
 
         return response()->json([
@@ -65,7 +95,7 @@ class CartController extends Controller
         ], 201);
     }
 
-    // 3. Mengupdate Quantity item di keranjang (Opsional, jika ada tombol + / - di halaman Cart)
+    // 3. Mengupdate Quantity item di keranjang
     public function update(Request $request, $id)
     {
         $item = CartItem::find($id);
@@ -82,26 +112,37 @@ class CartController extends Controller
     }
 
     // 4. Menghapus satu barang dari keranjang
-    public function destroy($id)
+    public function destroy(Request $request, $product_id)
     {
-        $item = CartItem::find($id);
+        $user = $request->user(); 
 
-        if (!$item) {
-            return response()->json(['message' => 'Item tidak ditemukan'], 404);
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized: User tidak ditemukan'], 401);
         }
 
-        $item->delete();
+        $cart = Cart::where('customer_id', $user->id)->first();
+
+        if (!$cart) {
+            return response()->json(['message' => 'Keranjang tidak ditemukan untuk user ini'], 404);
+        }
+
+        $deleted = CartItem::where('cart_id', $cart->id)
+                            ->where('product_id', $product_id)
+                            ->delete();
+
+        if (!$deleted) {
+            return response()->json(['message' => 'Item tidak ditemukan di keranjang'], 404);
+        }
 
         return response()->json(['message' => 'Produk dihapus dari keranjang']);
     }
 
-    // 5. Mengosongkan keranjang (Dipanggil setelah proses Checkout berhasil)
+    // 5. Mengosongkan keranjang
     public function clear($customer_id)
     {
         $cart = Cart::where('customer_id', $customer_id)->first();
 
         if ($cart) {
-            // Menghapus semua isi item di dalamnya
             $cart->items()->delete();
         }
 

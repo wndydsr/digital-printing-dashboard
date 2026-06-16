@@ -19,13 +19,11 @@ export default function OrderDetailModal({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl rounded-xl max-h-[90vh] overflow-y-auto">
-
         <DialogHeader>
           <DialogTitle>Detail Pesanan</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-
           {/* CUSTOMER */}
           <div>
             <label className="text-sm text-gray-500">Customer</label>
@@ -45,7 +43,6 @@ export default function OrderDetailModal({
           {/* ITEMS */}
           {order.items?.map((item: any, i: number) => (
             <div key={i} className="border rounded-lg p-4 space-y-3">
-
               <h3 className="font-semibold text-sm text-gray-700">
                 Item {i + 1}
               </h3>
@@ -74,35 +71,38 @@ export default function OrderDetailModal({
               {/* DESIGN FILE */}
               {item.design?.design_file && (
                 <div className="space-y-2">
-                  <label className="text-sm text-gray-500">
-                    File Desain
-                  </label>
-
+                  <label className="text-sm text-gray-500">File Desain</label>
                   <img
                     src={`http://127.0.0.1:8000/storage/${item.design.design_file}`}
                     className="rounded-md max-h-[220px] border"
+                    alt="design"
                   />
                 </div>
               )}
 
               {/* REFERENCE FILES */}
-              {item.design?.reference_files?.length > 0 && (
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-500">
-                    File Pendukung
-                  </label>
+              {(() => {
+                const rawFiles = item.design?.reference_files;
+                const files = typeof rawFiles === 'string' ? JSON.parse(rawFiles) : (Array.isArray(rawFiles) ? rawFiles : []);
+                
+                if (files.length === 0) return null;
 
-                  <div className="grid grid-cols-2 gap-3">
-                    {item.design.reference_files.map((file: string, idx: number) => (
-                      <img
-                        key={idx}
-                        src={`http://127.0.0.1:8000/storage/${file}`}
-                        className="rounded-md max-h-[180px] border"
-                      />
-                    ))}
+                return (
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-500">File Pendukung</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {files.map((file: string, idx: number) => (
+                        <img
+                          key={idx}
+                          src={`http://127.0.0.1:8000/storage/${file}`}
+                          className="rounded-md max-h-[180px] border"
+                          alt="reference"
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           ))}
 
@@ -112,14 +112,13 @@ export default function OrderDetailModal({
               Tutup
             </Button>
           </div>
-
         </div>
       </DialogContent>
     </Dialog>
   )
 }
 
-/* ================= HELPERS ================= */
+/* ================= HELPERS (TIDAK DIHAPUS) ================= */
 
 function parseJSON(data: any) {
   try {
@@ -135,7 +134,7 @@ function formatLabel(key: string) {
     .replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-/* ================= FIELD COMPONENT ================= */
+/* ================= FIELD COMPONENT (TIDAK DIHAPUS) ================= */
 
 function Field({ label, value }: { label: string; value: any }) {
   let display = "-"

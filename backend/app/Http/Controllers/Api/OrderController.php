@@ -66,28 +66,23 @@ class OrderController extends Controller
         return response()->json($orders);
     }
 
-    public function store(Request $request)
+   public function store(Request $request)
     {
         DB::beginTransaction();
 
         try {
             // =========================
-            // CUSTOMER
+            // 1. CUSTOMER
             // =========================
             if (!$request->customer_id && $request->customer_name) {
-                $customer = Customer::create([
-                    'name' => $request->customer_name
-                ]);
+                $customer = Customer::create(['name' => $request->customer_name]);
                 $customerId = $customer->id;
             } else {
                 $customerId = $request->customer_id;
             }
 
-            // =========================
-            // CREATE ORDER
-            // =========================
+            // 2. CREATE ORDER
             $defaultStageId = 6;
-
             $order = Order::create([
                 'customer_id' => $customerId,
                 'order_date' => now(),
@@ -97,61 +92,36 @@ class OrderController extends Controller
                 'current_stage_id' => $defaultStageId,
             ]);
 
-            // =========================
-            // CREATE ITEMS
-            // =========================
             $totalPrice = 0;
 
+            // 3. CREATE ITEMS
             foreach ($request->items as $index => $item) {
                 $product = Product::findOrFail($item['product_id']);
                 $qty = (int) $item['quantity'];
-
-                // Inputan dalam centimeter (cm)
-                $panjang = (float) ($item['panjang'] ?? 0); 
-                $lebar = (float) ($item['lebar'] ?? 0);
                 
-                // Konversi luas
-                $luasCm2 = $panjang * $lebar;
-                $luasM2 = $luasCm2 / 10000;
-
-                // 1. Hitung Harga Per Meter
+                $panjang = (float) ($item['panjang'] ?? 0);
+                $lebar = (float) ($item['lebar'] ?? 0);
+                $luasM2 = ($panjang * $lebar) / 10000;
                 $hargaPerMeter = (float) $product->price;
 
-                // Optimasi Atribut (Mengurangi beban query database)
-                $attributeIds = $item['attributes'] ?? [];
-                if (!empty($attributeIds)) {
-                    $attributeValues = \App\Models\ProductAttributeValue::whereIn('id', $attributeIds)->get();
+                if (!empty($item['attributes'])) {
+                    $attributeValues = \App\Models\ProductAttributeValue::whereIn('id', $item['attributes'])->get();
                     foreach ($attributeValues as $value) {
                         $hargaPerMeter += (float) $value->additional_price;
                     }
                 }
 
-                // 2. Hitung Harga Per Item 
-                // 👇 SEKARANG DIKUNCI OLEH is_custom. Hanya dikali luas jika produk bertipe kustom/meteran
                 $hargaPerItem = ($product->is_custom && $luasM2 > 0) ? ($luasM2 * $hargaPerMeter) : $hargaPerMeter;
-
-                \Illuminate\Support\Facades\Log::info('Debug Hitung Harga', [
-                    'nama_produk' => $product->name,
-                    'is_custom' => $product->is_custom,
-                    'panjang' => $panjang,
-                    'lebar' => $lebar,
-                    'luas_m2' => $luasM2,
-                    'harga_per_item' => $hargaPerItem,
-                    'qty' => $qty
-                ]);
-
-                // 3. Total Subtotal
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
-                // Simpan data item, termasuk panjang dan lebar ke masing-masing kolomnya
                 $orderItem = OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'quantity' => $qty,
-                    'panjang' => $panjang, 
-                    'lebar' => $lebar,     
-                    'price' => $hargaPerItem, 
+                    'panjang' => $panjang,
+                    'lebar' => $lebar,
+                    'price' => $hargaPerItem,
                     'subtotal' => $subtotal,
                     'catatan' => $item['catatan'] ?? null,
                     'need_design' => $item['need_design'] ?? false,
@@ -159,74 +129,69 @@ class OrderController extends Controller
                     'details' => $item['fields'] ?? '{}',
                 ]);
 
-                // =========================
-                // DESIGN
-                // =========================
+                // 4. DESIGN (Gabungan Upload & Fallback ke Cart)
                 $designFile = null;
-
-                if ($request->hasFile("items.$index.design_file")) {
-                    $designFiles = $request->file("items.$index.design_file");
-                    if (is_array($designFiles) && count($designFiles) > 0) {
-                        $designFile = $designFiles[0]->store('designs', 'public');
-                    }
-                }
-
                 $referenceFiles = [];
 
-                if ($request->hasFile("items.$index.reference_files")){
-                    $files = $request->file("items.$index.reference_files");
-                    foreach ($files as $file) {
+                if ($request->hasFile("items.$index.design_file")) {
+                    $designFile = $request->file("items.$index.design_file")[0]->store('designs', 'public');
+                }
+
+                if ($request->hasFile("items.$index.reference_files")) {
+                    foreach ($request->file("items.$index.reference_files") as $file) {
                         $referenceFiles[] = $file->store('references', 'public');
                     }
                 }
 
-                // simpan kalau ada salah satu file
+                if (!$designFile && empty($referenceFiles)) {
+                    $cartItem = \App\Models\CartItem::whereHas('cart', function($q) use ($customerId) {
+                        $q->where('customer_id', $customerId);
+                    })->where('product_id', $item['product_id'])->first();
+
+                    if ($cartItem) {
+                        $designFile = $cartItem->design_file;
+                        $referenceFiles = $cartItem->reference_files ? json_decode($cartItem->reference_files, true) : [];
+                    }
+                }
+
                 if ($designFile || count($referenceFiles) > 0) {
                     OrderItemDesign::create([
                         'order_item_id' => $orderItem->id,
                         'design_file' => $designFile,
-                        'reference_files' => $referenceFiles,
+                        'reference_files' => json_encode($referenceFiles),
                         'design_notes' => $item['design_notes'] ?? null,
                         'design_status' => 'pending',
                     ]);
 
                     if ($designFile) {
-                        $readyStage = Stage::whereRaw(
-                            'LOWER(name) = ?',
-                            ['siap cetak']
-                        )->first();
-
+                        $readyStage = Stage::whereRaw('LOWER(name) = ?', ['siap cetak'])->first();
                         if ($readyStage) {
-                            $order->update([
-                                'current_stage_id' => $readyStage->id
-                            ]);
+                            $order->update(['current_stage_id' => $readyStage->id]);
                         }
                     }
                 }
-            } 
+            } // End Foreach
 
-            // Update Total Price untuk keseluruhan pesanan
-            $order->update([
-                'total_price' => $totalPrice
-            ]);
+            $order->update(['total_price' => $totalPrice]);
+            
+            // Bersihkan Keranjang
+            // \App\Models\CartItem::whereHas('cart', function($q) use ($customerId) {
+            //     $q->where('customer_id', $customerId);
+            // })->delete();
 
             DB::commit();
 
             return response()->json([
                 'message' => 'Order berhasil dibuat',
-                'data' => $order->load('items')
+                'data' => $order->load('items.design')
             ]);
 
         } catch (\Throwable $e) {
             DB::rollBack();
-
-            return response()->json([
-                'error' => $e->getMessage(),
-                'line' => $e->getLine()
-            ], 500);
+            return response()->json(['error' => $e->getMessage(), 'line' => $e->getLine()], 500);
         }
     }
-
+    
     public function update(Request $request, $id)
     {
         try {

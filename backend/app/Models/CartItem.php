@@ -10,21 +10,20 @@ class CartItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'cart_id', 
-        'product_id', 
-        'quantity', 
-        'panjang', 
-        'lebar', 
-        'catatan', 
-        'selected_options'
+        'cart_id', 'product_id', 'quantity', 'panjang', 'lebar', 'catatan', 
+        'need_design', 'tahapan_order', 'design_file', 'reference_files', 'selected_options'
     ];
 
-    // Cast kolom JSON menjadi array otomatis di Laravel
     protected $casts = [
         'selected_options' => 'array',
     ];
 
-    // Relasi balik ke tabel produk untuk mengambil nama & harga dasar produk
+    // 🔥 TAMBAHKAN INI:
+    public function cart()
+    {
+        return $this->belongsTo(Cart::class, 'cart_id');
+    }
+
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id');

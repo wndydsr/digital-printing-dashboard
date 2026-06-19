@@ -35,9 +35,10 @@ class OrderController extends Controller
     {
         $orders = Order::with([
             'customer:id,name',
-            'items.product:id,name',
+            'order_items.product:id,name,price,photo',
             'stage:id,name,status_id',
-            'stage.status:id,name'
+            'stage.status:id,name',
+            'designer:id,name'
         ])
         ->where('customer_id', $customer_id) // 🔥 Filter berdasarkan customer_id
         ->orderBy('created_at', 'desc')

@@ -59,8 +59,12 @@ class Order extends Model
     }
 
     public function designer()
-{
-    // Menghubungkan designer_id ke model User
-    return $this->belongsTo(User::class, 'designer_id')->select('id', 'name', 'email');
-}
+    {
+        // Menghubungkan designer_id ke model User
+        return $this->belongsTo(User::class, 'designer_id')->select('id', 'name', 'email');
+    }
+
+    public function order_items() {
+        return $this->hasMany(OrderItem::class);
+    }
 }

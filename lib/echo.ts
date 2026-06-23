@@ -22,7 +22,7 @@ export function initEcho() {
     wssPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 8080,
     forceTLS: false,
     enabledTransports: ['ws', 'wss'],
-    authEndpoint: 'http://127.0.0.1:8000/api/broadcasting/auth',
+    authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/broadcasting/auth`,
     auth: {
       headers: {
         get Authorization() {

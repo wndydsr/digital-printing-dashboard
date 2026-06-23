@@ -31,7 +31,7 @@ export default function CustomerDetailModal({ open, onClose, customer, onSuccess
     try {
      const token = localStorage.getItem("token")
 
-      const res = await fetch(`http://127.0.0.1:8000/api/customers/${customer.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/customers/${customer.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

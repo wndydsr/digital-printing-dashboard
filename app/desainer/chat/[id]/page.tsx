@@ -177,7 +177,7 @@ export default function DiskusiDesainPolesan() {
                       {msg.file ? (
                         <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl rounded-tl-sm">
                           <img
-                             src={`http://127.0.0.1:8000/storage/${msg.file}`} alt="Desain" className="w-full h-48 object-cover border-b border-slate-100" />
+                             src={`${(process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").replace("/api", "")}/storage/${msg.file}`} alt="Desain" className="w-full h-48 object-cover border-b border-slate-100" />
                           <CardContent className="p-4">
                             <p className="text-sm text-slate-600 leading-relaxed mb-4">{msg.message}</p>
                             {approvedId === msg.id ? (

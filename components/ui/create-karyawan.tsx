@@ -45,7 +45,7 @@ export default function KaryawanCreateModal({
       const token = localStorage.getItem("token")
 
       // Pastikan endpoint mengarah ke /api/karyawan
-      const res = await fetch("http://127.0.0.1:8000/api/karyawan", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/karyawan`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

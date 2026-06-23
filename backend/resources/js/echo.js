@@ -11,7 +11,7 @@ window.Echo = new Echo({
     wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
     forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
     enabledTransports: ['ws', 'wss'],
-    authEndpoint: 'http://127.0.0.1:8000/api/broadcasting/auth',
+    authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/broadcasting/auth`,
     auth: {
         headers: {
             // ← getter agar token selalu fresh

@@ -30,7 +30,7 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
       const fetchCategories = async () => {
         try {
           const token = localStorage.getItem("token")
-          const res = await fetch("http://127.0.0.1:8000/api/categories", {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/categories`, {
             headers: { Authorization: `Bearer ${token}` },
           })
           if (res.ok) {
@@ -86,7 +86,7 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
 
       const token = localStorage.getItem("token")
 
-      const res = await fetch(`http://127.0.0.1:8000/api/products/${product.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/products/${product.id}`, {
         method: "POST", // Tetap POST karena membawa file + _method PUT
         headers: {
           Authorization: `Bearer ${token}`, 
@@ -152,7 +152,7 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                             : product.photo
                             ? product.photo.startsWith("http")
                               ? product.photo
-                              : `http://127.0.0.1:8000/storage/${product.photo}`
+                              : `${(process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").replace("/api", "")}/storage/${product.photo}`
                             : "/placeholder.png"
                         }
                         className="w-full h-44 object-cover rounded-lg"

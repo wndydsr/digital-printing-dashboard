@@ -33,7 +33,7 @@ export default function DetailPesananPage() {
       const token = localStorage.getItem("token")
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/download/design/${filepath}`,
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/download/design/${filepath}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -73,7 +73,7 @@ export default function DetailPesananPage() {
     formData.append("message", "Berikut hasil desain terbaru")
     formData.append("sender", "desainer")
 
-    await fetch(`http://127.0.0.1:8000/api/orders/${params.id}/messages`, {
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/orders/${params.id}/messages`, {
       method: "POST",
       body: formData,
     })

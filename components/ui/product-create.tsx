@@ -58,7 +58,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
       const fetchCategories = async () => {
         try {
           const token = localStorage.getItem("token")
-          const res = await fetch("http://127.0.0.1:8000/api/categories", {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/categories`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -158,7 +158,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
 
       const token = localStorage.getItem("token")
 
-      await fetch("http://127.0.0.1:8000/api/products", {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/products`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`, 
@@ -290,7 +290,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
                   onClick={async () => {
                     try {
                       const token = localStorage.getItem("token")
-                      const res = await fetch("http://127.0.0.1:8000/api/categories", {
+                      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/categories`, {
                         method: "POST",
                         headers: {
                           "Content-Type": "application/json",

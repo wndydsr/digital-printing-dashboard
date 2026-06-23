@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter, useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { initEcho } from "@/lib/echo";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+
 type Sender = "desainer" | "customer";
 
 interface Message {
@@ -39,10 +40,34 @@ export default function DiskusiDesainPolesan() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const params = useParams();
+  const orderId = params?.id;
   const router = useRouter();
   
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+
+  useEffect(() => {
+     initEcho();
+    if (!params.id || !window.Echo) return;
+
+    // Listen ke channel privat
+    window.Echo.private(`chat.${params.id}`)
+      .listen('.MessageSent', (e: { message: Message }) => {
+        setMessages((prev) =>{
+      if (prev.some(m => m.id === e.message.id)) return prev; // ← cegah duplikasi
+      return [...prev, e.message];
+    });
+        
+        // Auto scroll ke bawah saat pesan baru diterima
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      });
+
+    // Cleanup: hapus listener saat komponen ditutup
+    return () => {
+      window.Echo?.leave(`chat.${params.id}`);
+    };
+  }, [params.id]);
 
   useEffect(() => {
     fetchMessages()
@@ -59,44 +84,41 @@ export default function DiskusiDesainPolesan() {
     }
   }
 
-  const handleSend = async () => {
+ const handleSend = async () => {
+    if (!inputText.trim()) return;
+    if (!params.id) return;
 
-  try {
+    const tempId = Date.now();
+    const tempMsg: Message = {
+      id: tempId,
+      sender: "desainer",
+      message: inputText,
+      created_at: new Date().toISOString(),
+    };
 
-    const formData = new FormData()
+    setMessages((prev) => [...prev, tempMsg]);
+    setInputText("");
 
-    formData.append("sender", "desainer")
+    try {
+      const formData = new FormData();
+      formData.append("sender", "desainer");
+      formData.append("message", inputText);
 
-    formData.append("message", inputText)
-
-    if (fileInputRef.current?.files?.[0]) {
-      formData.append(
-        "file",
-        fileInputRef.current.files[0]
-      )
-    }
-
-    await apiFetch(
-      `/orders/${params.id}/messages`,
-      {
+      const result = await apiFetch(`/orders/${params.id}/messages`, {
         method: "POST",
         body: formData,
-      }
-    )
+      });
 
-    setInputText("")
+      // Hapus tempMsg — Echo listener yang akan menambahkan pesan aslinya
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+    } catch (err) {
+      console.error("Gagal kirim:", err);
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      alert("Gagal mengirim pesan. Silakan coba lagi.");
     }
-
-    fetchMessages()
-
-  } catch (err) {
-    console.error(err)
-  }
-}
-
+  };
+  
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans">
       {/* TOPBAR */}
@@ -128,6 +150,7 @@ export default function DiskusiDesainPolesan() {
 
             <div className="space-y-6">
               {messages.map((msg) => {
+                console.log("Rendering message:", msg);
                 const isDesainer = msg.sender === "desainer";
                 const time = new Date(msg.created_at).toLocaleTimeString(
                   "id-ID",

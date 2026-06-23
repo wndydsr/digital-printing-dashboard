@@ -10,13 +10,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-
-            // drop foreign key manual
-            DB::statement('ALTER TABLE orders DROP FOREIGN KEY fk_orders_product');
-
-            // drop column lama
+            // drop column lama (kecuali product_id yang memang tidak pernah ada)
             $table->dropColumn([
-                'product_id',
                 'design_url',
                 'qty',
                 'catatan',

@@ -44,13 +44,13 @@ services:
   db:
     image: mysql:8.0
     ports:
-      - "3306:3306"
+      - "${DB_PORT_EXTERNAL:-3306}:3306"
     restart: always
     environment:
       - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-secret}
       - MYSQL_DATABASE=${DB_DATABASE:-percetakan_db}
     volumes:
-      - db_data:/var/lib/mysql
+      - db_data2:/var/lib/mysql
 
 volumes:
-  db_data:
+  db_data2:

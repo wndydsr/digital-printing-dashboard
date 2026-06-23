@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\OrderController;
@@ -98,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/{id}/messages', [MessageController::class, 'index'] );
     Route::post('/orders/{id}/messages', [MessageController::class, 'store'] );
 
+
     Route::get('/cart/{customer_id}', [CartController::class, 'index']); 
     Route::post('/cart', [CartController::class, 'store']); 
     Route::put('/cart/item/{id}', [CartController::class, 'update']);
@@ -105,3 +107,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cart/clear/{customer_id}', [CartController::class, 'clear']); 
 
 });
+
+ Broadcast::routes(['middleware' => ['auth:sanctum']]);

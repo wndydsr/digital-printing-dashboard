@@ -9,8 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Order extends Model
 {
-    const UPDATED_AT = null;
-
     protected $fillable = [
         'order_code',
         'customer_id',

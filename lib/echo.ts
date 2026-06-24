@@ -25,7 +25,7 @@ export function initEcho() {
     wsPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 443,
     wssPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 443,
     forceTLS: true,
-    enabledTransports: ['wss'],
+    enabledTransports: ['ws', 'wss'],
     disableStats: true,
     authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "https://api-printing.hanifaslam.dev/api"}/broadcasting/auth`,
     auth: {

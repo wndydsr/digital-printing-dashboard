@@ -9,13 +9,14 @@ declare global {
 }
 
 export function initEcho() {
-  console.log("initEcho called. window.Echo exists?", !!window.Echo);
   if (typeof window === 'undefined') return;
   if (window.Echo) return;
 
-  console.log("Initializing Pusher & Echo...");
+  console.log("[ECHO] Memulai inisialisasi Websocket...");
   window.Pusher = Pusher;
-  Pusher.logToConsole = true; // Enable Pusher debug logs
+  
+  // Wajib nyalakan ini sementara untuk debug di production
+  Pusher.logToConsole = true; 
 
   window.Echo = new Echo({
     broadcaster: 'reverb',
@@ -35,5 +36,15 @@ export function initEcho() {
         'Accept': 'application/json',
       },
     },
+  });
+
+  // Tambahkan listener untuk mengecek status koneksi secara eksplisit
+  window.Echo.connector.pusher.connection.bind('connected', () => {
+    console.log("%c[ECHO] ✅ BERHASIL KONEK KE WEBSOCKET!", "color: green; font-size: 14px; font-weight: bold;");
+    console.log("[ECHO] Socket ID:", window.Echo.socketId());
+  });
+
+  window.Echo.connector.pusher.connection.bind('error', (err: any) => {
+    console.error("%c[ECHO] ❌ GAGAL KONEK KE WEBSOCKET!", "color: red; font-size: 14px; font-weight: bold;", err);
   });
 }

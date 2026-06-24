@@ -12,11 +12,8 @@ export function initEcho() {
   if (typeof window === 'undefined') return;
   if (window.Echo) return;
 
-  console.log("[ECHO] Memulai inisialisasi Websocket...");
   window.Pusher = Pusher;
-  
-  // Wajib nyalakan ini sementara untuk debug di production
-  Pusher.logToConsole = true; 
+  // Pusher.logToConsole = false; // Matikan log bawaan Pusher di production
 
   window.Echo = new Echo({
     broadcaster: 'reverb',
@@ -38,13 +35,8 @@ export function initEcho() {
     },
   });
 
-  // Tambahkan listener untuk mengecek status koneksi secara eksplisit
-  window.Echo.connector.pusher.connection.bind('connected', () => {
-    console.log("%c[ECHO] ✅ BERHASIL KONEK KE WEBSOCKET!", "color: green; font-size: 14px; font-weight: bold;");
-    console.log("[ECHO] Socket ID:", window.Echo.socketId());
-  });
-
+  // Hanya munculkan log error jika websocket terputus / gagal konek
   window.Echo.connector.pusher.connection.bind('error', (err: any) => {
-    console.error("%c[ECHO] ❌ GAGAL KONEK KE WEBSOCKET!", "color: red; font-size: 14px; font-weight: bold;", err);
+    console.error("[WEBSOCKET ERROR] Gagal terkoneksi ke server chat:", err);
   });
 }

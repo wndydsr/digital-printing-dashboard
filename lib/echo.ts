@@ -9,10 +9,13 @@ declare global {
 }
 
 export function initEcho() {
+  console.log("initEcho called. window.Echo exists?", !!window.Echo);
   if (typeof window === 'undefined') return;
   if (window.Echo) return;
 
+  console.log("Initializing Pusher & Echo...");
   window.Pusher = Pusher;
+  Pusher.logToConsole = true; // Enable Pusher debug logs
 
   window.Echo = new Echo({
     broadcaster: 'reverb',

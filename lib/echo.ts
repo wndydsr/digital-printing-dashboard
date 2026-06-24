@@ -21,13 +21,13 @@ export function initEcho() {
   window.Echo = new Echo({
     broadcaster: 'reverb',
     key: process.env.NEXT_PUBLIC_REVERB_APP_KEY || "rkk1ifs5yaarebrdhhzq",
-    wsHost: process.env.NEXT_PUBLIC_REVERB_HOST || '127.0.0.1',
-    wsPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 8080,
-    wssPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 8080,
-    forceTLS: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https',
-    enabledTransports: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https' ? ['wss'] : ['ws'],
+    wsHost: process.env.NEXT_PUBLIC_REVERB_HOST || "ws-printing.hanifaslam.dev",
+    wsPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 443,
+    wssPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 443,
+    forceTLS: true,
+    enabledTransports: ['wss'],
     disableStats: true,
-    authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/broadcasting/auth`,
+    authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "https://api-printing.hanifaslam.dev/api"}/broadcasting/auth`,
     auth: {
       headers: {
         get Authorization() {

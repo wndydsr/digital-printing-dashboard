@@ -29,7 +29,11 @@ jobs:
         run: |
           docker build \
             --no-cache \
-            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
+            --build-arg NEXT_PUBLIC_API_URL="https://api-printing.hanifaslam.dev/api" \
+            --build-arg NEXT_PUBLIC_REVERB_HOST="ws-printing.hanifaslam.dev" \
+            --build-arg NEXT_PUBLIC_REVERB_PORT=443 \
+            --build-arg NEXT_PUBLIC_REVERB_SCHEME="https" \
+            --build-arg NEXT_PUBLIC_REVERB_APP_KEY="rkk1ifs5yaarebrdhhzq" \
             -t ghcr.io/${{ github.repository }}/frontend:latest .
           docker push ghcr.io/${{ github.repository }}/frontend:latest
 

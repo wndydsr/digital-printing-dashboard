@@ -20,8 +20,9 @@ export function initEcho() {
     wsHost: process.env.NEXT_PUBLIC_REVERB_HOST || '127.0.0.1',
     wsPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 8080,
     wssPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 8080,
-    forceTLS: false,
-    enabledTransports: ['ws', 'wss'],
+    forceTLS: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https',
+    enabledTransports: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https' ? ['wss'] : ['ws'],
+    disableStats: true,
     authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/broadcasting/auth`,
     auth: {
       headers: {

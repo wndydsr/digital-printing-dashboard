@@ -18,13 +18,13 @@ export function initEcho() {
   window.Echo = new Echo({
     broadcaster: 'reverb',
     key: process.env.NEXT_PUBLIC_REVERB_APP_KEY || "rkk1ifs5yaarebrdhhzq",
-    wsHost: process.env.NEXT_PUBLIC_REVERB_HOST || "ws-printing.hanifaslam.dev",
+    wsHost: process.env.NEXT_PUBLIC_REVERB_HOST || "ws.prinora.store",
     wsPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 443,
     wssPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT) || 443,
     forceTLS: true,
     enabledTransports: ['ws', 'wss'],
     disableStats: true,
-    authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "https://api-printing.hanifaslam.dev/api"}/broadcasting/auth`,
+    authEndpoint: `${process.env.NEXT_PUBLIC_API_URL || "https://api.prinora.store/api"}/broadcasting/auth`,
     auth: {
       headers: {
         get Authorization() {

@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
-import { Upload, FileText, Loader2, ArrowLeft } from "lucide-react"
+import { Upload, FileText, Loader2, ArrowLeft, Download } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,102 +15,109 @@ export default function DetailPesananPage() {
   const [file, setFile] = useState<File | null>(null)
   const [revisi, setRevisi] = useState("")
   const [showRevisi, setShowRevisi] = useState(false)
+  const [order, setOrder] = useState<any>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  
 
   const router = useRouter()
   const params = useParams()
 
-  const [order, setOrder] = useState<any>(null)
-
-  const designFiles =
-  order?.items?.flatMap((item: any) => {
+  const designFiles = order?.items?.flatMap((item: any) => {
     const designFile = item.design?.design_file ? [item.design.design_file] : []
     const referenceFiles = item.design?.reference_files || []
-
     return [...designFile, ...referenceFiles]
   }) || []
 
+  // =========================
+  // HANDLE DOWNLOAD
+  // =========================
   const handleDownload = async (filepath: string) => {
     try {
       const token = localStorage.getItem("token")
+      const securedFilename = encodeURIComponent(filepath)
+      const downloadUrl = `http://127.0.0.1:8000/api/download/design/${securedFilename}`
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/download/design/${filepath}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      const response = await fetch(downloadUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json"
+        },
+      })
 
-      if (!response.ok) {
-        throw new Error("Gagal download file")
-      }
+      if (!response.ok) throw new Error("Gagal download file")
 
       const blob = await response.blob()
-
       const url = window.URL.createObjectURL(blob)
 
       const a = document.createElement("a")
       a.href = url
-      a.download = filepath.split("/").pop() || "download"
+      a.download = filepath.split("/").pop() || "download-file"
 
       document.body.appendChild(a)
       a.click()
       a.remove()
 
       window.URL.revokeObjectURL(url)
-
     } catch (err) {
-      console.error(err)
+      console.error("Gagal mengunduh file:", err)
     }
   }
 
+  // =========================
+  // HANDLE UPLOAD DESIGN (SAMA DENGAN SISI CHAT)
+  // =========================
   const handleUploadDesign = async () => {
-    if (!file) return
+    if (!file || !params?.id) {
+      alert("Silakan pilih file terlebih dahulu!")
+      return
+    }
 
-    const formData = new FormData()
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("sender", "desainer")
+      formData.append("file", file)
+      // 🔥 FIX: Disamakan persis dengan isi pesan payload dari halaman obrolan
+      formData.append("message", "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.")
 
-    formData.append("file", file)
-    formData.append("message", "Berikut hasil desain terbaru")
-    formData.append("sender", "desainer")
+      await apiFetch(`/orders/${params.id}/messages`, {
+        method: "POST",
+        body: formData,
+      })
 
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/orders/${params.id}/messages`, {
-      method: "POST",
-      body: formData,
-    })
-
-    router.push(`/desainer/chat/${params.id}`)
+      setFile(null)
+      // Langsung arahkan ke halaman chat diskusi agar desainer bisa melanjutkan obrolan
+      router.push(`/desainer/chat/${params.id}`)
+    } catch (err) {
+      console.error("Gagal mengunggah desain:", err)
+      alert("Gagal mengunggah berkas desain ke ruang obrolan.")
+    } finally {
+      setIsUploading(false)
+    }
   }
 
+  // =========================
+  // LOAD DATA PESANAN
+  // =========================
   useEffect(() => {
     const fetchOrder = async () => {
       try {
         const data = await apiFetch(`/orders/${params.id}`)
-        console.log("ORDER DETAIL RESPONSE:", data)
-        console.log(
-  "ITEM PERTAMA:",
-  JSON.stringify(data.items?.[0], null, 2)
-)
-
-console.log(
-  "DETAILS:",
-  JSON.stringify(data.items?.[0]?.details, null, 2)
-)
-        console.log("DETAILS:", data.items?.[0]?.details)
         setOrder(data)
       } catch (err) {
-        console.error(err)
+        console.error("Gagal memuat detail pesanan:", err)
       }
     }
 
     fetchOrder()
-  }, [])
+  }, [params.id])
 
   if (!order) {
     return (
       <DesainerLayout>
-        <div className="h-[70vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <div className="h-[60vh] flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
         </div>
       </DesainerLayout>
     )
@@ -121,134 +129,103 @@ console.log(
       .replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
-  // 🔥 FIX: ambil semua reference_files dari semua item
-  const referenceFiles =
-  order?.items?.flatMap((item: any) =>
-    item.design?.reference_files || []
-  ) || []
-
   return (
     <DesainerLayout>
-      <div className="space-y-6">
-
-        {/* HEADER */}
-        <div className="flex items-center gap-3">
-
+      <div className="max-w-5xl mx-auto space-y-4 p-2">
+        
+        {/* HEADER MINI */}
+        <div className="flex items-center gap-3 border-b pb-3">
           <Button
             variant="outline"
             size="icon"
+            className="h-8 w-8 rounded-lg"
             onClick={() => router.push("/desainer/antrian")}
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={16} />
           </Button>
-
           <div>
-            <h1 className="text-2xl font-semibold">Detail Pesanan</h1>
-
-            <p className="text-sm text-gray-500">
-              Informasi lengkap dan proses desain
-            </p>
+            <h1 className="text-xl font-bold text-slate-800">Detail Pesanan</h1>
+            <p className="text-xs text-slate-500">Informasi lengkap spesifikasi cetak & berkas</p>
           </div>
-
         </div>
 
-        {/* GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* GRID UTAMA */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-          {/* INFO PESANAN */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Informasi Pesanan</CardTitle>
+          {/* CARD INFO PESANAN */}
+          <Card className="shadow-sm border-slate-200/80 rounded-xl">
+            <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
+              <CardTitle className="text-sm font-bold text-slate-700">Informasi Transaksi</CardTitle>
             </CardHeader>
-
-            <CardContent className="space-y-4 text-sm">
-
-              <div className="flex justify-between">
-                <span>No Pesanan</span>
-                <Badge>{order?.order_code}</Badge>
+            <CardContent className="p-4 space-y-2.5 text-xs text-slate-600">
+              <div className="flex justify-between items-center">
+                <span>No. Pesanan</span>
+                <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 font-mono text-[11px] px-2 py-0">
+                  {order?.order_code}
+                </Badge>
               </div>
-
-              <div className="flex justify-between">
+              <div className="flex justify-between border-b pb-1.5 border-dashed">
                 <span>Pelanggan</span>
-                <span>{order?.customer?.name}</span>
+                <span className="font-semibold text-slate-800">{order?.customer?.name || "-"}</span>
               </div>
-
-              <div className="flex justify-between">
-                <span>Produk</span>
-                <span>
-                  {order?.items?.map((i: any) => i.product?.name).join(", ")}
+              <div className="flex justify-between border-b pb-1.5 border-dashed">
+                <span>Produk Utama</span>
+                <span className="font-medium text-slate-700">
+                  {order?.items?.map((i: any) => i.product?.name).join(", ") || "-"}
                 </span>
               </div>
-
               <div className="flex justify-between">
-                <span>Tanggal</span>
-                <span>
-                  {order?.order_date
-                    ? new Date(order.order_date).toLocaleString()
-                    : "-"}
+                <span>Tanggal Masuk</span>
+                <span className="font-medium text-slate-700">
+                  {order?.order_date ? new Date(order.order_date).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-"}
                 </span>
               </div>
-
             </CardContent>
           </Card>
 
-          {/* BRIEF */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Brief Pelanggan</CardTitle>
+          {/* CARD BRIEF CLIENT */}
+          <Card className="shadow-sm border-slate-200/80 rounded-xl flex flex-col">
+            <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
+              <CardTitle className="text-sm font-bold text-slate-700">Brief Permintaan Pelanggan</CardTitle>
             </CardHeader>
-
-            <CardContent className="text-sm text-gray-600 whitespace-pre-line">
-              {order?.notes || "Tidak ada brief pelanggan"}
+            <CardContent className="p-4 text-xs text-slate-600 whitespace-pre-line leading-relaxed flex-1 bg-white rounded-b-xl">
+              {order?.notes || "Tidak ada catatan instruksi khusus dari pelanggan."}
             </CardContent>
           </Card>
-
         </div>
 
-        {/* SPESIFIKASI PRODUK */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Spesifikasi Produk</CardTitle>
+        {/* CARD SPESIFIKASI CETAK */}
+        <Card className="shadow-sm border-slate-200/80 rounded-xl">
+          <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
+            <CardTitle className="text-sm font-bold text-slate-700">Rincian Spesifikasi Cetak</CardTitle>
           </CardHeader>
-
-          <CardContent className="space-y-4">
+          <CardContent className="p-4 space-y-3">
             {order?.items?.map((item: any, idx: number) => {
-
-              const details =
-                typeof item.details === "string"
-                  ? JSON.parse(item.details)
-                  : item.details || {}
+              const details = typeof item.details === "string" ? JSON.parse(item.details) : item.details || {}
 
               return (
-                <div
-                  key={idx}
-                  className="border rounded-lg p-4 space-y-2"
-                >
-                  <p className="font-medium text-sm">
-                    {item.product?.name}
-                  </p>
+                <div key={idx} className="border border-slate-100 rounded-lg p-3 bg-slate-50/30 space-y-2">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                    <p className="font-bold text-xs text-slate-800">{item.product?.name}</p>
+                    <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0">Qty: {item.quantity || 0} pcs</Badge>
+                  </div>
+
+                  {item.panjang && item.lebar && (
+                    <div className="flex justify-between text-xs border-b border-slate-100/70 pb-1">
+                      <span className="text-slate-400">Ukuran Dimensi</span>
+                      <span className="font-semibold text-slate-700">{Number(item.panjang)} x {Number(item.lebar)} meter</span>
+                    </div>
+                  )}
 
                   {Object.keys(details).length > 0 ? (
-                    Object.entries(details).map(
-                      ([key, value]: any) => (
-                        <div
-                          key={key}
-                          className="flex justify-between text-sm border-b pb-1"
-                        >
-                          <span className="text-gray-500">
-                            {formatLabel(key)}
-                          </span>
-
-                          <span className="font-medium">
-                            {String(value)}
-                          </span>
-                        </div>
-                      )
-                    )
+                    Object.entries(details).map(([key, value]: any) => (
+                      <div key={key} className="flex justify-between text-xs border-b border-slate-100/70 pb-1 last:border-none">
+                        <span className="text-slate-400">{formatLabel(key)}</span>
+                        <span className="font-medium text-slate-700">{String(value)}</span>
+                      </div>
+                    ))
                   ) : (
-                    <p className="text-sm text-gray-400">
-                      Tidak ada spesifikasi
-                    </p>
+                    !item.panjang && <p className="text-[11px] text-slate-400 italic">Tidak ada spesifikasi khusus.</p>
                   )}
                 </div>
               )
@@ -256,119 +233,122 @@ console.log(
           </CardContent>
         </Card>
 
-        {/* FILE PENDUKUNG */}
-        <Card>
-          <CardHeader>
-            <CardTitle>File Pendukung</CardTitle>
+        {/* CARD RIWAYAT FILE */}
+        <Card className="shadow-sm border-slate-200/80 rounded-xl">
+          <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
+            <CardTitle className="text-sm font-bold text-slate-700">Berkas Referensi & Pendukung</CardTitle>
           </CardHeader>
-
-          <CardContent className="space-y-2">
+          <CardContent className="p-4">
             {designFiles.length > 0 ? (
-              <div className="space-y-2">
-          {designFiles.map((file: string, i: number) => (
-            <div
-              key={i}
-              className="flex items-center justify-between p-2 border rounded-lg bg-white"
-            >
-              {/* kiri: nama file */}
-              <div className="flex items-center gap-2 min-w-0">
-                <FileText size={16} className="text-gray-500" />
-
-                <span className="text-sm truncate max-w-[300px]">
-                  {file.split("/").pop()}
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {designFiles.map((file: string, i: number) => (
+                  <div key={i} className="flex items-center justify-between p-2 border border-slate-100 rounded-lg bg-slate-50/40">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={15} className="text-slate-400 shrink-0" />
+                      <span className="text-xs font-medium truncate text-slate-700 max-w-[180px] sm:max-w-[240px]">
+                        {file.split("/").pop()}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-[11px] h-7 px-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-semibold"
+                      onClick={() => handleDownload(file)}
+                    >
+                      <Download size={12} />
+                      Unduh
+                    </Button>
+                  </div>
+                ))}
               </div>
-
-              {/* kanan: tombol download */}
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1"
-                onClick={() => handleDownload(file)}
-              >
-                <Upload size={14} />
-                Unduh
-              </Button>
-            </div>
-          ))}
-        </div>
             ) : (
-              <p className="text-sm text-gray-500">
-                Tidak ada file desain
-              </p>
+              <p className="text-xs text-slate-400 italic text-center py-2">Belum ada file aset pendukung yang diunggah.</p>
             )}
           </CardContent>
         </Card>
 
-        {/* UPLOAD DESAIN */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Upload Desain</CardTitle>
+        {/* CARD INPUT UPLOAD PROGRESS DESAIN */}
+        <Card className="shadow-sm border-slate-200/80 rounded-xl">
+          <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
+            <CardTitle className="text-sm font-bold text-slate-700">Unggah File Hasil Desain</CardTitle>
           </CardHeader>
-
-          <CardContent className="space-y-4">
-
+          <CardContent className="p-4 space-y-3">
             <Input
               type="file"
+              accept="image/*"
+              className="cursor-pointer file:text-purple-700 file:bg-purple-50 file:border-none file:text-xs text-xs h-9 rounded-lg"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
 
             {file && (
-              <p className="text-sm text-blue-500">
-                File: {file.name}
-              </p>
+              <div className="text-[11px] font-mono text-purple-600 bg-purple-50/60 p-2 rounded-lg border border-purple-100">
+                Siap dikirim: {file.name}
+              </div>
             )}
 
-            <div className="flex justify-end gap-3">
-
+            <div className="flex justify-end gap-2 pt-1">
               <Button
                 variant="outline"
+                size="sm"
+                className="text-xs h-8 rounded-lg"
                 onClick={() => setShowRevisi(true)}
               >
-                Tandai Revisi
+                Catatan Internal
               </Button>
 
               <Button
-                className="bg-purple-600 hover:bg-purple-700"
+                size="sm"
+                className="bg-purple-600 hover:bg-purple-700 text-xs h-8 font-bold"
                 onClick={handleUploadDesign}
+                disabled={isUploading}
               >
-                <Upload size={16} className="mr-2" />
-                Upload Desain
+                {isUploading ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin mr-1.5" />
+                    Mengirim...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={13} className="mr-1.5" />
+                    Upload & Kirim ke Client
+                  </>
+                )}
               </Button>
-
             </div>
-
           </CardContent>
         </Card>
 
-        {/* MODAL REVISI */}
+        {/* MODAL OVERLAY CATATAN REVISI INTERNAL */}
         {showRevisi && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
-            <div className="bg-white p-6 rounded-lg w-[400px] space-y-4">
-
-              <h2 className="font-semibold text-lg">Catatan Revisi</h2>
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-5 rounded-xl w-full max-w-sm space-y-3 shadow-xl">
+              <div>
+                <h2 className="font-bold text-sm text-slate-800">Catatan Tambahan Internal</h2>
+                <p className="text-[11px] text-slate-400">Pencatatan log perubahan revisi pengerjaan.</p>
+              </div>
 
               <textarea
-                className="w-full border rounded p-2 text-sm"
-                placeholder="Masukkan revisi..."
+                className="w-full border rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-purple-500 h-20 resize-none"
+                placeholder="Contoh: Font judul poster disesuaikan menjadi bold..."
                 value={revisi}
                 onChange={(e) => setRevisi(e.target.value)}
               />
 
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowRevisi(false)}>
+              <div className="flex justify-end gap-2 text-xs font-bold">
+                <Button variant="ghost" size="sm" onClick={() => setShowRevisi(false)}>
                   Batal
                 </Button>
                 <Button
+                  size="sm"
+                  className="bg-purple-600 hover:bg-purple-700 px-4"
                   onClick={() => {
                     setShowRevisi(false)
                     setRevisi("")
                   }}
                 >
-                  Kirim
+                  Simpan
                 </Button>
               </div>
-
             </div>
           </div>
         )}

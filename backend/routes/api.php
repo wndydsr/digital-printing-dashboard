@@ -99,6 +99,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/{id}/messages', [MessageController::class, 'index'] );
     Route::post('/orders/{id}/messages', [MessageController::class, 'store'] );
 
+    Route::post('/orders/{id}/approve-design', [MessageController::class, 'approveDesign']);
+
 
     Route::get('/cart/{customer_id}', [CartController::class, 'index']); 
     Route::post('/cart', [CartController::class, 'store']); 

@@ -7,6 +7,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  env: {
+    NEXT_PUBLIC_API_URL: "https://api.prinora.store/api",
+  },
 }
 
 export default nextConfig

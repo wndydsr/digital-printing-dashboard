@@ -32,15 +32,19 @@ class MessageSent implements ShouldBroadcastNow
         return 'MessageSent'; // Ini membuat nama event di frontend cukup '.MessageSent'
     }
 
-    public function broadcastWith(): array
-    {
-        return [
-            'message' => [
-                'id' => $this->message->id,
-                'sender' => $this->message->sender,
-                'message' => $this->message->message,
-                'created_at' => $this->message->created_at,
-            ]
-        ];
-    }
+public function broadcastWith(): array
+{
+    return [
+        'message' => [
+            'id' => $this->message->id,
+            'order_id' => $this->message->order_id, // 🔥 FIX UTAMA: Wajib ikut dikirim!
+            'sender' => $this->message->sender,
+            'message' => $this->message->message,
+            'file' => $this->message->file,
+            'is_design' => $this->message->is_design, // 🔥 Tambahkan juga ini agar sinkron
+            'created_at' => $this->message->created_at,
+        ]
+    ];
+}
+
 }

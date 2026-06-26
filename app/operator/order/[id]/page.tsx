@@ -20,10 +20,6 @@ import {
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
-// GANTI SELURUH INTERFACE Order MENJADI SEPERTI INI
-// Karena file desain tidak ada di order.items,
-// tetapi berada di relasi order.items[].design
-
 interface Order {
   id: number
   order_code: string
@@ -36,6 +32,7 @@ interface Order {
   }
 
   items?: {
+    id: number
     quantity?: number
     details?: any
     catatan?: string
@@ -76,88 +73,43 @@ export default function OperatorOrderDetailPage() {
   // =========================
   // HELPER URL FILE
   // =========================
-  // Ganti fungsi getFileUrl menjadi seperti ini
-
-// Ganti fungsi getFileUrl() menjadi seperti ini
-
-// GANTI FUNGSI getFileUrl MENJADI SEPERTI INI
-
-const getFileUrl = (
-    item: NonNullable<Order["items"]>[number]
-    ) => {
-    // File desain berada di item.design.design_file
-    const rawFile = item.design?.design_file
-
-    console.log("DESIGN OBJECT:", item.design)
-    console.log("RAW FILE:", rawFile)
-
+  const getFileUrl = (rawFile: string | null | undefined) => {
     if (!rawFile) return null
 
-    // Jika sudah berupa URL lengkap
     if (
-        rawFile.startsWith("http://") ||
-        rawFile.startsWith("https://")
+      rawFile.startsWith("http://") ||
+      rawFile.startsWith("https://")
     ) {
-        return rawFile
+      return rawFile
     }
 
-    
     const baseUrl =
-        process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") ||
-        `${(process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").replace("/api", "")}`
+      process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") ||
+      "http://127.0.0.1:8000"
 
-    // Jika path sudah diawali storage/
     if (rawFile.startsWith("storage/")) {
-        return `${baseUrl}/${rawFile}`
+      return `${baseUrl}/${rawFile}`
     }
 
-    // Karena di database tersimpan:
-    // designs/xxxxxxxx.png
-    // maka URL menjadi:
-    // http://127.0.0.1:8000/storage/designs/xxxxxxxx.png
     return `${baseUrl}/storage/${rawFile}`
-    }
+  }
 
   // =========================
   // LOAD DATA ORDER
   // =========================
-  // Ganti bagian fetchOrder() menjadi seperti ini agar bisa melihat struktur data dari backend
+  const fetchOrder = async () => {
+    try {
+      const data = await apiFetch(`/orders/${id}`)
+      const result = data.data || data
 
-const fetchOrder = async () => {
-  try {
-    const data = await apiFetch(`/orders/${id}`)
-    const result = data.data || data
-
-    // DEBUG: lihat struktur data lengkap di browser console
-    console.log("DETAIL ORDER:", result)
-    console.log("ORDER ITEMS:", result.items)
-
-    if (result.items && result.items.length > 0) {
-      result.items.forEach((item: any, index: number) => {
-        console.log(`ITEM ${index + 1}:`, item)
-        console.log(`ITEM ${index + 1} FILE FIELDS:`, {
-          design_file: item.design_file,
-          design_path: item.design_path,
-          file: item.file,
-          file_path: item.file_path,
-          attachment: item.attachment,
-          artwork_file: item.artwork_file,
-          // kemungkinan field lain
-          image: item.image,
-          image_path: item.image_path,
-          upload_file: item.upload_file,
-          file_desain: item.file_desain,
-        })
-      })
+      console.log("DETAIL ORDER OPERATOR:", result)
+      setOrder(result)
+    } catch (error) {
+      console.error("Gagal memuat detail pesanan:", error)
+    } finally {
+      setLoading(false)
     }
-
-    setOrder(result)
-  } catch (error) {
-    console.error("Gagal memuat detail pesanan:", error)
-  } finally {
-    setLoading(false)
   }
-}
 
   useEffect(() => {
     fetchOrder()
@@ -172,16 +124,61 @@ const fetchOrder = async () => {
         method: "PUT",
         body: JSON.stringify({ stage }),
       })
-
       await fetchOrder()
     } catch (error) {
       console.error("Gagal update stage:", error)
     }
   }
 
+  const formatLabel = (text: string) => {
+    return text
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+
   // =========================
-  // LOADING
+  // HANDLE DOWNLOAD
   // =========================
+ const handleDownload = async (filepath: string) => {
+    try {
+      const token = localStorage.getItem("token")
+      
+      // 🔒 Gunakan encodeURIComponent agar 'chat-designs/file.png' menjadi 'chat-designs%2Ffile.png'
+      // Ini mencegah rusaknya struktur segment URL di API Laravel kamu
+      const securedFilename = encodeURIComponent(filepath)
+      const downloadUrl = `http://127.0.0.1:8000/api/download/design/${securedFilename}`
+
+      console.log("MENEMBAK ENDPOINT DOWNLOAD:", downloadUrl)
+
+      const response = await fetch(downloadUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json"
+        },
+      })
+
+      if (!response.ok) throw new Error("Gagal mengunduh berkas dari server API")
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+
+      const a = document.createElement("a")
+      a.href = url
+      // Mengambil nama file murni di ujung path untuk nama file download
+      a.download = filepath.split("/").pop() || "desain-final"
+
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Download Error:", err)
+      alert("Gagal mengunduh berkas desain. Pastikan konfigurasi CORS di Laravel sudah aktif.")
+    }
+  }
+    
   if (loading) {
     return (
       <OperatorLayout>
@@ -190,9 +187,6 @@ const fetchOrder = async () => {
     )
   }
 
-  // =========================
-  // DATA TIDAK DITEMUKAN
-  // =========================
   if (!order) {
     return (
       <OperatorLayout>
@@ -203,50 +197,6 @@ const fetchOrder = async () => {
 
   const currentStage = order.stage?.name?.toLowerCase() || ""
 
-  const formatLabel = (text: string) => {
-    return text
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-    }
-
-    const handleDownload = async (filepath: string) => {
-    try {
-        const token = localStorage.getItem("token")
-
-        const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/download/design/${filepath}`,
-        {
-            headers: {
-            Authorization: `Bearer ${token}`,
-            },
-        }
-        )
-
-        if (!response.ok) {
-        throw new Error("Gagal download file")
-        }
-
-        const blob = await response.blob()
-
-        const url = window.URL.createObjectURL(blob)
-
-        const a = document.createElement("a")
-        a.href = url
-
-        a.download =
-        filepath.split("/").pop() || "download"
-
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-
-        window.URL.revokeObjectURL(url)
-
-    } catch (err) {
-        console.error(err)
-    }
-    }
-    
   return (
     <OperatorLayout>
       <div className="space-y-6">
@@ -261,12 +211,8 @@ const fetchOrder = async () => {
           </Button>
 
           <div>
-            <h1 className="text-2xl font-semibold">
-              Detail Pesanan
-            </h1>
-            <p className="text-gray-500">
-              {order.order_code}
-            </p>
+            <h1 className="text-2xl font-semibold">Detail Pesanan</h1>
+            <p className="text-gray-500">{order.order_code}</p>
           </div>
         </div>
 
@@ -277,107 +223,78 @@ const fetchOrder = async () => {
           </CardHeader>
 
           <CardContent className="space-y-3">
-            <p>
-              <strong>Pelanggan:</strong>{" "}
-              {order.customer?.name || "-"}
-            </p>
-
-            <p>
-              <strong>Tanggal:</strong>{" "}
-              {new Date(order.order_date).toLocaleString(
-                "id-ID"
-              )}
-            </p>
-
+            <p><strong>Pelanggan:</strong> {order.customer?.name || "-"}</p>
+            <p><strong>Tanggal:</strong> {new Date(order.order_date).toLocaleString("id-ID")}</p>
             <div className="flex items-center gap-2">
               <strong>Status:</strong>
               <Badge variant="outline">
-                {order.stage?.status?.name || "-"}
+                {order.stage?.status?.name || order.stage?.name || "-"}
               </Badge>
             </div>
-
-            <p>
-              <strong>Catatan:</strong>{" "}
-              {order.notes || "-"}
-            </p>
+            <p><strong>Catatan:</strong> {order.notes || "-"}</p>
           </CardContent>
         </Card>
 
-        {/* ================= PRODUK ================= */}
+        {/* ================= PRODUK & FILE DESAIN FINAL ================= */}
         {order.items && order.items.length > 0 ? (
           order.items.map((item, index) => {
+            // Mengambil berkas secara aman dari relasi item.design
             const rawFile = item.design?.design_file
 
             return (
               <Card key={index}>
                 <CardHeader>
-                  <CardTitle>
-                    {item.product?.name || "Produk"}
-                  </CardTitle>
+                  <CardTitle>{item.product?.name || "Produk"}</CardTitle>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  {/* Jumlah */}
-                  <p>
-                    <strong>Jumlah:</strong>{" "}
-                    {item.quantity || 0}
-                  </p>
+                  <p><strong>Jumlah:</strong> {item.quantity || 0}</p>
 
                   {/* Spesifikasi */}
-                    <div>
+                  <div>
                     <strong>Spesifikasi:</strong>
-
                     {item.details ? (
-                        <div className="space-y-1 mt-2">
+                      <div className="space-y-1 mt-2">
                         {Object.entries(
-                            typeof item.details === "string"
+                          typeof item.details === "string"
                             ? JSON.parse(item.details)
                             : item.details
                         ).map(([key, value]) => (
-                            <div
-                            key={formatLabel(key)}
-                            className="flex justify-between border-b pb-1 text-sm"
-                            >
-                            <span className="text-gray-500">
-                                {formatLabel(key)}
-                            </span>
-
-                            <span className="font-medium">
-                                {String(value)}
-                            </span>
-                            </div>
+                          <div key={key} className="flex justify-between border-b pb-1 text-sm">
+                            <span className="text-gray-500">{formatLabel(key)}</span>
+                            <span className="font-medium">{String(value)}</span>
+                          </div>
                         ))}
-                        </div>
+                      </div>
                     ) : (
-                        <p className="text-sm text-gray-500 mt-1">
-                        -
-                        </p>
+                      <p className="text-sm text-gray-500 mt-1">-</p>
                     )}
-                    </div>
+                  </div>
 
-                                    {rawFile ? (
-                    <div className="space-y-2">
-                        <p className="font-medium">
-                        File Desain
-                        </p>
+                  {/* Tampilan File Desain Terintegrasi */}
+                  {rawFile ? (
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                      <p className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        File Desain Final (Telah Disetujui Customer)
+                      </p>
 
-                        <Button
+                      <Button
                         variant="outline"
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-semibold text-xs rounded-xl"
                         onClick={() => handleDownload(rawFile)}
-                        >
+                      >
                         <Download className="w-4 h-4" />
                         Download File Desain
-                        </Button>
+                      </Button>
 
-                        <p className="text-sm text-gray-500 break-all">
+                      <p className="text-xs text-gray-400 break-all bg-slate-50 p-2 rounded-lg border border-slate-100 font-mono">
                         {rawFile.split("/").pop()}
-                        </p>
+                      </p>
                     </div>
-                    ) : (
-                    <div className="text-sm text-gray-500">
-                      <strong>File Desain:</strong>{" "}
-                      Tidak ada file
+                  ) : (
+                    <div className="text-xs font-semibold text-amber-600 bg-amber-50/50 p-3 rounded-xl border border-amber-100">
+                      File Desain: Belum ada file desain yang disetujui untuk item pesanan ini.
                     </div>
                   )}
                 </CardContent>
@@ -386,20 +303,17 @@ const fetchOrder = async () => {
           })
         ) : (
           <Card>
-            <CardContent className="p-6 text-gray-500">
-              Tidak ada item produk.
-            </CardContent>
+            <CardContent className="p-6 text-gray-500">Tidak ada item produk.</CardContent>
           </Card>
         )}
 
-        {/* ================= TOMBOL AKSI ================= */}
+        {/* ================= TOMBOL AKSI ALUR CETAK ================= */}
         <Card>
           <CardContent className="p-6">
             <div className="flex gap-3">
-              {/* Jika status siap cetak */}
               {currentStage === "siap cetak" && (
                 <Button
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-blue-600 hover:bg-blue-700 rounded-xl font-bold transition-all active:scale-95"
                   onClick={() => updateStage("cetak")}
                 >
                   <Printer className="w-4 h-4 mr-2" />
@@ -407,10 +321,9 @@ const fetchOrder = async () => {
                 </Button>
               )}
 
-              {/* Jika sedang cetak */}
               {currentStage === "cetak" && (
                 <Button
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 rounded-xl font-bold transition-all active:scale-95"
                   onClick={() => updateStage("selesai")}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -418,9 +331,8 @@ const fetchOrder = async () => {
                 </Button>
               )}
 
-              {/* Jika selesai */}
               {currentStage === "selesai" && (
-                <Badge className="bg-green-100 text-green-700 border border-green-200">
+                <Badge className="bg-green-100 text-green-700 border border-green-200 font-bold py-2 px-4 rounded-xl">
                   Pesanan Selesai
                 </Badge>
               )}

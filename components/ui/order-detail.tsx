@@ -73,7 +73,7 @@ export default function OrderDetailModal({
                 <div className="space-y-2">
                   <label className="text-sm text-gray-500">File Desain</label>
                   <img
-                    src={`http://127.0.0.1:8000/storage/${item.design.design_file}`}
+                    src={`${(process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").replace("/api", "")}/storage/${item.design.design_file}`}
                     className="rounded-md max-h-[220px] border"
                     alt="design"
                   />
@@ -94,7 +94,7 @@ export default function OrderDetailModal({
                       {files.map((file: string, idx: number) => (
                         <img
                           key={idx}
-                          src={`http://127.0.0.1:8000/storage/${file}`}
+                          src={`${(process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").replace("/api", "")}/storage/${file}`}
                           className="rounded-md max-h-[180px] border"
                           alt="reference"
                         />

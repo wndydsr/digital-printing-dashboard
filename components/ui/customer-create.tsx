@@ -44,7 +44,7 @@ export default function CustomerCreateModal({
     try {
       const token = localStorage.getItem("token")
 
-  const res = await fetch("http://127.0.0.1:8000/api/customers", {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/customers`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

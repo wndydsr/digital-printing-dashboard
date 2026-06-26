@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/frontend:latest
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    restart: always
+
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/backend:latest
+    pull_policy: always
+    ports:
+      - "8000:80"
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - app_storage:/var/www/html/storage/app/public
+
+  queue:
+    image: ghcr.io/${GITHUB_REPOSITORY}/backend:latest
+    pull_policy: always
+    command: php artisan queue:work --tries=3 --timeout=90
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - app_storage:/var/www/html/storage/app/public
+
+  reverb:
+    image: ghcr.io/${GITHUB_REPOSITORY}/backend:latest
+    pull_policy: always
+    command: php artisan reverb:start --host="0.0.0.0" --port=8080
+    ports:
+      - "8080:8080"
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - app_storage:/var/www/html/storage/app/public
+
+  db:
+    image: mysql:8.0
+    ports:
+      - "${DB_PORT_EXTERNAL:-3306}:3306"
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-secret}
+      - MYSQL_DATABASE=${DB_DATABASE:-percetakan_db}
+    volumes:
+      - db_data2:/var/lib/mysql
+
+volumes:
+  db_data2:
+  app_storage:

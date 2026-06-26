@@ -31,7 +31,7 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
       const token = localStorage.getItem("token")
 
       // Mengarah ke endpoint PUT karyawan
-      const res = await fetch(`http://127.0.0.1:8000/api/karyawan/${karyawan.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/karyawan/${karyawan.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

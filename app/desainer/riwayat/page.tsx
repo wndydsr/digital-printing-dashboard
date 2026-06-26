@@ -111,19 +111,11 @@ export default function RiwayatDesainPage() {
         </div>
 
         {/* Card */}
-        <Card className="border-gray-200">
-          <CardHeader>
-            <CardTitle>Riwayat Desain</CardTitle>
-
-            <CardDescription>
-              Daftar pesanan yang telah selesai diproses
-            </CardDescription>
-          </CardHeader>
-
+        <Card className="border-white">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow className="bg-gray-50">
+                <TableRow className="bg-gray-20">
                   <TableHead>No Pesanan</TableHead>
                   <TableHead>Pelanggan</TableHead>
                   <TableHead>Produk</TableHead>

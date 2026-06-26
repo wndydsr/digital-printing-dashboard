@@ -189,7 +189,7 @@ useEffect(() => {
                             <img
                               src={
                                 product.photo
-                                  ? `http://127.0.0.1:8000/storage/${product.photo}`
+                                  ? `${(process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").replace(/\/api$/, "")}/storage/${product.photo}`
                                   : "/placeholder.png"
                               }
                               className="w-10 h-10 rounded object-cover"

@@ -38,7 +38,6 @@ public function broadcastWith(): array
         'message' => [
             'id' => $this->message->id,
             'order_id' => $this->message->order_id,
-            'order_item_id' => $this->message->order_item_id, // 🔥 FIX UTAMA: Wajib ikut dikirim!
             'sender' => $this->message->sender,
             'message' => $this->message->message,
             'file' => $this->message->file,

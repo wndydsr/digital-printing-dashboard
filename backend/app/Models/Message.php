@@ -8,7 +8,6 @@ class Message extends Model
 {
     protected $fillable = [
         'order_id',
-        'order_item_id',
         'sender',
         'message',
         'file',

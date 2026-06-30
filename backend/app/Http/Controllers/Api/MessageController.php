@@ -30,7 +30,6 @@ class MessageController extends Controller
 
         $message = Message::create([
             'order_id' => (int)$orderId,
-            'order_item_id' => $request->order_item_id,
             'sender' => $request->sender ?? 'desainer',
             'message' => $request->message,
             'file' => $filePath,

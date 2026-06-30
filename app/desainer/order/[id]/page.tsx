@@ -93,8 +93,8 @@ export default function DetailPesananPage() {
       formData.append("file", file)
       // 🔥 FIX: Disamakan persis dengan isi pesan payload dari halaman obrolan
       formData.append("message", "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.")
-      formData.append("is_design", "1")
-      if (itemId) formData.append("order_item_id", itemId)
+      // formData.append("is_design", "1")
+      // if (itemId) formData.append("order_item_id", itemId)
 
 
       await apiFetch(`/orders/${params.id}/messages`, {

@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Send, Paperclip, Smile, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// 🛠️ TAMBAH useSearchParams UNTUK MENANGKAP ID ITEM AKTIF DARI ANTRIAN
-import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { initEcho } from "@/lib/echo";
 
@@ -21,7 +20,6 @@ interface Message {
   message?: string;
   file?: string;
   is_design?: boolean | number | string;
-  order_item_id?: number | string; // 🛠️ Menampung relasi ID item produk
   created_at: string;
 }
 
@@ -58,6 +56,9 @@ export default function DiskusiDesainPolesan() {
   const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // State bantuan untuk memegang preview blob lokal pas gambar di-upload desainer
+  const [uploadingBlob, setUploadingBlob] = useState<string | null>(null);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
   const ASSET_URL = API_URL ? API_URL.replace(/\/api$/, "").replace(/\/api\/$/, "") : "";
   
@@ -65,32 +66,29 @@ export default function DiskusiDesainPolesan() {
 
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // ─── 🛠️ AMBIL QUERY ITEM ID DARI URL (CONTOH: ?item=5) ───
-  const itemId = searchParams.get("item");
 
   useEffect(() => {
     initEcho();
     if (!params?.id || !window.Echo) return;
 
-    // Echo private channel tetap mendengarkan chat order terkait
     const channel = window.Echo.private(`chat.${params.id}`);
     channel.listen('.MessageSent', (e: any) => {
+      console.log("🔥 EVENT TERIMA DI DESAINER:", e);
       const incomingMessage = e.message || e;
       
-      // 🛠️ FILTER REAL-TIME: Hanya masukkan pesan baru jika order_item_id cocok dengan produk aktif
-      if (itemId && incomingMessage.order_item_id && String(incomingMessage.order_item_id) !== String(itemId)) {
-        return; 
-      }
-
       if (incomingMessage.is_design === 1 || incomingMessage.is_design === "1") {
         incomingMessage.is_design = true;
       }
 
+      // 🛠️ Jika gambar asli dari Laravel storage sudah datang lewat Echo, matikan blob preview lokal
+      if (incomingMessage.file) {
+        setUploadingBlob(null);
+      }
+
       setMessages((prev) => {
+        // Cek duplikasi ID asli dari Database
         if (prev.some(m => m.id === incomingMessage.id)) return prev;
         return [...prev, incomingMessage];
       });
@@ -104,26 +102,18 @@ export default function DiskusiDesainPolesan() {
     return () => {
       window.Echo?.leave(`chat.${params.id}`);
     };
-  }, [params?.id, itemId]);
+  }, [params?.id]);
 
   useEffect(() => {
     fetchInitialData();
-  }, [params?.id, itemId]);
+  }, [params?.id]);
 
   const fetchInitialData = async () => {
     if (!params?.id) return;
     setIsLoading(true);
     try {
-      // API GET MESSAGES DISESUAIKAN DENGAN FILTER ITEM ID JIKA BACKEND MENDUKUNG (?item=...)
-      const chatData = await apiFetch(`/orders/${params.id}/messages?item=${itemId || ""}`);
-      
-      // Filter cadangan di sisi client jika API belum memfilter response array chat dari backend
-      const filteredMessages = chatData.filter((msg: Message) => {
-        if (!itemId || !msg.order_item_id) return true;
-        return String(msg.order_item_id) === String(itemId);
-      });
-
-      setMessages(filteredMessages.reverse());
+      const chatData = await apiFetch(`/orders/${params.id}/messages`);
+      setMessages(chatData.reverse());
 
       const orderData = await apiFetch(`/orders/${params.id}`);
       
@@ -132,22 +122,18 @@ export default function DiskusiDesainPolesan() {
       else if (orderData.current_stage_id === 3) mappedStatus = "dikerjakan";
       else if (orderData.current_stage_id === 5) mappedStatus = "selesai";
 
-      // ─── 🛠️ FIX UTAMA: VALIDASI COCOK DATA MENGGUNAKAN NUMBER PARSING AGAR TIDAK SALAH KECANTOL ───
-      const activeProductItem = orderData.items?.find((item: any) => {
-        return itemId ? Number(item.id) === Number(itemId) : false;
-      }) || orderData.items?.[0];
-
+      const firstItem = orderData.items?.[0];
       let ukuranDisplay = "Ukuran Kustom";
-      if (activeProductItem && activeProductItem.panjang && activeProductItem.lebar) {
-        ukuranDisplay = `${Number(activeProductItem.panjang)} x ${Number(activeProductItem.lebar)} meter`;
+      if (firstItem && firstItem.panjang && firstItem.lebar) {
+        ukuranDisplay = `${Number(firstItem.panjang)} x ${Number(firstItem.lebar)} meter`;
       }
 
       setOrderInfo({
         order_code: orderData.order_code || "ORD-UNKNOWN",
-        product_name: activeProductItem?.product?.name || "Produk Cetak",
-        product_thumbnail_label: activeProductItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
+        product_name: firstItem?.product?.name || "Produk Cetak",
+        product_thumbnail_label: firstItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
         size: ukuranDisplay,
-        qty: activeProductItem?.quantity || 1,
+        qty: firstItem?.quantity || 1,
         status: mappedStatus
       });
 
@@ -161,31 +147,23 @@ export default function DiskusiDesainPolesan() {
   const handleSend = async () => {
     if (!inputText.trim() || !params?.id) return;
 
-    const tempId = Date.now();
-    const tempMsg: Message = {
-      id: tempId,
-      sender: "desainer",
-      message: inputText,
-      order_item_id: itemId || undefined, // Lampirkan secara lokal
-      created_at: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, tempMsg]);
+    const textToSend = inputText;
     setInputText("");
 
     try {
       const formData = new FormData();
       formData.append("sender", "desainer");
-      formData.append("message", inputText);
-      if (itemId) formData.append("order_item_id", itemId); // KIRIMKAN RELASI ITEM ID PRODUK
+      formData.append("message", textToSend);
 
+      // 🔥 FIX UTAMA CHAT TEXT: Kirim data ke API backend, biarkan WebSocket Echo yang menggambar bubble chat-nya
       await apiFetch(`/orders/${params.id}/messages`, {
         method: "POST",
         body: formData,
       });
     } catch (err) {
       console.error("Gagal kirim:", err);
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      // Kembalikan teks ke input jika server gagal memproses request
+      setInputText(textToSend);
       alert("Gagal mengirim pesan. Silakan coba lagi.");
     }
   };
@@ -203,18 +181,18 @@ export default function DiskusiDesainPolesan() {
       {/* TOPBAR */}
       <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shadow-sm z-10">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={() => router.push("/desainer/antrian")}>
+          <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 text-slate-600" />
           </Button>
           <div className="flex items-baseline gap-2">
-            <h1 className="text-lg font-bold text-slate-800 tracking-tight">Diskusi Desain per Item –</h1>
+            <h1 className="text-lg font-bold text-slate-800 tracking-tight">Diskusi Desain –</h1>
             <Badge variant="secondary" className="font-mono text-indigo-600 bg-indigo-50 border-none px-2 py-0.5">
               {orderInfo.order_code}
             </Badge>
           </div>
         </div>
-        <Button variant="ghost" className="text-indigo-600 font-semibold hover:bg-indigo-50" onClick={() => router.push(`/desainer/order/${params?.id}?item=${itemId}`)}>
-          Spesifikasi Produk
+        <Button variant="ghost" className="text-indigo-600 font-semibold hover:bg-indigo-50" onClick={() => router.push(`/operator/order/${params?.id}`)}>
+          Detail Pesanan
         </Button>
       </header>
 
@@ -223,9 +201,9 @@ export default function DiskusiDesainPolesan() {
         {/* CHAT PANEL */}
         <section className="flex-1 flex flex-col bg-[#F8FAFC]">
           <ScrollArea className="flex-1 px-6 py-6">
-            {messages.length === 0 ? (
+            {messages.length === 0 && !uploadingBlob ? (
               <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">
-                Belum ada diskusi khusus mengenai produk ini.
+                Belum ada riwayat pesan obrolan.
               </div>
             ) : (
               Object.entries(
@@ -252,7 +230,7 @@ export default function DiskusiDesainPolesan() {
                       <div key={msg.id} className={`flex gap-3 ${isDesainer ? "flex-row-reverse" : "flex-row"}`}>
                         <Avatar className="h-9 w-9 border-2 border-white shadow-sm">
                           <AvatarFallback className={isDesainer ? "bg-indigo-600 text-white" : "bg-sky-500 text-white"}>
-                            {isDesainer ? "DS" : "CS"}
+                            {isDesainer ? "GH" : "WD"}
                           </AvatarFallback>
                         </Avatar>
 
@@ -267,8 +245,8 @@ export default function DiskusiDesainPolesan() {
                               <img 
                                src={msg.file?.startsWith("blob:") ? msg.file : `${ASSET_URL}/storage/${msg.file}`}
                                 alt="Desain" 
-                                className="w-full h-48 object-cover border-b border-slate-100 cursor-zoom-in hover:opacity-95 transition-opacity" 
-                                onClick={() => setPreviewImage(`${ASSET_URL}/storage/${msg.file}`)}
+                                className="w-full h-44 object-cover border-b border-slate-100 cursor-zoom-in hover:opacity-95 transition-opacity" 
+                                onClick={() => setPreviewImage(msg.file?.startsWith("blob:") ? msg.file : `${ASSET_URL}/storage/${msg.file}`)}
                                 onError={(e) => console.error("Gagal memuat file gambar:", e.currentTarget.src)}
                               />
                               <CardContent className="p-4">
@@ -293,6 +271,28 @@ export default function DiskusiDesainPolesan() {
                 </div>
               ))
             )}
+            
+            {/* 🔥 OPTIMISTIC VIEW UNTUK BUBBLE UPLOAD GAMBAR BARU */}
+            {uploadingBlob && (
+              <div className="flex gap-3 flex-row-reverse mb-6">
+                <Avatar className="h-9 w-9 border-2 border-white shadow-sm">
+                  <AvatarFallback className="bg-indigo-600 text-white">GH</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col max-w-[70%] items-end opacity-70">
+                  <div className="flex items-baseline gap-2 mb-1 flex-row-reverse">
+                    <span className="text-xs font-bold text-slate-700">Desainer</span>
+                    <span className="text-[10px] text-slate-400">Mengupload...</span>
+                  </div>
+                  <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl rounded-tr-sm bg-white">
+                    <img src={uploadingBlob} alt="Uploading..." className="w-full h-44 object-cover border-b border-slate-100 blur-[1px]" />
+                    <CardContent className="p-4">
+                      <p className="text-sm text-slate-500 italic">Sedang mengirim berkas pratinjau desain terbaru...</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
             <div ref={bottomRef} />
           </ScrollArea>
 
@@ -304,7 +304,7 @@ export default function DiskusiDesainPolesan() {
                   placeholder="Tulis pesan..." 
                   className="border-none bg-transparent focus-visible:ring-0 text-sm shadow-none p-0 h-10"
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
+                  onChange={(e) => setInputText(e.target.value)} // ✔️ Sudah diperbaiki menjadi setInputText
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 />
                 <Button variant="ghost" size="icon" className="text-slate-400 hover:text-indigo-600 h-8 w-8" onClick={() => fileInputRef.current?.click()}>
@@ -323,17 +323,8 @@ export default function DiskusiDesainPolesan() {
                   const file = e.target.files?.[0];
                   if (!file || !params?.id) return;
 
-                  const objekPesanSementara = {
-                    id: Date.now(),
-                    sender: "desainer" as const,
-                    message: "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.",
-                    file: URL.createObjectURL(file), 
-                    is_design: true,
-                    order_item_id: itemId || undefined,
-                    created_at: new Date().toISOString(),
-                  };
-
-                  setMessages((prev) => [...prev, objekPesanSementara]);
+                  const localBlobUrl = URL.createObjectURL(file);
+                  setUploadingBlob(localBlobUrl);
 
                   try {
                     const formData = new FormData();
@@ -341,7 +332,6 @@ export default function DiskusiDesainPolesan() {
                     formData.append("file", file);
                     formData.append("is_design", "1");
                     formData.append("message", "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.");
-                    if (itemId) formData.append("order_item_id", itemId); // UPLOAD BERKAS IKAT KE ITEM ID
 
                     await apiFetch(`/orders/${params.id}/messages`, {
                       method: "POST",
@@ -349,16 +339,9 @@ export default function DiskusiDesainPolesan() {
                     });
                     
                     e.target.value = "";
-                    
-                    const chatData = await apiFetch(`/orders/${params.id}/messages?item=${itemId || ""}`);
-                    const filteredMessages = chatData.filter((msg: Message) => {
-                      if (!itemId || !msg.order_item_id) return true;
-                      return String(msg.order_item_id) === String(itemId);
-                    });
-                    setMessages(filteredMessages.reverse());
                   } catch (err) {
                     console.error(err);
-                    setMessages((prev) => prev.filter((m) => m.id !== objekPesanSementara.id));
+                    setUploadingBlob(null);
                     alert("Gagal mengunggah gambar.");
                   }
                 }}
@@ -370,7 +353,7 @@ export default function DiskusiDesainPolesan() {
         {/* SIDEBAR */}
         <aside className="w-[300px] bg-white border-l border-slate-200 p-5 overflow-y-auto hidden lg:flex flex-col gap-8">
           <div>
-            <h3 className="text-sm font-bold text-slate-800 mb-4">Info Produk</h3>
+            <h3 className="text-sm font-bold text-slate-800 mb-4">Info Pesanan</h3>
             <div className="flex gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/50">
               <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-black text-center leading-tight shrink-0 uppercase">
                 {orderInfo.product_thumbnail_label}
@@ -386,7 +369,7 @@ export default function DiskusiDesainPolesan() {
           </div>
 
           <div>
-            <h3 className="text-sm font-bold text-slate-800 mb-4">Riwayat File Desain Item</h3>
+            <h3 className="text-sm font-bold text-slate-800 mb-4">Riwayat File Desain</h3>
             <Button 
               variant="outline" 
               className="w-full border-dashed border-indigo-200 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 mb-4 rounded-xl py-5 border-2"
@@ -397,7 +380,7 @@ export default function DiskusiDesainPolesan() {
             
             <div className="space-y-2 max-h-[300px] overflow-y-auto no-scrollbar">
               {designFilesFromMessages.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">Belum ada file desain khusus produk ini.</p>
+                <p className="text-xs text-slate-400 italic">Belum ada file desain.</p>
               ) : (
                 designFilesFromMessages.map((fileItem) => (
                   <div 
@@ -408,7 +391,7 @@ export default function DiskusiDesainPolesan() {
                     <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
                       <CheckCircle2 className="h-4 w-4" />
                     </div>
-                    <div className="flex flex-col min-w-0 flex-1">
+                    <div className="overflow-hidden flex-1 flex flex-col min-w-0">
                       <span className="text-xs font-bold text-slate-700 truncate">{fileItem.file?.split('/').pop()}</span>
                       <span className="text-[10px] text-slate-400">{new Date(fileItem.created_at).toLocaleDateString("id-ID")}</span>
                     </div>
@@ -420,7 +403,7 @@ export default function DiskusiDesainPolesan() {
         </aside>
       </main>
 
-      {/* MODAL CUSTOM PREVIEW */}
+      {/* ==================== 🔹 MODAL CUSTOM PDF VIEWER LAYOUT ==================== */}
       {previewImage && (
         <div 
           className="fixed inset-0 z-[9999] flex flex-col bg-[#525659] text-white font-sans select-none"
@@ -434,6 +417,14 @@ export default function DiskusiDesainPolesan() {
               <span className="text-sm font-medium truncate tracking-wide max-w-[200px] sm:max-w-xs">
                 {previewImage.split('/').pop() || "Pratinjau_Desain.pdf"}
               </span>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center bg-[#202224] px-3 py-1 rounded border border-neutral-700">
+                <span>1</span>
+                <span className="mx-1 text-neutral-500">/</span>
+                <span className="text-neutral-400">1</span>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">

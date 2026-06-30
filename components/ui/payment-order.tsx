@@ -15,7 +15,7 @@ import {
 interface Props {
   open: boolean
   onClose: () => void
-  onConfirm: () => Promise<void>
+  onConfirm: () => Promise<any>
 
   customer: any
   products: any[]
@@ -31,10 +31,6 @@ export default function PaymentModal({
   total,
 }: Props) {
 
-  // =========================
-  // STATE
-  // =========================
-
   const [deliveryMethod, setDeliveryMethod] =
     useState("")
 
@@ -46,6 +42,13 @@ export default function PaymentModal({
 
   const [showInvoice, setShowInvoice] =
     useState(false)
+
+  const [realOrderId, setRealOrderId] = useState<string>("")
+
+  const [savedCustomer, setSavedCustomer] = useState<any>(null)
+  const [savedProducts, setSavedProducts] = useState<any[]>([])
+  const [savedTotal, setSavedTotal] = useState<number>(0)
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
 
   // =========================
   // STEP STATUS
@@ -68,11 +71,9 @@ export default function PaymentModal({
     contentRef: invoiceRef,
   })
 
-  // =========================
-  // SUBMIT
-  // =========================
-
   const handleSubmit = async () => {
+    // Pencegahan darurat jika fungsi terpanggil lewat enter key/cara lain saat loading
+    if (isSubmitting) return 
 
     if (!deliveryMethod) {
       return alert("Pilih delivery dulu")
@@ -82,21 +83,40 @@ export default function PaymentModal({
       return alert("Pilih payment dulu")
     }
 
-    setConfirmationDone(true)
+    try {
+      setIsSubmitting(true) // 🛠️ 1. NYALAKAN LOCK LOADING DI SINI
 
-    await onConfirm()
+      setSavedCustomer(customer)
+      setSavedProducts(products)
+      setSavedTotal(total)
 
-    setShowInvoice(true)
+      setConfirmationDone(true)
+
+      const responseData = await onConfirm()
+      
+      const idDariDatabase = responseData?.data?.id || responseData?.id || responseData?.data?.no_pesanan;
+      
+      if (!idDariDatabase) {
+        alert("Pesanan berhasil dibuat, tapi nomor urut database gagal dimuat.")
+      }
+
+      const formattedOrderNo = idDariDatabase 
+        ? `ORD-${String(idDariDatabase).padStart(5, '0')}`
+        : `ORD-UNKNOWN`
+      
+      setRealOrderId(formattedOrderNo)
+      setShowInvoice(true)
+    } catch (error) {
+      console.error("Gagal konfirmasi pesanan:", error)
+      setConfirmationDone(false)
+    } finally {
+      setIsSubmitting(false) // 🛠️ 2. MATIKAN LOCK JIKA SANG INDUK SELESAI/GAGAL RESPONS
+    }
   }
-
-  // =========================
-  // STEP SECTION
-  // =========================
 
   const StepSection = () => (
     <div className="bg-white border rounded-xl p-5 flex items-center">
 
-      {/* SHIPPING */}
       <div
         className={`flex items-center gap-2 text-sm font-semibold ${
           shippingDone
@@ -114,12 +134,9 @@ export default function PaymentModal({
         >
           {shippingDone ? "✓" : "1"}
         </div>
-
         SHIPPING
-
       </div>
 
-      {/* LINE */}
       <div
         className={`flex-1 h-px mx-3 ${
           shippingDone
@@ -128,7 +145,6 @@ export default function PaymentModal({
         }`}
       />
 
-      {/* PAYMENT */}
       <div
         className={`flex items-center gap-2 text-sm font-semibold ${
           paymentDone
@@ -186,9 +202,6 @@ export default function PaymentModal({
     </div>
   )
 
-  // =========================
-  // DELIVERY SECTION
-  // =========================
 
   const DeliverySection = () => (
     <div className="space-y-4">
@@ -252,10 +265,6 @@ export default function PaymentModal({
     </div>
   )
 
-  // =========================
-  // PAYMENT SECTION
-  // =========================
-
   const PaymentSection = () => (
     <div className="space-y-4">
 
@@ -318,10 +327,6 @@ export default function PaymentModal({
     </div>
   )
 
-  // =========================
-  // QRIS SECTION
-  // =========================
-
   const QRISSection = () => (
     <div className="bg-gray-50 border rounded-2xl p-6">
 
@@ -362,10 +367,6 @@ export default function PaymentModal({
     </div>
   )
 
-  // =========================
-  // CASH SECTION
-  // =========================
-
   const CashSection = () => (
     <div className="bg-gray-50 border rounded-2xl p-6 text-center">
 
@@ -379,70 +380,43 @@ export default function PaymentModal({
 
     </div>
   )
-// =========================
-  // SUMMARY
-  // =========================
 
   const SummarySection = () => {
-    // Sekarang console.log ada di dalam kurung kurawal pembuka, ini baru valid
     console.log("Cek isi data products:", products);
 
     return (
       <div className="bg-gray-50 border rounded-2xl p-5 space-y-4">
-
         <div>
-          <h2 className="font-bold">
-            Order Summary
-          </h2>
-
-          <p className="text-sm text-gray-400">
-            #{Date.now()}
-          </p>
+          <h2 className="font-bold">Order Summary</h2>
+          {/* 🔥 NOMOR ORDER DUMMY / DATE.NOW DI SINI SUDAH DIHAPUS TOTAL */}
+          <p className="text-sm text-gray-400">Ringkasan item pesanan</p> 
         </div>
 
         <div className="space-y-3">
-
           {products
             .filter((p) => p.product_id)
             .map((item) => (
-
-              <div
-                key={item.id}
-                className="flex justify-between text-sm"
-              >
-
+              <div key={item.id} className="flex justify-between text-sm">
                 <span className="text-gray-500">
                   {item.quantity}x {item.product_name}
                 </span>
-
                 <span className="font-medium">
-                  {/* Perhitungan harga disesuaikan dengan safety check Number() */}
                   Rp {((Number(item.price) || 0) * (Number(item.quantity) || 0)).toLocaleString("id-ID")}
                 </span>
-
               </div>
             ))}
-
         </div>
 
         <div className="border-t pt-4 flex justify-between items-center">
-
-          <span className="font-semibold">
-            Total
-          </span>
-
+          <span className="font-semibold">Total</span>
           <span className="text-2xl font-black text-blue-600">
             Rp {total.toLocaleString("id-ID")}
           </span>
-
         </div>
-
       </div>
     )
   }
-  // =========================
-  // RENDER
-  // =========================
+    
   
   return (
     <>
@@ -486,16 +460,19 @@ export default function PaymentModal({
 
                 <button
                   onClick={onClose}
-                  className="flex-1 border rounded-xl p-4"
+                  disabled={isSubmitting} // 🛠️ Kunci tombol cancel juga saat loading
+                  className="flex-1 border rounded-xl p-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
 
                 <button
                   onClick={handleSubmit}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-4 font-semibold"
+                  disabled={isSubmitting} // 🛠️ KUNCI TOMBOL CONFIRM
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-4 font-semibold disabled:bg-blue-400 disabled:cursor-not-allowed transition-all"
                 >
-                  Confirm Order
+                  {/* 🛠️ UBAH TEKS TOMBOL BIAR INTERAKTIF */}
+                  {isSubmitting ? "Processing Order..." : "Confirm Order"}
                 </button>
 
               </div>
@@ -516,53 +493,41 @@ export default function PaymentModal({
       </Dialog>
 
       {/* INVOICE MODAL */}
-      <Dialog
-        open={showInvoice}
-        onOpenChange={setShowInvoice}
-      >
-
+     <Dialog open={showInvoice} onOpenChange={setShowInvoice}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
-
           <DialogHeader>
-
-            <DialogTitle>
-              Invoice Order
-            </DialogTitle>
-
+            <DialogTitle>Invoice Order</DialogTitle>
           </DialogHeader>
 
+          {/* 🛠️ PASANG HIDEBUTTON DI SINI */}
           <InvoiceOrder
             ref={invoiceRef}
-            orderId={`ORD-${Date.now()}`}
-            customer={customer}
-            products={products}
-            total={total}
+            orderId={realOrderId}
+            customer={savedCustomer || customer}
+            products={savedProducts.length > 0 ? savedProducts : products}
+            total={savedTotal || total}
             deliveryMethod={deliveryMethod}
             paymentMethod={paymentMethod}
+            hideButton={true} 
           />
 
-          <div className="flex gap-3 mt-5">
-
+          {/* SEKARANG HANYA ADA SATU SET TOMBOL DI SINI */}
+          <div className="flex gap-3 mt-5 print:hidden">
             <button
-              onClick={() =>
-                setShowInvoice(false)
-              }
-              className="flex-1 border rounded-xl p-4"
+              onClick={() => setShowInvoice(false)}
+              className="flex-1 border rounded-xl p-4 hover:bg-gray-50 transition"
             >
               Close
             </button>
 
             <button
               onClick={() => handlePrint()}
-              className="flex-1 bg-blue-600 text-white rounded-xl p-4 font-semibold"
+              className="flex-1 bg-blue-600 text-white rounded-xl p-4 font-semibold hover:bg-blue-700 transition"
             >
               Print Invoice
             </button>
-
           </div>
-
         </DialogContent>
-
       </Dialog>
 
     </>

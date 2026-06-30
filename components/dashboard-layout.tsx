@@ -1,10 +1,10 @@
 "use client"
 
 import type React from "react"
-
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Settings, Users, Database, ArrowRight } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Search, Bell, Home, Workflow, BarChart3, Settings, Users, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -23,10 +23,7 @@ const navigation = [
   { name: "Pelanggan", href: "/admin/pelanggan", icon: Users },
   { name: "Produk", href: "/admin/produk", icon: Database },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  // { name: "Workflows", href: "/admin/workflows", icon: Workflow },
-  // { name: "Templates", href: "/templates", icon: Database },
   { name: "Karyawan", href: "/admin/karyawan", icon: Users },
-  // { name: "Settings", href: "/settings", icon: Settings },
 ]
 
 interface DashboardLayoutProps {
@@ -35,6 +32,33 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [adminName, setAdminName] = useState("Admin")
+
+  // Ambil nama dari localStorage saat komponen dimuat di browser
+  useEffect(() => {
+    const name = localStorage.getItem("user_name")
+    if (name) {
+      setAdminName(name)
+    }
+  }, [])
+
+  const handleSignOut = () => {
+ 
+    localStorage.removeItem("token")
+    localStorage.removeItem("role")
+    localStorage.removeItem("user_name")
+    localStorage.removeItem("user_email")
+    
+    router.push("/login")
+  }
+
+  // Mendapatkan inisial untuk Avatar Fallback (misal: "Windy Sari" -> "WS")
+  const getInitials = (name: string) => {
+    const parts = name.split(" ")
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+    return name.slice(0, 2).toUpperCase()
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -45,43 +69,50 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
               <Workflow className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-gray-900">Tugas Akhir</span>
+            <span className="font-semibold text-gray-900">Prinora Store</span>
           </div>
           <div className="text-sm text-gray-500">
             <span>Dashboard</span> <span className="mx-1">/</span>
-            <span className="capitalize">{pathname === "/" ? "Overview" : pathname.slice(1)}</span>
+            <span className="capitalize">{pathname === "/admin" ? "Overview" : pathname.replace("/admin/", "")}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search workflows, logs..."
-              className="pl-10 w-80 bg-gray-50 border-gray-200 focus:bg-white"
-            />
-          </div>
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="w-4 h-4" />
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </Button>
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="w-8 h-8">
                   <AvatarImage src="/placeholder.svg?height=32&width=32" />
-                  <AvatarFallback>AE</AvatarFallback>
+                  <AvatarFallback>{getInitials(adminName)}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Alex Evans</DropdownMenuLabel>
+              {/* Menampilkan Nama Akun Secara Dinamis */}
+              <DropdownMenuLabel className="font-semibold text-gray-900">{adminName}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Support</DropdownMenuItem>
+              
+              {/* Menggunakan asChild agar Link tidak merusak struktur HTML */}
+              <DropdownMenuItem asChild>
+                <Link href="/admin/profile" className="w-full cursor-pointer">
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/admin/settings" className="w-full cursor-pointer">
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Sign out</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSignOut} className="text-red-600 cursor-pointer focus:text-red-600">
+                Sign out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -91,8 +122,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Sidebar */}
         <aside className="w-60 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="p-4">
-            
-
             <nav className="space-y-1">
               {navigation.map((item) => {
                 const isActive = pathname === item.href

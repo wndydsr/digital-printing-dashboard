@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Eye, Trash2, Plus, Download, Filter } from "lucide-react"
+import { Eye, Trash2, Plus, Download } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -45,7 +45,7 @@ export default function CustomerPage() {
       console.error(err)
     }
   }
-     
+      
 
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -75,11 +75,47 @@ export default function CustomerPage() {
     c.name?.toLowerCase().includes(search.toLowerCase())
   )
 
-
   // PAGINATION
   const startIndex = (currentPage - 1) * itemsPerPage
   const currentData = filtered.slice(startIndex, startIndex + itemsPerPage)
   const totalPages = Math.ceil(filtered.length / itemsPerPage)
+
+  // 🛠️ FUNGSI EXCEL DATA EXPORTER (NATIVE CLIENT METHOD)
+  const handleExportCustomers = () => {
+    if (customers.length === 0) {
+      alert("Tidak ada data pelanggan untuk di-export.")
+      return
+    }
+
+    // 1. Definisikan header kolom Excel
+    const headers = ["ID Pelanggan", "Nama Lengkap", "No Telepon", "Email", "Alamat Tinggal"]
+
+    // 2. Format baris data (menggunakan data dari variabel filtered agar sinkron dengan kolom pencarian)
+    const csvRows = filtered.map((c) => {
+      return [
+        c.id,
+        `"${c.name || "-"}"`,
+        `"${c.phone || "-"}"`,
+        `"${c.email || "-"}"`,
+        `"${c.address || "-"}"`
+      ].join(",")
+    })
+
+    // 3. Gabungkan struktur baris dengan pembatas baris baru
+    const csvContent = [headers.join(","), ...csvRows].join("\n")
+
+    // 4. Bungkus dengan BOM UTF-8 (\uFEFF) agar terbaca rapi oleh Microsoft Excel & Sheets
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+
+    // 5. Eksekusi pengunduhan file otomatis dari browser client
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", `Data_Pelanggan_Prinora_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   return (
     <DashboardLayout>
@@ -90,11 +126,8 @@ export default function CustomerPage() {
           <h1 className="text-2xl font-semibold">Pelanggan</h1>
 
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2">
-              <Filter className="w-4 h-4" /> Filter
-            </Button>
-
-            <Button variant="outline" className="gap-2">
+            {/* 🛠️ FILTER DIHAPUS, DAN BUTTON EXPORT DISINKRONKAN DENGAN ONCLICK */}
+            <Button onClick={handleExportCustomers} variant="outline" className="gap-2">
               <Download className="w-4 h-4" /> Export
             </Button>
             <Button
@@ -151,12 +184,12 @@ export default function CustomerPage() {
                           <Eye className="w-5 h-5" />
                         </button>
                         <button onClick={() => {
-                                 setSelectedId(c.id)
-                                  setOpenDelete(true)
-                                }}
-                                className="text-gray-400 hover:text-red-500 transition-colors"
-                              >
-                                <Trash2 className="w-5 h-5" />
+                                   setSelectedId(c.id)
+                                    setOpenDelete(true)
+                                  }}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="w-5 h-5" />
                         </button>
                       </div>
                     </TableCell>
@@ -169,7 +202,7 @@ export default function CustomerPage() {
                       
                       {/* INFO */}
                       <span className="text-sm text-gray-500">
-                        {startIndex + 1} - {Math.min(startIndex + itemsPerPage, customers.length)} of {customers.length} Pages
+                        {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length} items
                       </span>          
                       <Pagination className="mx-0 w-auto justify-end"> 
                         <PaginationContent>

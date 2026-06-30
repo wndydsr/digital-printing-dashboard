@@ -148,9 +148,25 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
       formData.append("estimated_duration", form.estimated_duration)
       formData.append("status", form.status)
       formData.append("category_id", form.category_id) 
-      formData.append("is_custom", form.is_custom ? "1" : "0") // 👈 2. KIRIM KE BACKEND VIA FORM DATA
-      formData.append("fields", JSON.stringify(fields))
-      formData.append("attributes", JSON.stringify(attributes))
+
+      const isCustomValue = form.is_custom === true || String(form.is_custom) === "true" ? "1" : "0";
+      formData.append("is_custom", isCustomValue)
+
+      const sanitizedFields = fields.map(f => ({
+        name: f.name || "",
+        label: f.label || "",
+        type: f.type || "text",
+        options: Array.isArray(f.options) ? f.options : [] // Pastikan selalu array mutlak
+      }))
+      formData.append("fields", JSON.stringify(sanitizedFields))
+
+      const sanitizedAttributes = attributes.map(a => ({
+        name: a.name || "",
+        values: Array.isArray(a.values) 
+          ? a.values.map(v => ({ name: v.name || "", additional_price: Number(v.additional_price || 0) }))
+          : []
+      }))
+      formData.append("attributes", JSON.stringify(sanitizedAttributes))
 
       if (photo) {
         formData.append("photo", photo)
@@ -161,10 +177,12 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
       await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/products`, {
         method: "POST",
         headers: {
+          "Accept": "application/json",
           Authorization: `Bearer ${token}`, 
         },
         body: formData,
       })
+      
 
       onSuccess()
       onClose()
@@ -293,7 +311,6 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
                       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/categories`, {
                         method: "POST",
                         headers: {
-                          "Content-Type": "application/json",
                           Authorization: `Bearer ${token}`,
                         },
                         body: JSON.stringify({
@@ -344,6 +361,8 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
               type="number"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
+              onWheel={(e) => e.currentTarget.blur()}
+              className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </div>
 
@@ -354,6 +373,8 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
               type="number"
               value={form.estimated_duration}
               onChange={(e) => setForm({ ...form, estimated_duration: e.target.value })}
+              onWheel={(e) => e.currentTarget.blur()}
+              className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </div>
 
@@ -462,10 +483,12 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
                     <Input
                       type="number"
                       placeholder="Harga Tambahan"
-                      value={value.additional_price}
+                      value={value.additional_price === 0 ? "" : value.additional_price}
                       onChange={(e) =>
                         updateAttributeValue(attrIndex, valueIndex, "additional_price", Number(e.target.value))
                       }
+                       onWheel={(e) => e.currentTarget.blur()}
+                       className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <Button type="button" variant="destructive" onClick={() => removeAttributeValue(attrIndex, valueIndex)}>
                       X

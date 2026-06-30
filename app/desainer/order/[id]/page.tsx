@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -8,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { DesainerLayout } from "@/components/layout/DesainerLayout"
-import { useRouter, useParams } from "next/navigation"
+// 🛠️ TAMBAH useSearchParams UNTUK DETEKSI PRODUK YANG DI-KLIK DESAINER
+import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 
 export default function DetailPesananPage() {
@@ -16,58 +16,71 @@ export default function DetailPesananPage() {
   const [revisi, setRevisi] = useState("")
   const [showRevisi, setShowRevisi] = useState(false)
   const [order, setOrder] = useState<any>(null)
+  const [activeItem, setActiveItem] = useState<any>(null) // 🛠️ STATE UNTUK MENAMPUNG 1 ITEM AKTIF
   const [isUploading, setIsUploading] = useState(false)
   
-
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
 
-  const designFiles = order?.items?.flatMap((item: any) => {
-    const designFile = item.design?.design_file ? [item.design.design_file] : []
-    const referenceFiles = item.design?.reference_files || []
+  // ─── 🛠️ AMBIL QUERY ITEM ID DARI URL (CONTOH: ?item=5) ───
+  const itemId = searchParams.get("item")
+
+  // ─── 🛠️ FIX PARSE JSON ARRAY AGAR NAMA FILE UTUH DARI ACTIVE ITEM ───
+  const designFiles = (() => {
+    if (!activeItem) return []
+    
+    const designFile = activeItem.design?.design_file ? [activeItem.design.design_file] : []
+    const rawRefFiles = activeItem.design?.reference_files || []
+    
+    let referenceFiles: string[] = []
+    
+    // Jika data dari DB berbentuk string JSON "[file1.jpg, ...]", kita bongkar jadi array objek
+    if (typeof rawRefFiles === "string") {
+      try {
+        referenceFiles = JSON.parse(rawRefFiles)
+      } catch (e) {
+        referenceFiles = [rawRefFiles]
+      }
+    } else {
+      referenceFiles = rawRefFiles
+    }
+
     return [...designFile, ...referenceFiles]
-  }) || []
+  })()
 
   // =========================
   // HANDLE DOWNLOAD
   // =========================
   const handleDownload = async (filepath: string) => {
-    try {
-      const token = localStorage.getItem("token")
-      const securedFilename = encodeURIComponent(filepath)
-      const downloadUrl = `http://127.0.0.1:8000/api/download/design/${securedFilename}`
+    const cleanPath = filepath.replace(/^\/?storage\//, "")
+    const token = localStorage.getItem("token") // sesuaikan dengan key token kamu
 
-      const response = await fetch(downloadUrl, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/json"
-        },
-      })
+    const response = await fetch(`https://api.prinora.store/api/download/design/${cleanPath}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
 
-      if (!response.ok) throw new Error("Gagal download file")
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-
-      const a = document.createElement("a")
-      a.href = url
-      a.download = filepath.split("/").pop() || "download-file"
-
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-
-      window.URL.revokeObjectURL(url)
-    } catch (err) {
-      console.error("Gagal mengunduh file:", err)
+    if (!response.ok) {
+      alert("File tidak ditemukan")
+      return
     }
-  }
 
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = blobUrl
+  link.download = cleanPath.split("/").pop() || "download"
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+}
   // =========================
-  // HANDLE UPLOAD DESIGN (SAMA DENGAN SISI CHAT)
+  // HANDLE UPLOAD DESIGN
   // =========================
-  const handleUploadDesign = async () => {
+   const handleUploadDesign = async () => {
     if (!file || !params?.id) {
       alert("Silakan pilih file terlebih dahulu!")
       return
@@ -80,6 +93,9 @@ export default function DetailPesananPage() {
       formData.append("file", file)
       // 🔥 FIX: Disamakan persis dengan isi pesan payload dari halaman obrolan
       formData.append("message", "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.")
+      formData.append("is_design", "1")
+      if (itemId) formData.append("order_item_id", itemId)
+
 
       await apiFetch(`/orders/${params.id}/messages`, {
         method: "POST",
@@ -88,14 +104,14 @@ export default function DetailPesananPage() {
 
       setFile(null)
       // Langsung arahkan ke halaman chat diskusi agar desainer bisa melanjutkan obrolan
-      router.push(`/desainer/chat/${params.id}`)
-    } catch (err) {
-      console.error("Gagal mengunggah desain:", err)
-      alert("Gagal mengunggah berkas desain ke ruang obrolan.")
-    } finally {
-      setIsUploading(false)
+      router.push(`/desainer/chat/${params.id}?item=${itemId || activeItem?.id || ""}`)
+      } catch (err) {
+        console.error("Gagal mengunggah desain:", err)
+        alert("Gagal mengunggah berkas desain ke ruang obrolan.")
+      } finally {
+        setIsUploading(false)
+      }
     }
-  }
 
   // =========================
   // LOAD DATA PESANAN
@@ -105,15 +121,23 @@ export default function DetailPesananPage() {
       try {
         const data = await apiFetch(`/orders/${params.id}`)
         setOrder(data)
+
+        // ─── 🛠️ ISOLASI DATA HANYA UNTUK ITEM YANG DI-KLIK DESAINER ───
+        if (data?.items && itemId) {
+          const matchedItem = data.items.find((item: any) => String(item.id) === itemId)
+          setActiveItem(matchedItem || data.items[0])
+        } else if (data?.items?.length > 0) {
+          setActiveItem(data.items[0])
+        }
       } catch (err) {
         console.error("Gagal memuat detail pesanan:", err)
       }
     }
 
     fetchOrder()
-  }, [params.id])
+  }, [params.id, itemId])
 
-  if (!order) {
+  if (!order || !activeItem) {
     return (
       <DesainerLayout>
         <div className="h-[60vh] flex items-center justify-center">
@@ -128,6 +152,11 @@ export default function DetailPesananPage() {
       .replace(/_/g, " ")
       .replace(/\b\w/g, (l) => l.toUpperCase())
   }
+
+  // Ambil rincian json kustom detail dari satu produk terpilih
+  const itemDetails = typeof activeItem.details === "string" 
+    ? JSON.parse(activeItem.details) 
+    : activeItem.details || {}
 
   return (
     <DesainerLayout>
@@ -145,7 +174,9 @@ export default function DetailPesananPage() {
           </Button>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Detail Pesanan</h1>
-            <p className="text-xs text-slate-500">Informasi lengkap spesifikasi cetak & berkas</p>
+            <p className="text-xs text-slate-500">
+              Fokus Kerja: <span className="font-bold text-purple-600">{activeItem.product?.name}</span>
+            </p>
           </div>
         </div>
 
@@ -169,9 +200,9 @@ export default function DetailPesananPage() {
                 <span className="font-semibold text-slate-800">{order?.customer?.name || "-"}</span>
               </div>
               <div className="flex justify-between border-b pb-1.5 border-dashed">
-                <span>Produk Utama</span>
-                <span className="font-medium text-slate-700">
-                  {order?.items?.map((i: any) => i.product?.name).join(", ") || "-"}
+                <span>Target Produk</span>
+                <span className="font-bold text-purple-600">
+                  {activeItem.product?.name}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -189,7 +220,7 @@ export default function DetailPesananPage() {
               <CardTitle className="text-sm font-bold text-slate-700">Brief Permintaan Pelanggan</CardTitle>
             </CardHeader>
             <CardContent className="p-4 text-xs text-slate-600 whitespace-pre-line leading-relaxed flex-1 bg-white rounded-b-xl">
-              {order?.notes || "Tidak ada catatan instruksi khusus dari pelanggan."}
+              {activeItem?.notes || order?.notes || "Tidak ada catatan instruksi khusus dari pelanggan."}
             </CardContent>
           </Card>
         </div>
@@ -197,39 +228,33 @@ export default function DetailPesananPage() {
         {/* CARD SPESIFIKASI CETAK */}
         <Card className="shadow-sm border-slate-200/80 rounded-xl">
           <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
-            <CardTitle className="text-sm font-bold text-slate-700">Rincian Spesifikasi Cetak</CardTitle>
+            <CardTitle className="text-sm font-bold text-slate-700">Rincian Spesifikasi Cetak: {activeItem.product?.name}</CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-3">
-            {order?.items?.map((item: any, idx: number) => {
-              const details = typeof item.details === "string" ? JSON.parse(item.details) : item.details || {}
+            <div className="border border-slate-100 rounded-lg p-3 bg-slate-50/30 space-y-2">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                <p className="font-bold text-xs text-slate-800">{activeItem.product?.name}</p>
+                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0">Qty: {activeItem.quantity || 0} pcs</Badge>
+              </div>
 
-              return (
-                <div key={idx} className="border border-slate-100 rounded-lg p-3 bg-slate-50/30 space-y-2">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <p className="font-bold text-xs text-slate-800">{item.product?.name}</p>
-                    <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0">Qty: {item.quantity || 0} pcs</Badge>
-                  </div>
-
-                  {item.panjang && item.lebar && (
-                    <div className="flex justify-between text-xs border-b border-slate-100/70 pb-1">
-                      <span className="text-slate-400">Ukuran Dimensi</span>
-                      <span className="font-semibold text-slate-700">{Number(item.panjang)} x {Number(item.lebar)} meter</span>
-                    </div>
-                  )}
-
-                  {Object.keys(details).length > 0 ? (
-                    Object.entries(details).map(([key, value]: any) => (
-                      <div key={key} className="flex justify-between text-xs border-b border-slate-100/70 pb-1 last:border-none">
-                        <span className="text-slate-400">{formatLabel(key)}</span>
-                        <span className="font-medium text-slate-700">{String(value)}</span>
-                      </div>
-                    ))
-                  ) : (
-                    !item.panjang && <p className="text-[11px] text-slate-400 italic">Tidak ada spesifikasi khusus.</p>
-                  )}
+              {activeItem.panjang && activeItem.lebar && (
+                <div className="flex justify-between text-xs border-b border-slate-100/70 pb-1">
+                  <span className="text-slate-400">Ukuran Dimensi</span>
+                  <span className="font-semibold text-slate-700">{Number(activeItem.panjang)} x {Number(activeItem.lebar)} meter</span>
                 </div>
-              )
-            })}
+              )}
+
+              {Object.keys(itemDetails).length > 0 ? (
+                Object.entries(itemDetails).map(([key, value]: any) => (
+                  <div key={key} className="flex justify-between text-xs border-b border-slate-100/70 pb-1 last:border-none">
+                    <span className="text-slate-400">{formatLabel(key)}</span>
+                    <span className="font-medium text-slate-700">{String(value)}</span>
+                  </div>
+                ))
+              ) : (
+                !activeItem.panjang && <p className="text-[11px] text-slate-400 italic">Tidak ada spesifikasi khusus.</p>
+              )}
+            </div>
           </CardContent>
         </Card>
 

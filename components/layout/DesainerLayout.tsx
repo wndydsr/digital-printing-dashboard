@@ -32,38 +32,52 @@ interface UserProfile {
 export function DesainerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   
-  // State untuk menyimpan data profile desainer yang sedang login
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: "Loading...",
     email: "",
   })
 
   useEffect(() => {
-    // Mengambil data user yang sedang login dari endpoint /me (Sanctum)
+    // 🛠️ Sinkronisasi Awal: Coba intip localStorage dulu biar instan langsung muncul namanya
+    const storedName = localStorage.getItem("user_name")
+    const storedEmail = localStorage.getItem("user_email")
+    if (storedName) {
+      setUserProfile({ name: storedName, email: storedEmail || "" })
+    }
+
+    // Ambil data terbaru dari backend API
     apiFetch("/me")
       .then((data: any) => {
         if (data && data.name) {
-          setUserProfile({
-            name: data.name,
-            email: data.email,
-          })
+          setUserProfile({ name: data.name, email: data.email })
+          // Sinkronkan ke local storage
+          localStorage.setItem("user_name", data.name)
+          localStorage.setItem("user_email", data.email)
         }
       })
       .catch((err) => {
         console.error("Gagal memuat profil desainer:", err)
-        setUserProfile({
-          name: "Desainer Panel",
-          email: "",
-        })
+        if (!storedName) {
+          setUserProfile({ name: "Desainer Panel", email: "" })
+        }
       })
-  }, [])
 
-  // Mengambil 2 huruf pertama dari nama untuk dijadikan inisial avatar fallback
+    // 🛠️ Fungsi sakti: Jika di halaman profile datanya di-save, komponen header ini langsung mendeteksi perubahannya secara real-time
+    const handleStorageChange = () => {
+      setUserProfile({
+        name: localStorage.getItem("user_name") || "Desainer Panel",
+        email: localStorage.getItem("user_email") || "",
+      })
+    }
+
+    window.addEventListener("storage_profile_updated", handleStorageChange)
+    return () => window.removeEventListener("storage_profile_updated", handleStorageChange)
+  }, [pathname]) // Dipicu ulang setiap pindah halaman agar datanya selalu segar
+
   const getInitials = (name: string) => {
-    return name ? name.substring(0, 2).toUpperCase() : "DS"
+    return name && name !== "Loading..." ? name.substring(0, 2).toUpperCase() : "DS"
   }
 
-  // Fungsi logout (bisa disesuaikan dengan handler logout proyekmu)
   const handleLogout = async () => {
     try {
       await apiFetch("/logout", { method: "POST" })
@@ -80,9 +94,9 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-4">
           <div className="font-semibold text-gray-900">
-            Desainer Panel
+            Prinora Store
           </div>
           <div className="text-sm text-gray-500">
             <span>Desainer</span>
@@ -94,14 +108,7 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search..."
-              className="pl-10 w-72 bg-gray-50 border-gray-200"
-            />
-          </div>
-
+        
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="w-4 h-4" />
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
@@ -112,10 +119,9 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-gray-50 h-10 rounded-md">
                 <Avatar className="w-8 h-8">
-                  <AvatarImage src="/placeholder.svg" />
-                  <AvatarFallback>{getInitials(userProfile.name)}</AvatarFallback>
+                  <AvatarImage src="" />
+                  <AvatarFallback className="bg-purple-100 text-purple-700 font-bold">{getInitials(userProfile.name)}</AvatarFallback>
                 </Avatar>
-                {/* Menampilkan nama desainer real di samping avatar */}
                 <span className="text-sm font-medium text-gray-700 hidden sm:inline-block">
                   {userProfile.name}
                 </span>
@@ -126,14 +132,15 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  {/* Menampilkan nama dan email asli di dalam dropdown card */}
                   <p className="text-sm font-medium leading-none text-gray-900">{userProfile.name}</p>
                   <p className="text-xs leading-none text-gray-500">{userProfile.email}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
+              {/* 🛠️ SAMBUNGKAN LINK PROFILE KE HALAMAN PROFILE KAMU */}
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link href="/desainer/profile">Profile</Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
                 Logout
@@ -171,7 +178,7 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 p-8 bg-gray-50">
+        <main className="flex-1 p-8 bg-gray-50 min-h-[calc(100vh-4rem)]">
           {children}
         </main>
       </div>

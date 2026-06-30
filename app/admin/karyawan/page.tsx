@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Eye, Trash2, Plus, Download, Filter } from "lucide-react"
+import { Eye, Trash2, Plus, Download } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -43,7 +43,6 @@ export default function KaryawanPage() {
   const fetchKaryawan = async () => {
     try {
       const data = await apiFetch("/karyawan")
-      // Memastikan data yang di-set adalah array
       const rawData = Array.isArray(data) ? data : data.data || []
       setKaryawanList(rawData)
     } catch (err) {
@@ -71,7 +70,7 @@ export default function KaryawanPage() {
     fetchKaryawan()
   }, [])
 
-  // FILTER SEARCH (Aman dari property name yang null/undefined)
+  // FILTER SEARCH
   const filtered = karyawanList.filter(k =>
     k.name?.toLowerCase().includes(search.toLowerCase()) ||
     k.role?.toLowerCase().includes(search.toLowerCase())
@@ -82,7 +81,6 @@ export default function KaryawanPage() {
   const currentData = filtered.slice(startIndex, startIndex + itemsPerPage)
   const totalPages = Math.ceil(filtered.length / itemsPerPage)
 
-  // Fungsi Helper untuk styling Badge berdasarkan Role
   const getRoleBadgeClass = (role: string) => {
     switch (role?.toLowerCase()) {
       case 'admin':
@@ -96,11 +94,9 @@ export default function KaryawanPage() {
     }
   }
 
-  // Fungsi Helper untuk format Tanggal Bergabung dari created_at
   const formatTanggal = (dateString: string) => {
     if (!dateString) return "-"
     try {
-      // Mengganti spasi dengan 'T' jika format dari DB menggunakan format YYYY-MM-DD HH:mm:ss
       const formattedString = dateString.replace(" ", "T")
       const date = new Date(formattedString)
       
@@ -114,6 +110,43 @@ export default function KaryawanPage() {
     }
   }
 
+  // 🛠️ FUNGSI EXCEL EXPORTER UNTUK DATA KARYAWAN
+  const handleExportKaryawan = () => {
+    if (karyawanList.length === 0) {
+      alert("Tidak ada data karyawan untuk di-export.")
+      return
+    }
+
+    // 1. Header tabel Excel
+    const headers = ["ID Karyawan", "Nama Karyawan", "Alamat Email", "Role / Jabatan", "Tanggal Bergabung"]
+
+    // 2. Format baris (menggunakan data dari filtered agar sinkron dengan input search)
+    const csvRows = filtered.map((k) => {
+      return [
+        k.id,
+        `"${k.name || "-"}"`,
+        `"${k.email || "-"}"`,
+        `"${k.role || "-"}"`,
+        `"${formatTanggal(k.created_at)}"`
+      ].join(",")
+    })
+
+    // 3. Gabungkan struktur data baris
+    const csvContent = [headers.join(","), ...csvRows].join("\n")
+
+    // 4. Tambahkan BOM UTF-8 (\uFEFF) untuk kompabilitas Microsoft Excel
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+
+    // 5. Trigger download file otomatis di sisi client browser
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", `Data_Karyawan_Prinora_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -123,11 +156,8 @@ export default function KaryawanPage() {
           <h1 className="text-2xl font-semibold">Karyawan</h1>
 
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2">
-              <Filter className="w-4 h-4" /> Filter
-            </Button>
-
-            <Button variant="outline" className="gap-2">
+            {/* 🛠️ FILTER DIHAPUS, DAN BUTTON EXPORT DISINKRONKAN DENGAN ONCLICK */}
+            <Button onClick={handleExportKaryawan} variant="outline" className="gap-2">
               <Download className="w-4 h-4" /> Export
             </Button>
             <Button
@@ -146,7 +176,7 @@ export default function KaryawanPage() {
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
-            setCurrentPage(1) // Reset ke halaman 1 saat mengetik pencarian
+            setCurrentPage(1)
           }}
           className="max-w-sm"
         />

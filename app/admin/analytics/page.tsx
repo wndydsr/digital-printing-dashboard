@@ -1,18 +1,16 @@
 "use client"
 
-import { useEffect, useState, } from "react"
-import { BarChart3, Activity, Clock, CheckCircle, Download, FileText } from "lucide-react"
+import { useEffect, useState, useRef } from "react" // 🛠️ TAMBAH useRef
+import { BarChart3, Activity, Clock, CheckCircle, Download, FileText, Printer } from "lucide-react" // 🛠️ TAMBAH Printer Icon
 import {
   AreaChart,
   Area,
   BarChart,
   Bar,
-  PieChart as RechartsPieChart,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Pie,
 } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,6 +19,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import InvoiceOrder from "@/components/ui/invoice-order"
+import { useReactToPrint } from "react-to-print" // 🛠️ TAMBAH useReactToPrint
 import {
   Table,
   TableBody,
@@ -32,21 +31,17 @@ import {
 import { apiFetch } from "@/lib/api"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState("30d")
   const [revenueData, setRevenueData] = useState<any[]>([])
   const [orderData, setOrderData] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
-  const [selectedInvoice, setSelectedInvoice] =
-    useState<any>(null)
-
-  const [showInvoice, setShowInvoice] =
-    useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
+  const [showInvoice, setShowInvoice] = useState(false)
 
   const latestOrders = (transactions || [])
-  .sort((a: any, b: any) => b.id - a.id)
-  .slice(0, 5)
+    .sort((a: any, b: any) => b.id - a.id)
+    .slice(0, 5)
 
   const [kpi, setKpi] = useState<any>({
     total_pendapatan: 0,
@@ -55,12 +50,17 @@ export default function AnalyticsPage() {
     pesanan_pending: 0,
   })
 
- useEffect(() => {
+  // ─── 🛠️ SETUP PRINT UNTUK HALAMAN ANALYTICS ───
+  const analyticsInvoiceRef = useRef<HTMLDivElement>(null)
+  
+  const handlePrintAnalytics = useReactToPrint({
+    contentRef: analyticsInvoiceRef,
+  })
+
+  useEffect(() => {
     const load = async () => {
       try {
         const data = await apiFetch("/laporan")
-        console.log("TRANSACTIONS:", data.transactions)
-
         const bulan = [
           "Jan","Feb","Mar","Apr","Mei","Jun",
           "Jul","Agu","Sep","Okt","Nov","Des"
@@ -88,12 +88,10 @@ export default function AnalyticsPage() {
           pesanan_selesai: data.pesanan_selesai || 0,
           pesanan_pending: data.pesanan_pending || 0,
         })
-
       } catch (err) {
         console.error("Laporan error:", err)
       }
     }
-
     load()
   }, [])
 
@@ -126,7 +124,6 @@ export default function AnalyticsPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-  
           <Card className="border-gray-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -170,17 +167,14 @@ export default function AnalyticsPage() {
               <div className="text-sm text-gray-600">Pesanan Pending</div>
             </CardContent>
           </Card>
-
         </div>
 
         <Tabs defaultValue="performance" className="space-y-6">
-
           <TabsContent value="performance" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Execution Trends */}
               <Card className="border-gray-200">
                 <CardHeader>
-                 <CardTitle className="text-lg font-semibold">Statistik Pendapatan</CardTitle>
+                  <CardTitle className="text-lg font-semibold">Statistik Pendapatan</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-80">
@@ -196,10 +190,9 @@ export default function AnalyticsPage() {
                 </CardContent>
               </Card>
 
-              {/* Success vs Failed */}
               <Card className="border-gray-200">
                 <CardHeader>
-                   <CardTitle className="text-lg font-semibold">Jumlah Pesanan per Bulan</CardTitle>
+                  <CardTitle className="text-lg font-semibold">Jumlah Pesanan per Bulan</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-80">
@@ -216,10 +209,9 @@ export default function AnalyticsPage() {
               </Card>
             </div>
 
-            {/* Average Duration */}
             <Card className="w-full border-gray-200">
               <CardHeader>
-               <CardTitle className="text-lg font-semibold">Riwayat Transaksi</CardTitle>
+                <CardTitle className="text-lg font-semibold">Riwayat Transaksi</CardTitle>
               </CardHeader>
 
               <CardContent className="p-0">
@@ -237,92 +229,91 @@ export default function AnalyticsPage() {
                   </TableHeader>
 
                   <TableBody>
-                  {latestOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      
-                      <TableCell className="text-blue-500 font-medium">
-                        {order.invoice}
-                      </TableCell>
-
-                      <TableCell>
-                         {order.customer?.name}
-                      </TableCell>
-
-                    
+                    {latestOrders.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="text-blue-500 font-medium">
+                          {order.invoice}
+                        </TableCell>
+                        <TableCell>{order.customer?.name}</TableCell>
                         <TableCell>
-                        <div className="space-y-1">
-                          {order.products?.map((item: any, index: number) => (
-                            <div
-                              key={index}
-                              className="text-sm"
-                            >
-                              {item.product_name}
-                            </div>
-                          ))}
-                        </div>
-                      </TableCell>
-
-                      <TableCell>
-                        Rp {Number(order.total || 0).toLocaleString("id-ID")}
-                      </TableCell>
-
-                      <TableCell>
-                        {order.date || "-"}
-                      </TableCell>
-
-                      <TableCell>
-                        <Badge className="bg-green-100 text-green-600">
-                          {order.status}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell className="text-center">
-
-                        <button
-                          onClick={() => {
-                            setSelectedInvoice(order)
-                            setShowInvoice(true)
-                          }}
-                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg border hover:bg-gray-100 transition"
-                        >
-                          <FileText className="w-4 h-4 text-blue-600" />
-                        </button>
-
-                      </TableCell>
-
-                    </TableRow>
-                  ))}
-                </TableBody>
+                          <div className="space-y-1">
+                            {order.products?.map((item: any, index: number) => (
+                              <div key={index} className="text-sm">
+                                {item.product_name}
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          Rp {Number(order.total || 0).toLocaleString("id-ID")}
+                        </TableCell>
+                        <TableCell>{order.date || "-"}</TableCell>
+                        <TableCell>
+                          <Badge className="bg-green-100 text-green-600">
+                            {order.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <button
+                            onClick={() => {
+                              setSelectedInvoice(order)
+                              setShowInvoice(true)
+                            }}
+                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border hover:bg-gray-100 transition"
+                          >
+                            <FileText className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
                 </Table>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-        <Dialog
-  open={showInvoice}
-  onOpenChange={setShowInvoice}
->
-  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
 
-    <DialogHeader>
-      <DialogTitle>
-        Invoice Order
-      </DialogTitle>
-    </DialogHeader>
+        {/* DIALOG INVOICE VIEW */}
+        <Dialog open={showInvoice} onOpenChange={setShowInvoice}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
+            <DialogHeader>
+              <DialogTitle>Invoice Order</DialogTitle>
+            </DialogHeader>
 
-    {selectedInvoice && (
-    <InvoiceOrder
-      orderId={selectedInvoice.invoice}
-      customer={selectedInvoice.customer}
-      products={selectedInvoice.products}
-      total={selectedInvoice.total}
-      deliveryMethod="delivery"
-      paymentMethod="cash"
-    />
-  )}
+            {selectedInvoice && (
+              <>
+                {/* ─── 🛠️ MASUKKAN REF DAN HIDEBUTTON KE SINI ─── */}
+                <InvoiceOrder
+                  ref={analyticsInvoiceRef}
+                  orderId={selectedInvoice.invoice}
+                  customer={selectedInvoice.customer}
+                  products={selectedInvoice.products}
+                  total={selectedInvoice.total}
+                  deliveryMethod="delivery"
+                  paymentMethod="cash"
+                  hideButton={true}
+                />
 
-  </DialogContent>
-</Dialog>
+                {/* ─── 🛠️ TOMBOL KONTROL YANG DISERAGAMKAN DENGAN MODAL PAYMENT ─── */}
+                <div className="flex gap-3 mt-5 print:hidden">
+                  <button
+                    onClick={() => setShowInvoice(false)}
+                    className="flex-1 border rounded-xl p-4 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    Close
+                  </button>
+
+                  <Button
+                    onClick={() => handlePrintAnalytics()}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2 h-auto py-4 rounded-xl font-semibold shadow-sm text-sm"
+                  >
+                    <Printer className="w-4 h-4" /> Cetak Invoice
+                  </Button>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   )

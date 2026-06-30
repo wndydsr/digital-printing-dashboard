@@ -39,6 +39,16 @@ interface Order {
     id: number;
     name: string;
   };
+  // SINKRONISASI INTERFACE DENGAN STRUKTUR ARRAY ITEMS AGAR TIDAK ERROR
+  items?: {
+    id: number
+    quantity: number
+    subtotal: number
+    product?: {
+      id: number
+      name: string
+    }
+  }[];
   product?: {
     id: number;
     name: string;
@@ -116,7 +126,7 @@ export default function Dashboard() {
     }
   }
 
-  // Fungsi Assign / Ganti Desainer
+  // Fungsi Assign / Ganti Desainer (Milik Kode Aslimu)
   const handleAssignDesigner = async (orderId: number, designerId: string) => {
     try {
       await apiFetch(`/orders/${orderId}/assign-designer`, {
@@ -276,7 +286,7 @@ useEffect(() => {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-lg font-semibold">Statistik Pesanan</CardTitle>
-                      <CardDescription>Jumlah pesanan per bulan</CardDescription>
+                      <CardDescription>Jumlah pesanan per bureau</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -302,7 +312,7 @@ useEffect(() => {
                 </CardContent>
               </Card>             
             </div>            
-                      
+                     
             {/* Right Sidebar */}
             <div className="space-y-6"> 
               {/* Recent Activity */}
@@ -384,11 +394,15 @@ useEffect(() => {
                           {/* No Pesanan */}
                           <TableCell className="text-blue-500 font-medium">{order.order_code}</TableCell>
                           
-                          {/* Pelanggan & Produk */}
+                          {/* Pelanggan */}
                           <TableCell className="text-gray-700">{order.customer?.name}</TableCell>
-                          <TableCell className="text-gray-700">{order.product?.name || "-"}</TableCell>
                           
-                         {/* KOLOM DESAINER */}
+                          {/* 🛠️ SINKRONISASI LOGIKA PRODUK: Menggunakan logic map dan join seperti halaman analitarmu */}
+                          <TableCell className="text-gray-700">
+                            {order.items?.map((item: any) => item.product?.name).join(", ") || "-"}
+                          </TableCell>
+                          
+                          {/* KOLOM DESAINER (KODE ASLI KAMU YANG TETAP UTUH & INTERAKTIF) */}
                           <TableCell className="text-center">
                             {(() => {
                               const stage = stageName.trim()
@@ -397,7 +411,7 @@ useEffect(() => {
                               if (stage === "antrean desain") {
                                 return (
                                   <select
-                                    value="" // 🔥 Harus pakai value="", bukan defaultValue
+                                    value="" // Harus pakai value="", bukan defaultValue
                                     onChange={(e) => handleAssignDesigner(order.id, e.target.value)}
                                     className="h-8 w-full min-w-[140px] rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none text-red-600 font-medium cursor-pointer"
                                   >
@@ -415,7 +429,7 @@ useEffect(() => {
                                 const currentValue = order.designer_id ? String(order.designer_id) : ""; 
                                 return (
                                   <select
-                                    value={currentValue} // 🔥 Menggunakan currentValue
+                                    value={currentValue} // Menggunakan currentValue
                                     onChange={(e) => handleAssignDesigner(order.id, e.target.value)}
                                     className="h-8 w-full min-w-[140px] rounded-md border border-gray-300 bg-white px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none font-medium cursor-pointer"
                                   >
@@ -475,7 +489,7 @@ useEffect(() => {
                           </TableCell>
 
                           {/* Status */}
-                         <TableCell>
+                          <TableCell>
                             <Badge
                               className={`rounded-md px-4 py-1 border-none font-medium shadow-none ${
                                 statusColorMap[order.stage?.status?.id || 0] || "bg-gray-100 text-gray-500"
@@ -524,6 +538,6 @@ useEffect(() => {
                         onClose={() => setOpenDelete(false)}
                         onDelete={handleDelete}
                       />}
-    </DashboardLayout>
+  </DashboardLayout>
   )
 }

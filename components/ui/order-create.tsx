@@ -41,6 +41,33 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
     address: "",
   })
 
+  const resetForm = () => {
+    setPhoneSearch("")
+    setFilteredCustomers([])
+    setShowNewCustomerForm(false)
+    setCustomer(null)
+    setNewCustomer({ name: "", phone: "", email: "", address: "" })
+    setShowCheckout(false)
+    
+    // Kembalikan struktur produk ke kondisi awal (1 item kosong)
+    setProducts([
+      {
+        id: Date.now(),
+        product_id: "",
+        quantity: 1,
+        panjang: 0,
+        lebar: 0,
+        catatan: "",
+        need_design: false,
+        designer_id: "",
+        design_files: [],
+        support_files: [],
+        fields: {},
+        attributes: {},
+      }
+    ])
+  }
+
   // --- LOGIC: PRODUCTS ---
   const addProduct = () => {
     setProducts([
@@ -222,7 +249,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
   
   const [showCheckout, setShowCheckout] = useState(false)
 
-// --- SUBMIT ---
+  // --- SUBMIT ---
   const handleSubmit = async () => {
     if (!customer) {
       return toast({
@@ -251,21 +278,19 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
       formData.append("customer_id", customer.id)
       formData.append("total_price", total.toString())
 
-      // 🔥 LOGIKA PENENTUAN TAHAP (STAGE) DEFAULT OTOMATIS
-      let initialStageId = 2; // Default 2: Siap Cetak (Jika dari awal tidak butuh desain)
+      let initialStageId = 2; 
       
       const needsDesign = validProducts.some(p => p.need_design);
       const assignedDesigner = validProducts.find(p => p.need_design && p.designer_id)?.designer_id;
 
       if (needsDesign) {
         if (assignedDesigner) {
-          initialStageId = 1; // Tahap 1: Butuh Desain (Karena desainer sudah dipilih di form)
+          initialStageId = 1; 
         } else {
-          initialStageId = 6; // Tahap 6: Antrean Desain (Butuh desain, tapi desainer dikosongkan)
+          initialStageId = 6; 
         }
       }
 
-      // Kirim ID tahap ke backend
       formData.append("current_stage_id", initialStageId.toString());
 
       if (assignedDesigner) {
@@ -301,7 +326,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         })
       })
 
-      await apiFetch("/orders", {
+      // 🔥 TANGKAP HASIL FETCH DARI BACKEND
+      const res = await apiFetch("/orders", {
         method: "POST",
         body: formData,
       })
@@ -310,9 +336,16 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         title: "Berhasil",
         description: "Pesanan berhasil dibuat",
       })
-
+      
       onSuccess()
       onClose()
+
+      setTimeout(() => {
+        resetForm()
+      }, 300)
+      
+      return res; // 🔥 WAJIB DI-RETURN agar ID database bisa dibaca oleh PaymentModal!
+
     } catch (err) {
       console.error(err)
       toast({
@@ -320,10 +353,22 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         description: "Pesanan gagal dibuat",
         variant: "destructive",
       })
+      throw err; // Lempar error agar block catch di PaymentModal ikut mendeteksi kegagalan
     } finally { 
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+      resetForm()
+    }, 50)
+    
+    return () => clearTimeout(timer)
+    }
+  }, [open])
+
   useEffect(() => {
     fetchCustomers();
     fetchProducts();
@@ -857,8 +902,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         total={total}
         onClose={() => setShowCheckout(false)}
         onConfirm={async () => {
-          await handleSubmit()
-          setShowCheckout(false)
+          const hasilDatabase = await handleSubmit() 
+          return hasilDatabase;
         }}
       />
     </Dialog>

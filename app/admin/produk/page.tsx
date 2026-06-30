@@ -39,7 +39,6 @@ interface Product {
 
 
 export default function ProductPage() {
-      const [selectedPeriod, setSelectedPeriod] = useState("Last 30 days")
       const [products, setProducts] = useState<Product[]>([])
   
       const [timeRange, setTimeRange] = useState("30d")
@@ -115,6 +114,43 @@ export default function ProductPage() {
     }
   }
 
+  // 🛠️ FUNGSI EXCEL DATA EXPORTER UNTUK PRODUK
+  const handleExportProducts = () => {
+    if (products.length === 0) {
+      alert("Tidak ada data produk untuk di-export.")
+      return
+    }
+
+    // 1. Definisikan header kolom Excel
+    const headers = ["ID Produk", "Nama Produk", "Harga (Rp)", "Estimasi Durasi (Hari)", "Status"]
+
+    // 2. Format baris data (menggunakan data dari filteredProducts agar sinkron dengan kolom pencarian)
+    const csvRows = filteredProducts.map((p) => {
+      return [
+        `"PR${String(p.id).padStart(2, "0")}"`,
+        `"${p.name || "-"}"`,
+        p.price,
+        p.estimated_duration,
+        `"${p.status ? "Aktif" : "Tidak Aktif"}"`
+      ].join(",")
+    })
+
+    // 3. Gabungkan struktur baris dengan pembatas baris baru
+    const csvContent = [headers.join(","), ...csvRows].join("\n")
+
+    // 4. Bungkus dengan BOM UTF-8 (\uFEFF) agar terbaca rapi oleh Microsoft Excel & Sheets
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+
+    // 5. Eksekusi pengunduhan file otomatis dari browser client
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", `Data_Produk_Prinora_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
 useEffect(() => {
   fetchProducts()
 }, [])
@@ -128,21 +164,13 @@ useEffect(() => {
             <h1 className="text-2xl font-semibold text-gray-900">Produk</h1>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="1y">Last year</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" className="gap-2 bg-transparent">
+            
+            {/* 🛠️ PASANG FITUR EXCEL DI BUTTON EXPORT */}
+            <Button onClick={handleExportProducts} variant="outline" className="gap-2 bg-transparent">
               <Download className="w-4 h-4" />
               Export
             </Button>
+            
             <Button
               onClick={() => setOpenCreate(true)}
               className="bg-purple-600 hover:bg-purple-700 gap-2"
@@ -204,9 +232,6 @@ useEffect(() => {
                             Rp {Number(product.price).toLocaleString("id-ID")}
                           </TableCell>
 
-                          {/* KATEGORI (sementara static dulu)
-                          <TableCell>Banner</TableCell> */}
-
                           {/* ESTIMASI */}
                           <TableCell>
                             {product.estimated_duration} Hari
@@ -256,7 +281,7 @@ useEffect(() => {
                       
                       {/* INFO */}
                       <span className="text-sm text-gray-500">
-                        {startIndex + 1} - {Math.min(startIndex + itemsPerPage, products.length)} of {products.length} Pages
+                        {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredProducts.length)} of {filteredProducts.length} items
                       </span>
 
                       {/* PAGINATION */}

@@ -118,7 +118,6 @@ export default function AnalyticsPage() {
   const fetchDesigners = () => {
     apiFetch(`/users?role=desainer`)
       .then((data: any) => {
-        // Memastikan jika response berupa object wrap, ambil data.data
         const result = Array.isArray(data) ? data : data.data || []
         setDesigners(result)
       })
@@ -129,12 +128,11 @@ export default function AnalyticsPage() {
 
   const handleAssignDesigner = async (orderId: number, designerId: string) => {
     try {
-      // Endpoint yang sekarang sudah sinkron berada di dalam sanctum middleware
       await apiFetch(`/orders/${orderId}/assign-designer`, {
         method: "PUT",
         body: JSON.stringify({ designer_id: Number(designerId) }),
       })
-      fetchOrders() // Refresh list tabel pesanan
+      fetchOrders() 
     } catch (err) {
       console.error("Gagal menugaskan desainer:", err)
     }
@@ -150,6 +148,51 @@ export default function AnalyticsPage() {
     } catch (err) {
       console.error(err)
     }
+  }
+
+  // 🛠️ FUNGSI EXCEL DOWNLOAD GENERATOR (NATIVE CSV METHOD)
+  const handleExportExcel = () => {
+    if (orders.length === 0) {
+      alert("Tidak ada data pesanan untuk di-export.")
+      return
+    }
+
+    // 1. Tentukan Header Kolom Excel
+    const headers = ["No Pesanan", "Nama Pelanggan", "Produk yang Dipesan", "Total Harga (Rp)", "Tanggal Pemesanan", "Nama Desainer", "Tahap Kerja", "Status"]
+
+    // 2. Map data order ke bentuk baris Excel
+    const csvRows = filteredOrders.map((order) => {
+      const productNames = order.items?.map((item) => item.product?.name).join(" | ") || "-"
+      const formattedDate = new Date(order.order_date).toLocaleDateString("id-ID", {
+        year: "numeric", month: "2-digit", day: "2-digit"
+      })
+      
+      return [
+        `"${order.order_code}"`, // Dibungkus kutip agar string code aman
+        `"${order.customer?.name || "-"}"`,
+        `"${productNames}"`,
+        order.total_price,
+        `"${formattedDate}"`,
+        `"${order.designer?.name || "-"}"`,
+        `"${order.stage?.name || "-"}"`,
+        `"${order.stage?.status?.name || "-"}"`
+      ].join(",")
+    })
+
+    // 3. Gabungkan header dan isi baris
+    const csvContent = [headers.join(","), ...csvRows].join("\n")
+
+    // 4. Tambahkan BOM (\uFEFF) supaya Excel membaca encoding UTF-8 (mencegah karakter berantakan)
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    
+    // 5. Trigger download otomatis dari browser
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", `Laporan_Pesanan_Prinora_${new Date().toISOString().slice(0,10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   useEffect(() => {
@@ -177,10 +220,13 @@ export default function AnalyticsPage() {
                 <SelectItem value="1y">Last year</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" className="gap-2 bg-transparent">
+            
+            {/* 🛠️ PASANG FITUR EXCEL DI BUTTON EXPORT */}
+            <Button onClick={handleExportExcel} variant="outline" className="gap-2 bg-transparent">
               <Download className="w-4 h-4" />
               Export
             </Button>
+            
             <Button
               onClick={() => setOpenCreate(true)}
               className="bg-purple-600 hover:bg-purple-700 gap-2"
@@ -236,12 +282,10 @@ export default function AnalyticsPage() {
                       })}
                     </TableCell>
 
-                    {/* AKSI INTERAKTIF / CONDITIONAL BADGE PILIH DESAINER */}
                   <TableCell className="min-w-[160px]">
                     {order.stage?.name?.toLowerCase() === "siap cetak" || 
                     order.stage?.name?.toLowerCase() === "cetak" || 
                     order.stage?.name?.toLowerCase() === "selesai" ? (
-                      // Jika tidak butuh desain, tampilkan label flat
                       <Badge 
                         variant="outline" 
                         className="rounded-md px-2.5 py-1 font-normal text-gray-400 border-gray-200 bg-gray-50/50"
@@ -249,7 +293,6 @@ export default function AnalyticsPage() {
                         File Siap Cetak (Tanpa Desainer)
                       </Badge>
                     ) : (
-                      // Tetap gunakan Select agar bisa diubah, tapi warnanya berubah menyesuaikan kondisi
                       <Select
                         value={order.designer?.id?.toString() || "unassigned"}
                         onValueChange={(val) => handleAssignDesigner(order.id, val)}
@@ -257,8 +300,8 @@ export default function AnalyticsPage() {
                         <SelectTrigger 
                           className={`h-8 w-full border text-xs font-medium transition-colors ${
                             !order.designer 
-                              ? 'text-amber-600 border-amber-200 bg-amber-50/40 font-semibold shadow-sm' // Mencolok kalau belum dipilih
-                              : 'text-gray-700 border-gray-200 bg-white hover:bg-gray-50' // Kalem dan rapi kalau sudah ada desainer
+                              ? 'text-amber-600 border-amber-200 bg-amber-50/40 font-semibold shadow-sm' 
+                              : 'text-gray-700 border-gray-200 bg-white hover:bg-gray-50' 
                           }`}
                         >
                           <SelectValue placeholder="Pilih Desainer" />

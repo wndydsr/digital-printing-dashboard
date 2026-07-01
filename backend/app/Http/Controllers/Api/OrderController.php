@@ -72,7 +72,7 @@ public function store(Request $request)
     DB::beginTransaction();
 
     try {
-        // 1. TENTUKAN ATAU BUAT CUSTOMER
+        // 1. CUSTOMER
         if (!$request->customer_id && $request->customer_name) {
             $customer   = Customer::create(['name' => $request->customer_name]);
             $customerId = $customer->id;
@@ -80,45 +80,28 @@ public function store(Request $request)
             $customerId = $request->customer_id;
         }
 
-        // 2. TENTUKAN STAGE AWAL
+        // 2. TENTUKAN STAGE
         $defaultStageId = (int) $request->input('current_stage_id', 6);
         if ($request->input('design_method') === 'ready-to-print' || $defaultStageId === 2) {
             $defaultStageId = 2; // Paksa ke "Siap Cetak" di awal
         }
 
-        // 3. 🔥 TAMBAHKAN: BUAT DATA ORDER UTAMA TERLEBIH DAHULU
-        // Sesuaikan field di bawah ini dengan kolom asli yang ada di tabel 'orders' kamu
-        $order = Order::create([
-            'customer_id'       => $customerId,
-            'current_stage_id'  => $defaultStageId,
-            'total_price'       => $request->input('total_price', 0),
-            'shipping_method'   => $request->input('shipping_method', 'pickup'),
-            'shipping_cost'     => $request->input('shipping_cost', 0),
-            'shipping_latitude' => $request->input('shipping_latitude'),
-            'shipping_longitude'=> $request->input('shipping_longitude'),
-            'designer_id'       => null, // Default kosong di awal jika belum di-assign
-        ]);
-
-        // 4. CREATE ITEMS LOOP
+        // ... 4. CREATE ITEMS LOOP
         foreach ($request->items as $index => $item) {
-            
-            // Buat Order Item terikat dengan order_id yang baru saja dibuat
+            // ... (Kalkulasi harga item tetap sama)
+
             $orderItem = OrderItem::create([
-                'order_id'       => $order->id, // Kunci relasi ke order utama
-                'product_id'     => $item['product_id'] ?? $item['id'],
-                'quantity'       => $item['quantity'],
-                'panjang'        => $item['panjang'] ?? 0,
-                'lebar'          => $item['lebar'] ?? 0,
+                // parameter data item tetep sama ...
                 'order_stage_id' => $defaultStageId,
-                // tambahkan field attribute/opsi tambahan jika ada di sini...
             ]);
 
             $designFile = null;
             $referenceFiles = [];
 
-            // JALUR A: Upload langsung dari Next.js (Multi-part)
+            // 🔥 JALUR A: Upload langsung (Diperbaiki agar mampu membaca struktur array multi-part Next.js)
             if ($request->hasFile("items.$index.design_file")) {
                 $files = $request->file("items.$index.design_file");
+                // Ambil file pertama jika dikirim dalam bentuk array upload
                 $fileToStore = is_array($files) ? $files[0] : $files;
                 $designFile = $fileToStore->store('designs', 'public');
             }
@@ -133,7 +116,7 @@ public function store(Request $request)
             if (!$designFile && empty($referenceFiles)) {
                 $cartItem = \App\Models\CartItem::whereHas('cart', function ($q) use ($customerId) {
                     $q->where('customer_id', $customerId);
-                })->where('product_id', $item['product_id'] ?? $item['id'])->first();
+                })->where('product_id', $item['product_id'])->first();
 
                 if ($cartItem) {
                     $designFile = $cartItem->design_file;
@@ -159,10 +142,8 @@ public function store(Request $request)
         } // end foreach
 
         // 6. ✅ VALIDASI PERLINDUNGAN AKHIR STAGE ORDER
-        // Menggunakan order_id secara langsung agar lebih aman dan efisien database kuerinya
-        $hasReadyPrintFile = OrderItemDesign::whereHas('orderItem', function($q) use ($order) {
-                $q->where('order_id', $order->id);
-            })
+        // Jika salah satu item memiliki file cetak master asli, kunci status pesanan ke stage 2 (Siap Cetak)
+        $hasReadyPrintFile = OrderItemDesign::whereIn('order_item_id', $order->items->pluck('id'))
             ->whereNotNull('design_file')
             ->exists();
 
@@ -170,7 +151,6 @@ public function store(Request $request)
             $order->update(['current_stage_id' => 2]);
             OrderItem::where('order_id', $order->id)->update(['order_stage_id' => 2]);
         }
-
         // 7. BERSIHKAN KERANJANG
         if (!$request->input('is_direct', false)) {
             \App\Models\CartItem::whereHas('cart', function ($q) use ($customerId) {

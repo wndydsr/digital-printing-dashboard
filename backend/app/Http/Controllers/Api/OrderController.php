@@ -67,131 +67,112 @@ class OrderController extends Controller
         return response()->json($orders);
     }
 
-   public function store(Request $request)
-    {
-        DB::beginTransaction();
+public function store(Request $request)
+{
+    DB::beginTransaction();
 
-        try {
-            // =========================
-            // 1. CUSTOMER
-            // =========================
-            if (!$request->customer_id && $request->customer_name) {
-                $customer = Customer::create(['name' => $request->customer_name]);
-                $customerId = $customer->id;
-            } else {
-                $customerId = $request->customer_id;
+    try {
+        // 1. CUSTOMER
+        if (!$request->customer_id && $request->customer_name) {
+            $customer   = Customer::create(['name' => $request->customer_name]);
+            $customerId = $customer->id;
+        } else {
+            $customerId = $request->customer_id;
+        }
+
+        // 2. TENTUKAN STAGE
+        $defaultStageId = (int) $request->input('current_stage_id', 6);
+        if ($request->input('design_method') === 'ready-to-print' || $defaultStageId === 2) {
+            $defaultStageId = 2; // Paksa ke "Siap Cetak" di awal
+        }
+
+        // ... 4. CREATE ITEMS LOOP
+        foreach ($request->items as $index => $item) {
+            // ... (Kalkulasi harga item tetap sama)
+
+            $orderItem = OrderItem::create([
+                // parameter data item tetep sama ...
+                'order_stage_id' => $defaultStageId,
+            ]);
+
+            $designFile = null;
+            $referenceFiles = [];
+
+            // 🔥 JALUR A: Upload langsung (Diperbaiki agar mampu membaca struktur array multi-part Next.js)
+            if ($request->hasFile("items.$index.design_file")) {
+                $files = $request->file("items.$index.design_file");
+                // Ambil file pertama jika dikirim dalam bentuk array upload
+                $fileToStore = is_array($files) ? $files[0] : $files;
+                $designFile = $fileToStore->store('designs', 'public');
+            }
+            
+            if ($request->hasFile("items.$index.reference_files")) {
+                foreach ($request->file("items.$index.reference_files") as $file) {
+                    $referenceFiles[] = $file->store('references', 'public');
+                }
             }
 
-            // 2. CREATE ORDER
-            $defaultStageId = 6;
-            $order = Order::create([
-                'customer_id' => $customerId,
-                'order_date' => now(),
-                'total_price' => 0,
-                'notes' => $request->notes,
-                'created_by' => 1,
-                'current_stage_id' => $defaultStageId,
-            ]);
+            // JALUR B: Fallback dari keranjang jika Jalur A kosong
+            if (!$designFile && empty($referenceFiles)) {
+                $cartItem = \App\Models\CartItem::whereHas('cart', function ($q) use ($customerId) {
+                    $q->where('customer_id', $customerId);
+                })->where('product_id', $item['product_id'])->first();
 
-            $totalPrice = 0;
-
-            // 3. CREATE ITEMS
-            foreach ($request->items as $index => $item) {
-                $product = Product::findOrFail($item['product_id']);
-                $qty = (int) $item['quantity'];
-                
-                $panjang = (float) ($item['panjang'] ?? 0);
-                $lebar = (float) ($item['lebar'] ?? 0);
-                $luasM2 = ($panjang * $lebar) / 10000;
-                $hargaPerMeter = (float) $product->price;
-
-                if (!empty($item['attributes'])) {
-                    $attributeValues = \App\Models\ProductAttributeValue::whereIn('id', $item['attributes'])->get();
-                    foreach ($attributeValues as $value) {
-                        $hargaPerMeter += (float) $value->additional_price;
-                    }
+                if ($cartItem) {
+                    $designFile = $cartItem->design_file;
+                    $referenceFiles = $cartItem->reference_files ? json_decode($cartItem->reference_files, true) : [];
                 }
+            }
 
-                $hargaPerItem = ($product->is_custom && $luasM2 > 0) ? ($luasM2 * $hargaPerMeter) : $hargaPerMeter;
-                $subtotal = $hargaPerItem * $qty;
-                $totalPrice += $subtotal;
+            // JALUR C: Dummy teks jika berkas fisik benar-benar tidak terdeteksi namun stage bernilai 2
+            if (!$designFile && $defaultStageId === 2) {
+                $designFile = $item['dummy_file_name'] ?? 'design_beli_langsung_customer.pdf';
+            }
 
-                $orderItem = OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $product->id,
-                    'quantity' => $qty,
-                    'panjang' => $panjang,
-                    'lebar' => $lebar,
-                    'price' => $hargaPerItem,
-                    'subtotal' => $subtotal,
-                    'catatan' => $item['catatan'] ?? null,
-                    'need_design' => $item['need_design'] ?? false,
-                    'order_stage_id' => $defaultStageId,
-                    'details' => $item['fields'] ?? '{}',
+            // Simpan ke database order_item_designs
+            if ($designFile || count($referenceFiles) > 0) {
+                OrderItemDesign::create([
+                    'order_item_id'   => $orderItem->id,
+                    'design_file'     => $designFile,
+                    'reference_files' => json_encode($referenceFiles),
+                    'design_notes'    => $request->notes ?? null,
+                    'design_status'   => 'pending',
                 ]);
+            }
+        } // end foreach
 
-                // 4. DESIGN (Gabungan Upload & Fallback ke Cart)
-                $designFile = null;
-                $referenceFiles = [];
+        // 6. ✅ VALIDASI PERLINDUNGAN AKHIR STAGE ORDER
+        // Jika salah satu item memiliki file cetak master asli, kunci status pesanan ke stage 2 (Siap Cetak)
+        $hasReadyPrintFile = OrderItemDesign::whereIn('order_item_id', $order->items->pluck('id'))
+            ->whereNotNull('design_file')
+            ->exists();
 
-                if ($request->hasFile("items.$index.design_file")) {
-                    $designFile = $request->file("items.$index.design_file")[0]->store('designs', 'public');
-                }
-
-                if ($request->hasFile("items.$index.reference_files")) {
-                    foreach ($request->file("items.$index.reference_files") as $file) {
-                        $referenceFiles[] = $file->store('references', 'public');
-                    }
-                }
-
-                if (!$designFile && empty($referenceFiles)) {
-                    $cartItem = \App\Models\CartItem::whereHas('cart', function($q) use ($customerId) {
-                        $q->where('customer_id', $customerId);
-                    })->where('product_id', $item['product_id'])->first();
-
-                    if ($cartItem) {
-                        $designFile = $cartItem->design_file;
-                        $referenceFiles = $cartItem->reference_files ? json_decode($cartItem->reference_files, true) : [];
-                    }
-                }
-
-                if ($designFile || count($referenceFiles) > 0) {
-                    OrderItemDesign::create([
-                        'order_item_id' => $orderItem->id,
-                        'design_file' => $designFile,
-                        'reference_files' => json_encode($referenceFiles),
-                        'design_notes' => $item['design_notes'] ?? null,
-                        'design_status' => 'pending',
-                    ]);
-
-                    if ($designFile) {
-                        $readyStage = Stage::whereRaw('LOWER(name) = ?', ['siap cetak'])->first();
-                        if ($readyStage) {
-                            $order->update(['current_stage_id' => $readyStage->id]);
-                        }
-                    }
-                }
-            } // End Foreach
-
-            $order->update(['total_price' => $totalPrice]);
-            
-            // Bersihkan Keranjang
-            // \App\Models\CartItem::whereHas('cart', function($q) use ($customerId) {
-            //     $q->where('customer_id', $customerId);
-            // })->delete();
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Order berhasil dibuat',
-                'data' => $order->load('items.design')
-            ]);
-
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json(['error' => $e->getMessage(), 'line' => $e->getLine()], 500);
+        if ($hasReadyPrintFile || $defaultStageId === 2) {
+            $order->update(['current_stage_id' => 2]);
+            OrderItem::where('order_id', $order->id)->update(['order_stage_id' => 2]);
         }
+        // 7. BERSIHKAN KERANJANG
+        if (!$request->input('is_direct', false)) {
+            \App\Models\CartItem::whereHas('cart', function ($q) use ($customerId) {
+                $q->where('customer_id', $customerId);
+            })->delete();
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Order berhasil dibuat',
+            'data'    => $order->load('items.design'),
+        ]);
+
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        return response()->json([
+            'error' => $e->getMessage(),
+            'line'  => $e->getLine(),
+        ], 500);
     }
+}
     
     public function update(Request $request, $id)
     {

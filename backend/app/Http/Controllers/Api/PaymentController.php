@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api; // Sesuaikan jika kamu menaruhnya di dalam folder Api
+namespace App\Http\Controllers\Api; 
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -15,15 +15,23 @@ class PaymentController extends Controller
         // 1. Ambil data user yang sedang login via Sanctum
         $user = $request->user();
 
-        // 2. Set konfigurasi Midtrans
-        Config::$serverKey = env('MIDTRANS_SERVER_KEY');
-        Config::$isProduction = false; 
+        // 2. 🔥 AMAN DARI CACHE: Menggunakan config() menggantikan env()
+        Config::$serverKey = config('services.midtrans.server_key');
+        Config::$isProduction = (bool) config('services.midtrans.is_production', false); 
         Config::$isSanitized = true;
         Config::$is3ds = true;
 
         // 3. Tangkap data dari Next.js (cukup orderId dan totalHarga)
         $orderId = $request->input('orderId') ?? 'PRINT-' . time();
         $totalHarga = $request->input('totalHarga');
+
+        // Validasi tambahan agar gross_amount tidak kosong/0
+        if (!$totalHarga || (int)$totalHarga <= 0) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Total harga (gross_amount) tidak valid atau kosong.'
+            ], 400);
+        }
 
         // 4. Susun parameter transaksi menggunakan data user dari token auth
         $params = [
@@ -32,7 +40,7 @@ class PaymentController extends Controller
                 'gross_amount' => (int) $totalHarga,
             ],
             'customer_details' => [
-                'first_name' => $user->name ?? 'Pelanggan',
+                'first_name' => $user->name ?? 'Pelanggan Prinora',
                 'email' => $user->email ?? 'pelanggan@mail.com',
             ],
         ];
@@ -47,16 +55,16 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => 'Midtrans Error: ' . $e->getMessage()
             ], 500);
         }
     }
 
     public function notificationHandler(Request $request)
     {
-        // 1. Inisialisasi konfigurasi Midtrans
-        Config::$serverKey = env('MIDTRANS_SERVER_KEY');
-        Config::$isProduction = false;
+        // 1. 🔥 AMAN DARI CACHE: Inisialisasi menggunakan config()
+        Config::$serverKey = config('services.midtrans.server_key');
+        Config::$isProduction = (bool) config('services.midtrans.is_production', false);
 
         try {
             // 2. Tangkap data notifikasi dari Midtrans

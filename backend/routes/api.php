@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ChatBotController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\CartController;
+use App\Http\Controllers\Api\PaymentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +32,9 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::post('/categories', [CategoryController::class, 'store']);
 
 Route::post('/chatbot', [ChatBotController::class, 'handleChat']);
+
+// Taruh di bagian rute public (TIDAK PERLU LOGIN)
+Route::post('/midtrans-notification', [App\Http\Controllers\Api\PaymentController::class, 'notificationHandler']);
 
 
 
@@ -56,6 +60,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::put('/orders/{id}', [OrderController::class, 'update']);
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
+
+    Route::post('/checkout', [PaymentController::class, 'checkout']);
 
    Route::put('orders/{id}/assign-designer', [OrderController::class, 'assignDesigner']);
    Route::get('/orders/customer/{customer_id}', [App\Http\Controllers\Api\OrderController::class, 'getCustomerOrders']);

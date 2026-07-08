@@ -8,14 +8,15 @@ class Message extends Model
 {
     protected $fillable = [
         'order_id',
+        'order_item_id',
         'sender',
         'message',
         'file',
         'is_design',
     ];
 
-    public function order()
+    public function orderItem()
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(OrderItem::class, 'order_item_id');
     }
 }

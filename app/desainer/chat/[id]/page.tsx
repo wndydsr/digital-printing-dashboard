@@ -119,48 +119,53 @@ export default function DiskusiDesainPolesan() {
     fetchInitialData();
   }, [params?.id, itemId]);
 
-  const fetchInitialData = async () => {
-    if (!params?.id) return;
-    setIsLoading(true);
-    try {
-      // 🌟 KIRIM KAN QUERY PARAMETER item_id KE LARAVEL BACKEND SANG JEMBATAN FILTER
-      const urlMessages = itemId 
-        ? `/orders/${params.id}/messages?item_id=${itemId}`
-        : `/orders/${params.id}/messages`;
+ // 🛠️ SINKRONISASI COCOK PADA FUNGSI fetchInitialData
+const fetchInitialData = async () => {
+  if (!params?.id) return;
+  setIsLoading(true);
+  try {
+    const urlMessages = itemId 
+      ? `/orders/${params.id}/messages?item_id=${itemId}`
+      : `/orders/${params.id}/messages`;
 
-      const chatData = await apiFetch(urlMessages);
+    const chatData = await apiFetch(urlMessages);
+    
+    // 🌟 PROTEKSI: Amankan reverse dari kegagalan response objek error server
+    if (Array.isArray(chatData)) {
       setMessages(chatData.reverse());
-
-      const orderData = await apiFetch(`/orders/${params.id}`);
-      
-      let mappedStatus: OrderInfo["status"] = "dikerjakan";
-      if (orderData.current_stage_id === 2) mappedStatus = "siap_cetak";
-      else if (orderData.current_stage_id === 3) mappedStatus = "dikerjakan";
-      else if (orderData.current_stage_id === 5) mappedStatus = "selesai";
-
-      // 🌟 UTAMAKAN ITEM YANG ID-NYA MATCH DENGAN QUERY PARAMETER URL
-      const currentItem = orderData.order_items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.[0];
-      
-      let ukuranDisplay = "Ukuran Kustom";
-      if (currentItem && currentItem.panjang && currentItem.lebar) {
-        ukuranDisplay = `${Number(currentItem.panjang)} x ${Number(currentItem.lebar)} meter`;
-      }
-
-      setOrderInfo({
-        order_code: orderData.order_code || "ORD-UNKNOWN",
-        product_name: currentItem?.product?.name || "Produk Cetak",
-        product_thumbnail_label: currentItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
-        size: ukuranDisplay,
-        qty: currentItem?.quantity || 1,
-        status: mappedStatus
-      });
-
-    } catch (err) {
-      console.error("Gagal memuat data awal:", err);
-    } finally {
-      setIsLoading(false);
+    } else {
+      setMessages([]);
     }
-  };
+
+    const orderData = await apiFetch(`/orders/${params.id}`);
+    
+    let mappedStatus: OrderInfo["status"] = "dikerjakan";
+    if (orderData.current_stage_id === 2) mappedStatus = "siap_cetak";
+    else if (orderData.current_stage_id === 3) mappedStatus = "dikerjakan";
+    else if (orderData.current_stage_id === 5) mappedStatus = "selesai";
+
+    const currentItem = orderData.order_items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.[0];
+    
+    let ukuranDisplay = "Ukuran Kustom";
+    if (currentItem && currentItem.panjang && currentItem.lebar) {
+      ukuranDisplay = `${Number(currentItem.panjang)} x ${Number(currentItem.lebar)} meter`;
+    }
+
+    setOrderInfo({
+      order_code: orderData.order_code || "ORD-UNKNOWN",
+      product_name: currentItem?.product?.name || "Produk Cetak",
+      product_thumbnail_label: currentItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
+      size: ukuranDisplay,
+      qty: currentItem?.quantity || 1,
+      status: mappedStatus
+    });
+
+  } catch (err) {
+    console.error("Gagal memuat data awal:", err);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleSend = async () => {
     if (!inputText.trim() || !params?.id) return;

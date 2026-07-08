@@ -11,18 +11,32 @@ use Illuminate\Support\Facades\DB;
 
 class MessageController extends Controller
 {
-    public function index(Request $request, $orderId)
+   public function index(Request $request, $orderId)
     {
-        // 🔥 AMBIL DATA FILTER BERDASARKAN QUERY PARAMETER ?item_id=
-        $itemId = $request->query('item_id');
+        try {
+            // 🔥 AMBIL DATA FILTER BERDASARKAN QUERY PARAMETER ?item_id=
+            $itemId = $request->query('item_id');
 
-        $query = Message::where('order_id', $orderId);
+            // Cast $orderId menjadi integer untuk keamanan query
+            $query = Message::where('order_id', (int)$orderId);
 
-        if ($itemId) {
-            $query->where('order_item_id', $itemId);
+            // Validasi jika itemId ada dan merupakan angka valid sebelum di-query
+            if ($itemId && is_numeric($itemId)) {
+                $query->where('order_item_id', (int)$itemId);
+            }
+
+            $messages = $query->latest()->get();
+
+            // 🌟 Pastikan mengembalikan data berformat JSON Array murni
+            return response()->json($messages, 200);
+
+        } catch (\Exception $e) {
+            // Catat error sistem ke storage/logs/laravel.log agar bisa kamu pelajari detailnya
+            \Log::error("Gagal memuat pesan chat Order #{$orderId}: " . $e->getMessage());
+
+            // Kembalikan array kosong dengan status 200 sebagai penangkal crash .reverse() di frontend
+            return response()->json([], 200);
         }
-
-        return $query->latest()->get();
     }
 
     public function store(Request $request, $orderId)

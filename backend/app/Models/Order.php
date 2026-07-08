@@ -16,6 +16,10 @@ class Order extends Model
         'total_price',
         'status_id',
         'created_by',
+        'shipping_method',    // Pastikan ini ada
+        'shipping_cost',      // Pastikan ini ada
+        'shipping_latitude',  // Pastikan ini ada
+        'shipping_longitude',
         'notes',
         'current_stage_id',
         'designer_id'

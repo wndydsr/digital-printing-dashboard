@@ -8,7 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useRouter, useParams } from "next/navigation";
+// 🌟 INTEGRASI useSearchParams untuk menangkap query parameter (?item=) tanpa mengubah folder routing
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { initEcho } from "@/lib/echo";
 
@@ -51,6 +52,13 @@ const formatDateHeader = (dateStr: string) => {
 };
 
 export default function DiskusiDesainPolesan() {
+  const params = useParams();
+  const router = useRouter();
+  
+  // 🌟 AKTIFKAN useSearchParams UNTUK MENYARING DISKUSI PER ITEM PRODUK
+  const searchParams = useSearchParams();
+  const itemId = searchParams.get("item"); 
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null);
@@ -64,8 +72,6 @@ export default function DiskusiDesainPolesan() {
   
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  const params = useParams();
-  const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,11 +84,16 @@ export default function DiskusiDesainPolesan() {
       console.log("🔥 EVENT TERIMA DI DESAINER:", e);
       const incomingMessage = e.message || e;
       
+      // 🌟 FILTER CHAT REAL-TIME BERDASARKAN ITEM ID AGAR TIDAK BOCOR KE ITEM LAIN
+      if (itemId && incomingMessage.order_item_id && String(incomingMessage.order_item_id) !== String(itemId)) {
+        return;
+      }
+
       if (incomingMessage.is_design === 1 || incomingMessage.is_design === "1") {
         incomingMessage.is_design = true;
       }
 
-      // 🛠️ Jika gambar asli dari Laravel storage sudah datang lewat Echo, matikan blob preview lokal
+      // Jika gambar asli dari Laravel storage sudah datang lewat Echo, matikan blob preview lokal
       if (incomingMessage.file) {
         setUploadingBlob(null);
       }
@@ -102,17 +113,22 @@ export default function DiskusiDesainPolesan() {
     return () => {
       window.Echo?.leave(`chat.${params.id}`);
     };
-  }, [params?.id]);
+  }, [params?.id, itemId]);
 
   useEffect(() => {
     fetchInitialData();
-  }, [params?.id]);
+  }, [params?.id, itemId]);
 
   const fetchInitialData = async () => {
     if (!params?.id) return;
     setIsLoading(true);
     try {
-      const chatData = await apiFetch(`/orders/${params.id}/messages`);
+      // 🌟 KIRIM KAN QUERY PARAMETER item_id KE LARAVEL BACKEND SANG JEMBATAN FILTER
+      const urlMessages = itemId 
+        ? `/orders/${params.id}/messages?item_id=${itemId}`
+        : `/orders/${params.id}/messages`;
+
+      const chatData = await apiFetch(urlMessages);
       setMessages(chatData.reverse());
 
       const orderData = await apiFetch(`/orders/${params.id}`);
@@ -122,18 +138,20 @@ export default function DiskusiDesainPolesan() {
       else if (orderData.current_stage_id === 3) mappedStatus = "dikerjakan";
       else if (orderData.current_stage_id === 5) mappedStatus = "selesai";
 
-      const firstItem = orderData.items?.[0];
+      // 🌟 UTAMAKAN ITEM YANG ID-NYA MATCH DENGAN QUERY PARAMETER URL
+      const currentItem = orderData.order_items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.[0];
+      
       let ukuranDisplay = "Ukuran Kustom";
-      if (firstItem && firstItem.panjang && firstItem.lebar) {
-        ukuranDisplay = `${Number(firstItem.panjang)} x ${Number(firstItem.lebar)} meter`;
+      if (currentItem && currentItem.panjang && currentItem.lebar) {
+        ukuranDisplay = `${Number(currentItem.panjang)} x ${Number(currentItem.lebar)} meter`;
       }
 
       setOrderInfo({
         order_code: orderData.order_code || "ORD-UNKNOWN",
-        product_name: firstItem?.product?.name || "Produk Cetak",
-        product_thumbnail_label: firstItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
+        product_name: currentItem?.product?.name || "Produk Cetak",
+        product_thumbnail_label: currentItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
         size: ukuranDisplay,
-        qty: firstItem?.quantity || 1,
+        qty: currentItem?.quantity || 1,
         status: mappedStatus
       });
 
@@ -154,15 +172,18 @@ export default function DiskusiDesainPolesan() {
       const formData = new FormData();
       formData.append("sender", "desainer");
       formData.append("message", textToSend);
+      
+      // 🌟 SERTAKAN IDENTITAS order_item_id PADA CHAT TEKS
+      if (itemId) {
+        formData.append("order_item_id", String(itemId));
+      }
 
-      // 🔥 FIX UTAMA CHAT TEXT: Kirim data ke API backend, biarkan WebSocket Echo yang menggambar bubble chat-nya
       await apiFetch(`/orders/${params.id}/messages`, {
         method: "POST",
         body: formData,
       });
     } catch (err) {
       console.error("Gagal kirim:", err);
-      // Kembalikan teks ke input jika server gagal memproses request
       setInputText(textToSend);
       alert("Gagal mengirim pesan. Silakan coba lagi.");
     }
@@ -189,9 +210,13 @@ export default function DiskusiDesainPolesan() {
             <Badge variant="secondary" className="font-mono text-indigo-600 bg-indigo-50 border-none px-2 py-0.5">
               {orderInfo.order_code}
             </Badge>
+            {/* Tag visual penanda produk aktif */}
+            <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded border border-slate-200">
+              {orderInfo.product_name}
+            </span>
           </div>
         </div>
-        <Button variant="ghost" className="text-indigo-600 font-semibold hover:bg-indigo-50" onClick={() => router.push(`/operator/order/${params?.id}`)}>
+        <Button variant="ghost" className="text-indigo-600 font-semibold hover:bg-indigo-50" onClick={() => router.push(`/desainer/order/${params?.id}`)}>
           Detail Pesanan
         </Button>
       </header>
@@ -203,7 +228,7 @@ export default function DiskusiDesainPolesan() {
           <ScrollArea className="flex-1 px-6 py-6">
             {messages.length === 0 && !uploadingBlob ? (
               <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">
-                Belum ada riwayat pesan obrolan.
+                Belum ada riwayat pesan obrolan pada item produk ini.
               </div>
             ) : (
               Object.entries(
@@ -230,7 +255,7 @@ export default function DiskusiDesainPolesan() {
                       <div key={msg.id} className={`flex gap-3 ${isDesainer ? "flex-row-reverse" : "flex-row"}`}>
                         <Avatar className="h-9 w-9 border-2 border-white shadow-sm">
                           <AvatarFallback className={isDesainer ? "bg-indigo-600 text-white" : "bg-sky-500 text-white"}>
-                            {isDesainer ? "GH" : "WD"}
+                            {isDesainer ? "DS" : "CS"}
                           </AvatarFallback>
                         </Avatar>
 
@@ -241,7 +266,7 @@ export default function DiskusiDesainPolesan() {
                           </div>
 
                           {memilikiFile || merupakanDesain ? (
-                            <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl rounded-tl-sm bg-white">
+                            <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl bg-white">
                               <img 
                                src={msg.file?.startsWith("blob:") ? msg.file : `${ASSET_URL}/storage/${msg.file}`}
                                 alt="Desain" 
@@ -272,18 +297,18 @@ export default function DiskusiDesainPolesan() {
               ))
             )}
             
-            {/* 🔥 OPTIMISTIC VIEW UNTUK BUBBLE UPLOAD GAMBAR BARU */}
+            {/* OPTIMISTIC VIEW UNTUK BUBBLE UPLOAD GAMBAR BARU */}
             {uploadingBlob && (
               <div className="flex gap-3 flex-row-reverse mb-6">
                 <Avatar className="h-9 w-9 border-2 border-white shadow-sm">
-                  <AvatarFallback className="bg-indigo-600 text-white">GH</AvatarFallback>
+                  <AvatarFallback className="bg-indigo-600 text-white">DS</AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col max-w-[70%] items-end opacity-70">
                   <div className="flex items-baseline gap-2 mb-1 flex-row-reverse">
                     <span className="text-xs font-bold text-slate-700">Desainer</span>
                     <span className="text-[10px] text-slate-400">Mengupload...</span>
                   </div>
-                  <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl rounded-tr-sm bg-white">
+                  <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl bg-white">
                     <img src={uploadingBlob} alt="Uploading..." className="w-full h-44 object-cover border-b border-slate-100 blur-[1px]" />
                     <CardContent className="p-4">
                       <p className="text-sm text-slate-500 italic">Sedang mengirim berkas pratinjau desain terbaru...</p>
@@ -304,7 +329,7 @@ export default function DiskusiDesainPolesan() {
                   placeholder="Tulis pesan..." 
                   className="border-none bg-transparent focus-visible:ring-0 text-sm shadow-none p-0 h-10"
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)} // ✔️ Sudah diperbaiki menjadi setInputText
+                  onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 />
                 <Button variant="ghost" size="icon" className="text-slate-400 hover:text-indigo-600 h-8 w-8" onClick={() => fileInputRef.current?.click()}>
@@ -333,6 +358,11 @@ export default function DiskusiDesainPolesan() {
                     formData.append("is_design", "1");
                     formData.append("message", "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.");
 
+                    // 🌟 SERTAKAN IDENTITAS order_item_id PADA UPLOAD GAMBAR PREVIEW BARU
+                    if (itemId) {
+                      formData.append("order_item_id", String(itemId));
+                    }
+
                     await apiFetch(`/orders/${params.id}/messages`, {
                       method: "POST",
                       body: formData,
@@ -350,7 +380,7 @@ export default function DiskusiDesainPolesan() {
           </footer>
         </section>
 
-        {/* SIDEBAR */}
+        {/* SIDEBAR INFO */}
         <aside className="w-[300px] bg-white border-l border-slate-200 p-5 overflow-y-auto hidden lg:flex flex-col gap-8">
           <div>
             <h3 className="text-sm font-bold text-slate-800 mb-4">Info Pesanan</h3>
@@ -403,7 +433,7 @@ export default function DiskusiDesainPolesan() {
         </aside>
       </main>
 
-      {/* ==================== 🔹 MODAL CUSTOM PDF VIEWER LAYOUT ==================== */}
+      {/* MODAL CUSTOM PDF VIEWER LAYOUT */}
       {previewImage && (
         <div 
           className="fixed inset-0 z-[9999] flex flex-col bg-[#525659] text-white font-sans select-none"

@@ -27,31 +27,26 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 
-interface Order {
-  id: number;
+// ─── 🛠️ INTERFACE FLAT ITEM PRODUK ───
+interface AdminFlatOrderItem {
+  id: number;           // ID order induk
+  item_id: number;      // ID detail item (OrderItem)
   order_code: string;
-  customer?: { name: string };
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string | null;
+  product_name: string;
+  quantity: number;
+  subtotal: number;
   order_date: string;
-  total_price: number;
-  designer_id?: number | null; 
-  designer?: { id: number; name: string } | null; 
-  items?: {
-    id: number
-    quantity: number
-    subtotal: number
-    product?: {
-      id: number
-      name: string
-    }
-  }[]
-  stage?: {
-    id: number
-    name: string
-    status?: {
-      id: number
-      name: string
-    }
-  }   
+  created_at: string;   
+  shipping_method: string;
+  shipping_cost: number;
+  shipping_latitude: string | null;
+  shipping_longitude: string | null;
+  designer?: { id: number; name: string } | null;
+  stage_name: string;
+  raw_order_payload: any; 
 }
 
 interface Designer {
@@ -60,8 +55,8 @@ interface Designer {
 }
 
 export default function AnalyticsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState("Last 30 days")
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState<any[]>([])
+  const [flatItems, setFlatItems] = useState<AdminFlatOrderItem[]>([]) 
   const [designers, setDesigners] = useState<Designer[]>([]) 
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
@@ -75,44 +70,70 @@ export default function AnalyticsPage() {
 
   const itemsPerPage = 10
 
-  const filteredOrders = orders.filter((order) => {
+  const filteredItems = flatItems.filter((item) => {
     const keyword = search.toLowerCase()
     return (
-      order.order_code?.toLowerCase().includes(keyword) ||
-      order.customer?.name?.toLowerCase().includes(keyword) ||
-      order.items?.map((item: any) => item.product?.name).join(", ").toLowerCase().includes(keyword)
+      item.order_code?.toLowerCase().includes(keyword) ||
+      item.customer_name?.toLowerCase().includes(keyword) ||
+      item.product_name?.toLowerCase().includes(keyword)
     )
   })
 
   const startIndex = (currentPage - 1) * itemsPerPage
-  const currentData = filteredOrders.slice(startIndex, startIndex + itemsPerPage)
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+  const currentData = filteredItems.slice(startIndex, startIndex + itemsPerPage)
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage || 1) 
 
+  // ─── 🎨 PEMETAAN WARNA BADGE STAGE KERJA ───
   const stageColorByName: Record<string, string> = {
     "butuh desain": "text-red-500 border-red-200 bg-red-50/30",
+    "antrean desain": "text-orange-500 border-orange-200 bg-orange-50/30",
     "siap cetak": "text-yellow-500 border-yellow-200 bg-yellow-50/30",
     "cetak": "text-blue-500 border-blue-200 bg-blue-50/30",
-    "desain": "text-blue-500 border-blue-50 bg-blue-50/30",
+    "desain": "text-blue-500 border-blue-500 bg-blue-50/30",
     "selesai": "text-green-500 border-green-200 bg-green-50/30",
   }
 
-  const statusColorMap: Record<number, string> = {
-    1: "bg-yellow-100 text-yellow-600", 
-    2: "bg-blue-100 text-blue-600",     
-    3: "bg-green-100 text-green-600",   
-  }
-
-  const fetchOrders = () => {
+const fetchOrders = () => {
     apiFetch(`/orders`)
-      .then((data) => {
-        const result = Array.isArray(data)
-          ? data
-          : Array.isArray(data.data)
-          ? data.data
-          : []
+      .then((data: any) => {
+        const result = Array.isArray(data) ? data : data.data || []
         setOrders(result)
+
+        const rows: AdminFlatOrderItem[] = [] 
+        
+        result.forEach((order: any) => {
+          if (order && Array.isArray(order.items)) {
+            order.items.forEach((item: any) => {
+              rows.push({
+                id: order.id, 
+                item_id: item.id,
+                order_code: order.order_code || "-",
+                customer_name: order.customer?.name || "-",
+                customer_phone: order.customer?.phone || "-",
+                customer_address: order.customer?.address || null,
+                product_name: item.product?.name || "-",
+                quantity: item.quantity || 1,
+                subtotal: item.subtotal || (Number(item.price || 0) * Number(item.quantity || 1)),
+                // 🔥 SINKRONISASI AMAN: Jika item.stage null (karena data database NULL), pakai stage order induk
+                stage_name: item.stage?.name || order.stage?.name || "Antrean Desain",
+                created_at: order.created_at || new Date().toISOString(), 
+                order_date: order.order_date || new Date().toISOString(),
+                shipping_method: order.shipping_method || "pickup",
+                shipping_cost: order.shipping_cost || 0,
+                shipping_latitude: order.shipping_latitude || null,
+                shipping_longitude: order.shipping_longitude || null,
+                designer: order.designer || null,
+                raw_order_payload: order 
+              })
+            })
+          }
+        })
+        setFlatItems(rows)
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("🔴 Error fetching orders:", err)
+        setFlatItems([]) // Cegah crash jika API putus
+      })
   }
 
   const fetchDesigners = () => {
@@ -121,9 +142,7 @@ export default function AnalyticsPage() {
         const result = Array.isArray(data) ? data : data.data || []
         setDesigners(result)
       })
-      .catch((err) => {
-        console.error("Gagal mengambil data desainer dari API:", err)
-      })
+      .catch((err) => console.error(err))
   }
 
   const handleAssignDesigner = async (orderId: number, designerId: string) => {
@@ -134,7 +153,7 @@ export default function AnalyticsPage() {
       })
       fetchOrders() 
     } catch (err) {
-      console.error("Gagal menugaskan desainer:", err)
+      console.error(err)
     }
   }
 
@@ -150,46 +169,38 @@ export default function AnalyticsPage() {
     }
   }
 
-  // 🛠️ FUNGSI EXCEL DOWNLOAD GENERATOR (NATIVE CSV METHOD)
   const handleExportExcel = () => {
-    if (orders.length === 0) {
+    if (flatItems.length === 0) {
       alert("Tidak ada data pesanan untuk di-export.")
       return
     }
 
-    // 1. Tentukan Header Kolom Excel
-    const headers = ["No Pesanan", "Nama Pelanggan", "Produk yang Dipesan", "Total Harga (Rp)", "Tanggal Pemesanan", "Nama Desainer", "Tahap Kerja", "Status"]
+    const headers = ["No Pesanan", "Nama Pelanggan", "Item Produk", "Qty", "Subtotal (Rp)", "Tanggal Pemesanan", "Nama Desainer", "Tahap Kerja"]
 
-    // 2. Map data order ke bentuk baris Excel
-    const csvRows = filteredOrders.map((order) => {
-      const productNames = order.items?.map((item) => item.product?.name).join(" | ") || "-"
-      const formattedDate = new Date(order.order_date).toLocaleDateString("id-ID", {
+    const csvRows = filteredItems.map((item) => {
+      const formattedDate = new Date(item.created_at).toLocaleDateString("id-ID", {
         year: "numeric", month: "2-digit", day: "2-digit"
       })
       
       return [
-        `"${order.order_code}"`, // Dibungkus kutip agar string code aman
-        `"${order.customer?.name || "-"}"`,
-        `"${productNames}"`,
-        order.total_price,
+        `"${item.order_code}"`,
+        `"${item.customer_name}"`,
+        `"${item.product_name}"`,
+        item.quantity,
+        item.subtotal,
         `"${formattedDate}"`,
-        `"${order.designer?.name || "-"}"`,
-        `"${order.stage?.name || "-"}"`,
-        `"${order.stage?.status?.name || "-"}"`
+        `"${item.designer?.name || "-"}"`,
+        `"${item.stage_name}"`
       ].join(",")
     })
 
-    // 3. Gabungkan header dan isi baris
     const csvContent = [headers.join(","), ...csvRows].join("\n")
-
-    // 4. Tambahkan BOM (\uFEFF) supaya Excel membaca encoding UTF-8 (mencegah karakter berantakan)
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     
-    // 5. Trigger download otomatis dari browser
     const link = document.createElement("a")
     link.href = url
-    link.setAttribute("download", `Laporan_Pesanan_Prinora_${new Date().toISOString().slice(0,10)}.csv`)
+    link.setAttribute("download", `Laporan_Produksi_Item_${new Date().toISOString().slice(0,10)}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -206,7 +217,7 @@ export default function AnalyticsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Pesanan</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Monitoring Antrian Kerja (Per Item)</h1>
           </div>
           <div className="flex items-center gap-3">
             <Select value={timeRange} onValueChange={setTimeRange}>
@@ -221,16 +232,12 @@ export default function AnalyticsPage() {
               </SelectContent>
             </Select>
             
-            {/* 🛠️ PASANG FITUR EXCEL DI BUTTON EXPORT */}
             <Button onClick={handleExportExcel} variant="outline" className="gap-2 bg-transparent">
               <Download className="w-4 h-4" />
-              Export
+              Export csv
             </Button>
             
-            <Button
-              onClick={() => setOpenCreate(true)}
-              className="bg-purple-600 hover:bg-purple-700 gap-2"
-            >
+            <Button onClick={() => setOpenCreate(true)} className="bg-purple-600 hover:bg-purple-700 gap-2">
               <Plus className="w-4 h-4" />
               Tambah
             </Button>
@@ -239,102 +246,85 @@ export default function AnalyticsPage() {
 
         {/* SEARCH */}
         <Input
-          placeholder="Cari nama pelanggan..."
+          placeholder="Cari No. Order, pelanggan atau produk..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
 
         {/* Workflow Status Table */}
-        <div className="mt-8"></div>
-        <Card className="w-full border-gray-200">    
+        <Card className="w-full border-gray-200 mt-4">    
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50/50">
                   <TableHead className="font-medium text-gray-600">No Pesanan</TableHead>
                   <TableHead className="font-medium text-gray-600">Pelanggan</TableHead>
-                  <TableHead className="font-medium text-gray-600">Produk</TableHead>
-                  <TableHead className="font-medium text-gray-600">Total</TableHead>
+                  <TableHead className="font-medium text-gray-600">Item Produk</TableHead>
+                  <TableHead className="font-medium text-gray-600">Qty</TableHead>
+                  <TableHead className="font-medium text-gray-600">Subtotal</TableHead>
                   <TableHead className="font-medium text-gray-600">Tanggal</TableHead>
                   <TableHead className="font-medium text-gray-600">Desainer</TableHead>
-                  <TableHead className="font-medium text-gray-600">Tahap</TableHead>
-                  <TableHead className="font-medium text-gray-600">Status</TableHead>
+                  <TableHead className="font-medium text-gray-600">Tahap Item</TableHead>
                   <TableHead className="font-medium text-gray-600 text-center">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {currentData.map((order) => (
-                  <TableRow key={order.id} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100">
-                    <TableCell className="text-blue-500 font-medium">{order.order_code}</TableCell>
-                    <TableCell className="text-gray-700">{order.customer?.name}</TableCell>
-                    <TableCell className="text-gray-700">
-                      {order.items?.map((item: any) => item.product?.name).join(", ") || "-"}
-                    </TableCell>
+                {currentData.map((item, idx) => (
+                  <TableRow key={`${item.id}-${item.item_id}-${idx}`} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100">
+                    <TableCell className="text-blue-500 font-medium">{item.order_code}</TableCell>
+                    <TableCell className="text-gray-700">{item.customer_name}</TableCell>
+                    <TableCell className="font-semibold text-gray-900">{item.product_name}</TableCell>
+                    <TableCell className="text-gray-600">{item.quantity}x</TableCell>
                     <TableCell className="font-medium text-gray-900">
-                      Rp {Number(order.total_price).toLocaleString('id-ID')}
+                      Rp {Number(item.subtotal).toLocaleString('id-ID')}
                     </TableCell>
                     <TableCell className="text-gray-500 text-sm">
-                      {new Date(order.order_date).toLocaleString('en-US', {
-                        timeZone: 'Asia/Jakarta',
+                      {new Date(item.created_at).toLocaleString('id-ID', {
                         month: '2-digit', day: '2-digit', year: '2-digit',
-                        hour: '2-digit', minute: '2-digit', hour12: true
+                        hour: '2-digit', minute: '2-digit'
                       })}
                     </TableCell>
 
-                  <TableCell className="min-w-[160px]">
-                    {order.stage?.name?.toLowerCase() === "siap cetak" || 
-                    order.stage?.name?.toLowerCase() === "cetak" || 
-                    order.stage?.name?.toLowerCase() === "selesai" ? (
-                      <Badge 
-                        variant="outline" 
-                        className="rounded-md px-2.5 py-1 font-normal text-gray-400 border-gray-200 bg-gray-50/50"
-                      >
-                        File Siap Cetak (Tanpa Desainer)
-                      </Badge>
-                    ) : (
-                      <Select
-                        value={order.designer?.id?.toString() || "unassigned"}
-                        onValueChange={(val) => handleAssignDesigner(order.id, val)}
-                      >
-                        <SelectTrigger 
-                          className={`h-8 w-full border text-xs font-medium transition-colors ${
-                            !order.designer 
-                              ? 'text-amber-600 border-amber-200 bg-amber-50/40 font-semibold shadow-sm' 
-                              : 'text-gray-700 border-gray-200 bg-white hover:bg-gray-50' 
-                          }`}
+                    {/* Alokasi Tugas Desainer */}
+                    <TableCell className="min-w-[160px]">
+                      {item.stage_name.toLowerCase() === "siap cetak" || 
+                      item.stage_name.toLowerCase() === "cetak" || 
+                      item.stage_name.toLowerCase() === "selesai" ? (
+                        <Badge variant="outline" className="rounded-md px-2.5 py-1 font-normal text-gray-400 border-gray-200 bg-gray-50/50">
+                          File Siap Cetak (Langsung)
+                        </Badge>
+                      ) : (
+                        <Select
+                          value={item.designer?.id?.toString() || "unassigned"}
+                          onValueChange={(val) => handleAssignDesigner(item.id, val)}
                         >
-                          <SelectValue placeholder="Pilih Desainer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unassigned" disabled className="text-xs text-gray-400">Belum Ditugaskan</SelectItem>
-                          {designers.map((designer) => (
-                            <SelectItem key={designer.id} value={designer.id.toString()} className="text-xs">
-                              {designer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </TableCell>
+                          <SelectTrigger className={`h-8 w-full border text-xs font-medium ${!item.designer ? 'text-amber-600 border-amber-200 bg-amber-50/40 font-semibold' : 'text-gray-700'}`}>
+                            <SelectValue placeholder="Pilih Desainer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned" disabled>Belum Ditugaskan</SelectItem>
+                            {designers.map((designer) => (
+                              <SelectItem key={designer.id} value={designer.id.toString()}>{designer.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </TableCell>
 
+                    {/* BADGE STAGE MANDIRI PER ITEM */}
                     <TableCell>
-                      <Badge variant="outline" className={`rounded-md px-3 py-1 font-normal border ${stageColorByName[order.stage?.name?.toLowerCase() || ''] || 'text-gray-500 border-gray-200 bg-gray-50'}`}>
-                        {order.stage?.name || '-'}
+                      <Badge variant="outline" className={`rounded-md px-3 py-1 font-normal border ${stageColorByName[item.stage_name.toLowerCase()] || 'text-gray-500 border-gray-200 bg-gray-50'}`}>
+                        {item.stage_name}
                       </Badge>
                     </TableCell>
 
-                    <TableCell>
-                      <Badge className={`rounded-md px-4 py-1 border-none font-medium shadow-none ${statusColorMap[order.stage?.status?.id || 0] || 'bg-gray-100 text-gray-500'}`}>
-                        {order.stage?.status?.name || '-'}
-                      </Badge>
-                    </TableCell>
-
+                    {/* AKSI */}
                     <TableCell>
                       <div className="flex items-center justify-center gap-3">
                         <button
                           onClick={() => {
-                            setSelectedOrder(order)
+                            setSelectedOrder(item.raw_order_payload)
                             setOpenDetail(true)
                           }}
                           className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -343,7 +333,7 @@ export default function AnalyticsPage() {
                         </button>
                         <button  
                           onClick={() => {
-                            setSelectedId(order.id)
+                            setSelectedId(item.id)
                             setOpenDelete(true)
                           }}
                           className="text-gray-400 hover:text-red-500 transition-colors"
@@ -360,35 +350,23 @@ export default function AnalyticsPage() {
             {/* PAGINATION */}
             <div className="flex items-center justify-between w-full px-4 py-3 border-t bg-gray-50">
               <span className="text-sm text-gray-500">
-                {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredOrders.length)} of {filteredOrders.length} items
+                {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredItems.length)} of {filteredItems.length} items
               </span>
 
               <Pagination className="mx-0 w-auto justify-end"> 
                 <PaginationContent>
                   <PaginationItem>
-                    <PaginationPrevious
-                      href="#"
-                      onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    />
+                    <PaginationPrevious href="#" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} />
                   </PaginationItem>
-
                   {Array.from({ length: totalPages }, (_, i) => (
                     <PaginationItem key={i}>
-                      <PaginationLink
-                        href="#"
-                        isActive={currentPage === i + 1}
-                        onClick={() => setCurrentPage(i + 1)}
-                      >
+                      <PaginationLink href="#" isActive={currentPage === i + 1} onClick={() => setCurrentPage(i + 1)}>
                         {i + 1}
                       </PaginationLink>
                     </PaginationItem>
                   ))}
-
                   <PaginationItem>
-                    <PaginationNext
-                      href="#"
-                      onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    />
+                    <PaginationNext href="#" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} />
                   </PaginationItem>
                 </PaginationContent>
               </Pagination>
@@ -396,7 +374,7 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Modal-modal */}
+        {/* Modal Components */}
         <OrderDetailModal open={openDetail} onClose={() => setOpenDetail(false)} order={selectedOrder} />
         <OrderCreateModal open={openCreate} onClose={() => setOpenCreate(false)} onSuccess={() => { fetchOrders(); setCurrentPage(1); }} />
         <DeleteModal open={openDelete} onClose={() => setOpenDelete(false)} onDelete={handleDelete} />

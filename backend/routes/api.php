@@ -54,6 +54,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    Route::get('/kurir/orders', [OrderController::class, 'getKurirOrders']);
+    Route::put('/admin/orders/{id}/stage', [OrderController::class, 'updateStage']);
+    
+    Route::put('/orders/items/{id}/stage', [OrderController::class, 'updateItemStage']);
+
     // 🔹 SEMUA ROLE BOLEH
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);

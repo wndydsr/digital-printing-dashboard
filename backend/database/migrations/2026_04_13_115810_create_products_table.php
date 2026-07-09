@@ -11,15 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('products', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->decimal('price', 12, 2)->default(0);
-            $table->integer('estimated_duration')->nullable();
-            $table->string('photo')->nullable();
-            $table->string('status')->default('active');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('products')) {
+            Schema::create('products', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('category_id')->nullable()->constrained('categories')->onDelete('set null'); // Sesuaikan nama tabel kategorimu jika ada
+                $table->string('name');
+                $table->decimal('price', 12, 2)->default(0);
+                $table->boolean('is_custom')->default(0);
+                $table->integer('estimated_duration')->nullable();
+                $table->string('photo')->nullable();
+                $table->string('status')->default('active');
+                $table->timestamps();
+                $table->text('fields')->nullable();
+                $table->text('description')->nullable();
+            });
+        }
     }
 
     /**

@@ -11,15 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('order_items', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('order_id')->constrained()->onDelete('cascade');
-            $table->foreignId('product_id')->constrained()->onDelete('cascade');
-            $table->integer('quantity')->default(1);
-            $table->decimal('price', 12, 2)->default(0);
-            $table->decimal('subtotal', 12, 2)->default(0);
-            $table->json('details')->nullable();
-        });
+        // 🌟 TAMBAHKAN PROTEKSI: Hanya buat jika tabelnya belum wujud di database server
+        if (!Schema::hasTable('order_items')) {
+            Schema::create('order_items', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('order_id')->constrained()->onDelete('cascade');
+                $table->foreignId('product_id')->constrained()->onDelete('cascade');
+                $table->integer('quantity')->default(1);
+                $table->decimal('price', 12, 2)->default(0);
+                $table->decimal('subtotal', 12, 2)->default(0);
+                $table->json('details')->nullable();
+            });
+        }
     }
 
     /**

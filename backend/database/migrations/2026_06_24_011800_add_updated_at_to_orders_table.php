@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('orders', function (Blueprint $table) {
-            $table->timestamp('updated_at')->nullable()->after('created_at');
-        });
+        // 🌟 TAMBAHKAN PROTEKSI: Cek apakah tabel orders ada dan kolom updated_at BELUM ada
+        if (Schema::hasTable('orders') && !Schema::hasColumn('orders', 'updated_at')) {
+            Schema::table('orders', function (Blueprint $table) {
+                $table->timestamp('updated_at')->nullable()->after('created_at');
+            });
+        }
     }
 
     /**
@@ -21,8 +24,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('orders', function (Blueprint $table) {
-            $table->dropColumn('updated_at');
-        });
+        if (Schema::hasTable('orders') && Schema::hasColumn('orders', 'updated_at')) {
+            Schema::table('orders', function (Blueprint $table) {
+                $table->dropColumn('updated_at');
+            });
+        }
     }
 };

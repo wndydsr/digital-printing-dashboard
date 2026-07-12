@@ -123,27 +123,26 @@ export default function PaymentModal({
       return;
     }
     
-    // Panggil jendela pembayaran
+    // Panggil jendela pembayaran Midtrans Snap
     (window as any).snap.pay(midtransSnapToken, {
-      // ... sisanya sama seperti kode kamu
-          onSuccess: function (result: any) {
-            alert("Pembayaran Admin Kasir Berhasil!")
-            setConfirmationDone(true)
-            setShowInvoice(true)
-          },
-          onPending: function (result: any) {
-            alert("Menunggu transaksi diselesaikan oleh pihak customer.")
-            setConfirmationDone(true)
-            setShowInvoice(true)
-          },
-          onError: function (result: any) {
-            alert("Sistem mencatat transaksi Midtrans gagal/ditolak.")
-            setConfirmationDone(false)
-          },
-          onClose: function () {
-            setIsSubmitting(false)
-          }
-        })
+      onSuccess: function (result: any) {
+        alert("Pembayaran Admin Kasir Berhasil!");
+        setConfirmationDone(true);
+        setShowInvoice(true); // 🔥 Membuka komponen modal <InvoiceOrder /> internal admin kamu
+      },
+      onPending: function (result: any) {
+        alert("Menunggu transaksi diselesaikan oleh pihak customer.");
+        setConfirmationDone(true);
+        setShowInvoice(true); // 🔥 Tetap buka modal invoice admin agar kasir bisa print slip pending
+      },
+      onError: function (result: any) {
+        alert("Sistem mencatat transaksi Midtrans gagal/ditolak.");
+        setConfirmationDone(false);
+      },
+      onClose: function () {
+        setIsSubmitting(false);
+      }
+    });
       } else {
         // Jalur Kondisi: Pembayaran Cash / Tunai Manual di Kasir Toko
         setConfirmationDone(true)

@@ -43,22 +43,22 @@ export default function PaymentModal({
   // INJEKSI OTOMATIS MIDTRANS SNAP SDK VIA DOM
   // ==========================================
   useEffect(() => {
-    if (!open) return
+    // Hapus kondisi 'if (!open) return' agar script dimuat sejak awal halaman admin diakses (seperti di customer)
+    const existingScript = document.getElementById("midtrans-snap-script");
+    if (existingScript) return;
 
-    const script = document.createElement("script")
-    script.src = "https://app.sandbox.midtrans.com/snap/snap.js"
-    script.setAttribute("data-client-key", process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "")
-    script.async = true
+    const script = document.createElement("script");
+    script.id = "midtrans-snap-script";
+    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.setAttribute("data-client-key", process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "");
+    script.async = true;
     
-    document.body.appendChild(script)
+    document.body.appendChild(script);
 
     return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
-      }
-    }
-  }, [open])
-
+      // Biarkan script tetap menempel atau hapus hanya jika benar-injeksi
+    };
+  }, []); // Menggunakan array kosong [] agar di-load sejak awal halaman di-render
   // ==========================================
   // STEP STATUS TRACKING
   // ==========================================
@@ -94,32 +94,38 @@ export default function PaymentModal({
       setSavedProducts(products)
       setSavedTotal(total)
 
-      // Menembak fungsi pembuatan pesanan ke backend laravel via prop induk
-      const responseData = await onConfirm()
-      
-      // 🌟 SINKRONISASI: Menyesuaikan ekstraksi properti langsung sesuai return json PaymentController
-      const idDariDatabase = responseData?.order_id || responseData?.data?.id || responseData?.id || responseData?.data?.order_id;
-      const midtransSnapToken = responseData?.token || responseData?.data?.token;
+    const responseData = await onConfirm();
 
-      if (!idDariDatabase) {
-        alert("Pesanan berhasil dibuat, tapi nomor urut database gagal dimuat.")
-        setIsSubmitting(false)
-        return
-      }
+    console.log("RAW RESPONSE DATA DARI ONCONFIRM:", responseData);
 
-      const formattedOrderNo = `ORD-${String(idDariDatabase).padStart(5, '0')}`
-      setRealOrderId(formattedOrderNo)
+    // 🌟 SINKRONISASI AMAN: Mengambil ID & Token dari PaymentController yang sukses
+    const idDariDatabase = responseData?.order_id || responseData?.data?.id || responseData?.id;
+    const midtransSnapToken = responseData?.token || responseData?.data?.token;
 
-      // Jalur Kondisi: Pembayaran Elektronik Online Gateway
-      if (paymentMethod === "qris") {
-        if (!midtransSnapToken || !(window as any).snap) {
-          alert("Sistem gerbang pembayaran Midtrans belum siap sepenuhnya. Mohon pastikan file .env proyek admin sudah memuat NEXT_PUBLIC_MIDTRANS_CLIENT_KEY dengan benar.")
-          setIsSubmitting(false)
-          return
-        }
+    console.log("Hasil Extract ID Database:", idDariDatabase);
+    console.log("Hasil Extract Token Midtrans:", midtransSnapToken);
 
-        // Panggil Jendela Pembayaran Midtrans Snap HP/Desktop
-        (window as any).snap.pay(midtransSnapToken, {
+    if (!idDariDatabase) {
+      alert("Pesanan berhasil dibuat, tapi nomor urut database gagal dimuat.");
+      setIsSubmitting(false);
+      return;
+    }
+
+  const formattedOrderNo = `ORD-${String(idDariDatabase).padStart(5, '0')}`;
+  setRealOrderId(formattedOrderNo);
+
+  // Jalur Kondisi: Pembayaran Elektronik Online Gateway
+  if (paymentMethod === "qris") {
+    if (!midtransSnapToken || !(window as any).snap) {
+      // Pesan error dibuat lebih spesifik agar kamu tahu persis mana yang kosong
+      alert(`Sistem belum siap sepenuhnya.\nDetail -> Token: ${midtransSnapToken ? 'Ada' : 'Kosong'}, SDK Midtrans: ${(window as any).snap ? 'Siap' : 'Belum Dimuat Browser'}`);
+      setIsSubmitting(false);
+      return;
+    }
+    
+    // Panggil jendela pembayaran
+    (window as any).snap.pay(midtransSnapToken, {
+      // ... sisanya sama seperti kode kamu
           onSuccess: function (result: any) {
             alert("Pembayaran Admin Kasir Berhasil!")
             setConfirmationDone(true)

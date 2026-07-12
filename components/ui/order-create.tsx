@@ -277,6 +277,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
       const formData = new FormData()
       formData.append("customer_id", customer.id)
       formData.append("total_price", total.toString())
+      formData.append("totalHarga", total.toString())
 
       let initialStageId = 2; 
       
@@ -327,7 +328,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
       })
 
       // 🔥 TANGKAP HASIL FETCH DARI BACKEND
-      const res = await apiFetch("/orders", {
+      const res = await apiFetch("/checkout", {
         method: "POST",
         body: formData,
       })

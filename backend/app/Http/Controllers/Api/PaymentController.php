@@ -140,14 +140,14 @@ class PaymentController extends Controller
                 })->delete();
             }
 
-            // Integrasi Midtrans Snap
+            // 🔥 INTEGRASI MIDTRANS SNAP DENGAN KONDISIONAL MULTI-REPO URL
             Config::$serverKey = config('services.midtrans.server_key');
             Config::$isProduction = (bool) config('services.midtrans.is_production', false); 
             Config::$isSanitized = true;
             Config::$is3ds = true;
 
-            // 🔥 SESUAIKAN CALLBACKS DENGAN DOMAIN E-COMMERCE CUSTOMER (Bukan admin dashboard lagi)
-            $frontendUrl = 'https://ws-printing.hanifaslam.dev'; 
+            // 🔍 Deteksi domain asal request (Client URL)
+            $referer = $request->headers->get('referer') ?? '';
 
             $params = [
                 'transaction_details' => [
@@ -157,17 +157,31 @@ class PaymentController extends Controller
                 'customer_details' => [
                     'first_name' => $user->name ?? 'Pelanggan Prinora',
                     'email' => $user->email ?? 'pelanggan@mail.com',
-                ],
-                'callbacks' => [
-                    'finish'   => $frontendUrl . '/invoice/' . $order->id,
-                    'unfinish' => $frontendUrl . '/invoice/' . $order->id,
-                    'error'    => $frontendUrl . '/my-account?tab=orders'
                 ]
             ];
 
+            // 🌟 STRATEGI CALLBACK:
+            if (str_contains($referer, 'ws-printing.hanifaslam.dev')) {
+                // Jalur A: Request datang dari web E-Commerce Customer umum
+                $params['callbacks'] = [
+                    'finish'   => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
+                    'unfinish' => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
+                    'error'    => 'https://ws-printing.hanifaslam.dev/my-account?tab=orders'
+                ];
+            } else {
+                // Jalur B: Request datang dari repo Admin Dashboard (baik localhost maupun admin.prinora.store)
+                // Kita berikan domain admin-mu agar kalaupun terjadi fallback redirect, ia tidak melompat ke web customer
+                $adminUrl = 'https://admin.prinora.store'; 
+                $params['callbacks'] = [
+                    'finish'   => $adminUrl . '/dashboard/orders', 
+                    'unfinish' => $adminUrl . '/dashboard/orders',
+                    'error'    => $adminUrl . '/dashboard/orders'
+                ];
+            }
+
             $snapToken = Snap::getSnapToken($params);
             DB::commit();
-
+            
             return response()->json([
                 'success' => true,
                 'token' => $snapToken,

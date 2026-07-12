@@ -140,39 +140,46 @@ class PaymentController extends Controller
                 })->delete();
             }
 
-            // 🔥 INTEGRASI MIDTRANS SNAP DENGAN KONDISIONAL MULTI-REPO URL
+            // Integrasi Midtrans Snap
             Config::$serverKey = config('services.midtrans.server_key');
             Config::$isProduction = (bool) config('services.midtrans.is_production', false); 
             Config::$isSanitized = true;
             Config::$is3ds = true;
 
-        // BUKA: PaymentController.php
+            // Deteksi domain asal request (Client URL)
+            $referer = $request->headers->get('referer') ?? '';
 
-        $referer = $request->headers->get('referer') ?? '';
-
-        $params = [
-            'transaction_details' => [
-                'order_id' => (string) $order->id, 
-                'gross_amount' => (int) $totalHarga,
-            ],
-            'customer_details' => [
-                'first_name' => $user->name ?? 'Pelanggan Prinora',
-                'email' => $user->email ?? 'pelanggan@mail.com',
-            ]
-        ];
-
-        // 🌟 HANYA BERIKAN CALLBACK UNTUK E-COMMERCE CUSTOMER
-        if (str_contains($referer, 'ws-printing.hanifaslam.dev')) {
-            $params['callbacks'] = [
-                'finish'   => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
-                'unfinish' => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
-                'error'    => 'https://ws-printing.hanifaslam.dev/my-account?tab=orders'
+            $params = [
+                'transaction_details' => [
+                    'order_id' => (string) $order->id, 
+                    'gross_amount' => (int) $totalHarga,
+                ],
+                'customer_details' => [
+                    'first_name' => $user->name ?? 'Pelanggan Prinora',
+                    'email' => $user->email ?? 'pelanggan@mail.com',
+                ]
             ];
-        } 
-        // Sisi Admin dikosongkan (tanpa callbacks) agar Midtrans TIDAK me-redirect halaman web admin.
 
-        $snapToken = Snap::getSnapToken($params);
-        DB::commit();
+            // 🌟 LOGIKA DINAMIS CALLBACKS MULTI-REPO (FIXED NO REDIRECT UNTUK ADMIN)
+            if (str_contains($referer, 'ws-printing.hanifaslam.dev')) {
+                // Jalur Customer E-Commerce: Menggunakan rute redirect halaman invoice
+                $params['callbacks'] = [
+                    'finish'   => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
+                    'unfinish' => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
+                    'error'    => 'https://ws-printing.hanifaslam.dev/my-account?tab=orders'
+                ];
+            } else {
+                // Jalur Admin Kasir Dashboard: Menggunakan modal popup lokal (<InvoiceOrder />)
+                // Diset NULL agar Midtrans TIDAK me-refresh/me-redirect halaman admin kasir!
+                $params['callbacks'] = [
+                    'finish'   => null,
+                    'unfinish' => null,
+                    'error'    => null
+                ];
+            }
+
+            $snapToken = Snap::getSnapToken($params);
+            DB::commit();
 
             return response()->json([
                 'success' => true,

@@ -146,8 +146,9 @@ class PaymentController extends Controller
             Config::$isSanitized = true;
             Config::$is3ds = true;
 
-            // Deteksi domain asal request (Client URL)
-            $referer = $request->headers->get('referer') ?? '';
+            // 🌟 DETEKSI PLATFORM VIA FLAG EKSPLISIT DARI FRONTEND
+            // (Referer header tidak reliable untuk request fetch/AJAX, jadi tidak dipakai lagi)
+            $platform = $request->input('platform', 'customer'); // default aman ke customer
 
             $params = [
                 'transaction_details' => [
@@ -160,21 +161,25 @@ class PaymentController extends Controller
                 ]
             ];
 
-            // 🌟 LOGIKA DINAMIS CALLBACKS MULTI-REPO (FIXED NO REDIRECT UNTUK ADMIN)
-            if (str_contains($referer, 'ws-printing.hanifaslam.dev')) {
+            // 🌟 LOGIKA DINAMIS CALLBACKS MULTI-REPO
+            // Catatan: callback ini hanya dipakai Midtrans sebagai fallback link internal
+            // (misal tombol "kembali" di halaman VA/Bank Transfer, atau saat popup gagal load).
+            // Navigasi utama tetap dikendalikan oleh onSuccess/onPending di JS masing-masing sisi.
+            // TIDAK BOLEH null, karena jika null Midtrans fallback ke domain default mereka (example.com).
+            if ($platform === 'admin') {
+                // Jalur Admin Kasir Dashboard: tetap kasih URL valid milik admin,
+                // walau navigasi sebenarnya ditangani modal popup lokal (<InvoiceOrder />)
+                $params['callbacks'] = [
+                    'finish'   => 'https://admin.prinora.store/admin/pesanan',
+                    'unfinish' => 'https://admin.prinora.store/admin/pesanan',
+                    'error'    => 'https://admin.prinora.store/admin/pesanan',
+                ];
+            } else {
                 // Jalur Customer E-Commerce: Menggunakan rute redirect halaman invoice
                 $params['callbacks'] = [
                     'finish'   => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
                     'unfinish' => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
                     'error'    => 'https://ws-printing.hanifaslam.dev/my-account?tab=orders'
-                ];
-            } else {
-                // Jalur Admin Kasir Dashboard: Menggunakan modal popup lokal (<InvoiceOrder />)
-                // Diset NULL agar Midtrans TIDAK me-refresh/me-redirect halaman admin kasir!
-                $params['callbacks'] = [
-                    'finish'   => null,
-                    'unfinish' => null,
-                    'error'    => null
                 ];
             }
 

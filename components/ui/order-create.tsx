@@ -276,8 +276,10 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
     try {
       const formData = new FormData()
       formData.append("customer_id", customer.id)
+      formData.append("platform", "admin")
       formData.append("total_price", total.toString())
       formData.append("totalHarga", total.toString())
+      
 
       let initialStageId = 2; 
       

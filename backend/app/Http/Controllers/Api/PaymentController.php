@@ -140,13 +140,14 @@ class PaymentController extends Controller
                 })->delete();
             }
 
+            // Integrasi Midtrans Snap
             Config::$serverKey = config('services.midtrans.server_key');
             Config::$isProduction = (bool) config('services.midtrans.is_production', false); 
             Config::$isSanitized = true;
             Config::$is3ds = true;
 
-            // 🔥 SESUAIKAN CALLBACKS DENGAN DOMAIN PRODUKSI FRONTEND (Bukan localhost lagi)
-            $frontendUrl = 'https://admin.prinora.store'; 
+            // 🔥 SESUAIKAN CALLBACKS DENGAN DOMAIN E-COMMERCE CUSTOMER (Bukan admin dashboard lagi)
+            $frontendUrl = 'https://ws-printing.hanifaslam.dev'; 
 
             $params = [
                 'transaction_details' => [

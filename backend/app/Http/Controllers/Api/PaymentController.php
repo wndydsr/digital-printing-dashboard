@@ -146,42 +146,34 @@ class PaymentController extends Controller
             Config::$isSanitized = true;
             Config::$is3ds = true;
 
-            // 🔍 Deteksi domain asal request (Client URL)
-            $referer = $request->headers->get('referer') ?? '';
+        // BUKA: PaymentController.php
 
-            $params = [
-                'transaction_details' => [
-                    'order_id' => (string) $order->id, 
-                    'gross_amount' => (int) $totalHarga,
-                ],
-                'customer_details' => [
-                    'first_name' => $user->name ?? 'Pelanggan Prinora',
-                    'email' => $user->email ?? 'pelanggan@mail.com',
-                ]
+        $referer = $request->headers->get('referer') ?? '';
+
+        $params = [
+            'transaction_details' => [
+                'order_id' => (string) $order->id, 
+                'gross_amount' => (int) $totalHarga,
+            ],
+            'customer_details' => [
+                'first_name' => $user->name ?? 'Pelanggan Prinora',
+                'email' => $user->email ?? 'pelanggan@mail.com',
+            ]
+        ];
+
+        // 🌟 HANYA BERIKAN CALLBACK UNTUK E-COMMERCE CUSTOMER
+        if (str_contains($referer, 'ws-printing.hanifaslam.dev')) {
+            $params['callbacks'] = [
+                'finish'   => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
+                'unfinish' => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
+                'error'    => 'https://ws-printing.hanifaslam.dev/my-account?tab=orders'
             ];
+        } 
+        // Sisi Admin dikosongkan (tanpa callbacks) agar Midtrans TIDAK me-redirect halaman web admin.
 
-            // 🌟 STRATEGI CALLBACK:
-            if (str_contains($referer, 'ws-printing.hanifaslam.dev')) {
-                // Jalur A: Request datang dari web E-Commerce Customer umum
-                $params['callbacks'] = [
-                    'finish'   => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
-                    'unfinish' => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
-                    'error'    => 'https://ws-printing.hanifaslam.dev/my-account?tab=orders'
-                ];
-            } else {
-                // Jalur B: Request datang dari repo Admin Dashboard (baik localhost maupun admin.prinora.store)
-                // Kita berikan domain admin-mu agar kalaupun terjadi fallback redirect, ia tidak melompat ke web customer
-                $adminUrl = 'https://admin.prinora.store'; 
-                $params['callbacks'] = [
-                    'finish'   => $adminUrl . '/dashboard/orders', 
-                    'unfinish' => $adminUrl . '/dashboard/orders',
-                    'error'    => $adminUrl . '/dashboard/orders'
-                ];
-            }
+        $snapToken = Snap::getSnapToken($params);
+        DB::commit();
 
-            $snapToken = Snap::getSnapToken($params);
-            DB::commit();
-            
             return response()->json([
                 'success' => true,
                 'token' => $snapToken,

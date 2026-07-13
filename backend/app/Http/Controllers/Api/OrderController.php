@@ -54,15 +54,25 @@ class OrderController extends Controller
 
         $orders = Order::with([
             'customer:id,name',
+            // 🔥 HANYA BAWA ITEM YANG MEMANG BUTUH DESAIN (SIAP CETAK TIDAK IKUT)
+            'items' => function ($query) {
+                $query->whereIn('order_stage_id', [1, 6]); 
+            },
             'items.product:id,name',
+            'items.stage:id,name,status_id',
             'items.design:id,order_item_id,design_file,reference_files,design_notes',
             'stage:id,name,status_id',
             'stage.status:id,name',
             'designer'
         ])
-        ->where('designer_id', $user->id) 
+        ->where('designer_id', $user->id)
         ->orderBy('created_at', 'desc')
-        ->get();
+        ->get()
+        // 🔥 FILTER AGAR ORDER YANG TIDAK PUNYA ANTRIAN DESAIN SAMA SEKALI TIDAK MUNCUL DI DESAINER
+        ->filter(function ($order) {
+            return $order->items->count() > 0;
+        })
+        ->values(); 
 
         return response()->json($orders);
     }
@@ -142,6 +152,16 @@ class OrderController extends Controller
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
+                // 🔥 PERBAIKAN: Tentukan stage per item secara mandiri agar tidak menimpa status siap cetak
+                $itemStageId = 2; 
+                if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
+                    $itemStageId = (!empty($item['designer_id']) || $defaultStageId === 1) ? 1 : 6;
+                } else if ($request->input('design_method') === 'ready-to-print') {
+                    $itemStageId = 2;
+                } else {
+                    $itemStageId = (int) $request->input('current_stage_id', 2);
+                }
+
                 $orderItem = OrderItem::create([
                     'order_id'       => $order->id,
                     'product_id'     => $product->id,
@@ -152,7 +172,7 @@ class OrderController extends Controller
                     'subtotal'       => $subtotal,
                     'catatan'        => $item['catatan'] ?? null,
                     'need_design'    => $item['need_design'] ?? false,
-                    'order_stage_id' => $defaultStageId,
+                    'order_stage_id' => $itemStageId, // 🔥 Menggunakan stage mandiri hasil kalkulasi di atas
                     'details'        => $item['fields'] ?? '{}',
                 ]);
 
@@ -190,7 +210,7 @@ class OrderController extends Controller
                     }
                 }
 
-                if (!$designFile && $defaultStageId === 2) {
+                if (!$designFile && $itemStageId === 2) {
                     $designFile = $item['dummy_file_name'] ?? 'design_beli_langsung_customer.pdf';
                 }
 
@@ -205,22 +225,7 @@ class OrderController extends Controller
                 }
             } 
 
-            $hasReadyPrintFile = OrderItemDesign::whereHas('orderItem', function($q) use ($order) {
-                    $q->where('order_id', $order->id);
-                })
-                ->whereNotNull('design_file')
-                ->exists();
-
-            $isReadyToPrint = ($request->input('design_method') === 'ready-to-print' || $defaultStageId === 2);
-
-            if ($hasReadyPrintFile && $isReadyToPrint) {
-                $order->update(['current_stage_id' => 2]);
-                OrderItem::where('order_id', $order->id)->update(['order_stage_id' => 2]);
-            } else {
-                $order->update(['current_stage_id' => $defaultStageId]);
-                OrderItem::where('order_id', $order->id)->update(['order_stage_id' => $defaultStageId]);
-            }
-
+            // 🔥 PERBAIKAN: Hapus kode massal update item bawaan yang menimpa status yang sudah diatur di dalam loop
             $order->update(['total_price' => $totalPrice]);
 
             if (!$request->input('is_direct', false)) {
@@ -250,34 +255,28 @@ class OrderController extends Controller
         try {
             $order = Order::findOrFail($id);
 
-        if ($request->stage) {
+            if ($request->stage) {
+                $stage = Stage::whereRaw(
+                    'LOWER(name) = ?',
+                    [strtolower($request->stage)]
+                )->first();
 
-            $stage = Stage::whereRaw(
-                'LOWER(name) = ?',
-                [strtolower($request->stage)]
-            )->first();
+                $order->current_stage_id = $stage->id;
 
-            $order->current_stage_id = $stage->id;
-
-            // Kalau ada item tertentu yang sedang dikerjakan
-            if ($request->filled('order_item_id')) {
-
-                OrderItem::where('id', $request->order_item_id)
-                    ->update([
-                        'order_stage_id' => $stage->id
-                    ]);
-
-            } else {
-
-                OrderItem::where('order_id', $order->id)
-                    ->update([
-                        'order_stage_id' => $stage->id
-                    ]);
-
+                if ($request->filled('order_item_id')) {
+                    OrderItem::where('id', $request->order_item_id)
+                        ->update([
+                            'order_stage_id' => $stage->id
+                        ]);
+                } else {
+                    OrderItem::where('order_id', $order->id)
+                        ->update([
+                            'order_stage_id' => $stage->id
+                        ]);
+                }
             }
-        }
 
-        $order->save();
+            $order->save();
 
             return response()->json([
                 'message' => 'Order updated successfully',
@@ -296,7 +295,7 @@ class OrderController extends Controller
         $order = Order::with([
             'customer:id,name',
             'items.product:id,name',
-            'items.stage:id,name', // 🔥 Pastikan eager load ini ada
+            'items.stage:id,name', 
             'items.design:id,order_item_id,design_file,reference_files,design_notes',
             'stage:id,name,status_id',
             'stage.status:id,name'
@@ -344,10 +343,7 @@ class OrderController extends Controller
 
     public function downloadDesign($filename)
     {
-        // Menggunakan urldecode untuk mengembalikan karakter space/spasi (%20) yang dikirim dari frontend
         $decodedFilename = urldecode($filename);
-
-        // Cek di root public storage atau di dalam folder designs
         $path = storage_path('app/public/' . $decodedFilename);
 
         if (!File::exists($path)) {
@@ -357,34 +353,34 @@ class OrderController extends Controller
         return response()->download($path);
     }
 
-public function assignDesigner(Request $request, $id)
-{
-    $request->validate([
-        'designer_id' => 'required|exists:users,id'
-    ]);
-
-    $order = Order::findOrFail($id);
-
-    $order->designer_id = $request->designer_id;
-
-    if ($order->current_stage_id == 6) {
-        $order->current_stage_id = 1;
-    }
-
-    $order->save();
-
-    // Sinkronkan stage semua item
-    OrderItem::where('order_id', $order->id)
-        ->where('order_stage_id', 6)
-        ->update([
-            'order_stage_id' => 1
+    public function assignDesigner(Request $request, $id)
+    {
+        $request->validate([
+            'designer_id' => 'required|exists:users,id'
         ]);
 
-    return response()->json([
-        'message' => 'Desainer berhasil ditugaskan',
-        'data' => $order->load('designer', 'stage')
-    ]);
-}
+        $order = Order::findOrFail($id);
+        $order->designer_id = $request->designer_id;
+
+        if ($order->current_stage_id == 6) {
+            $order->current_stage_id = 1;
+        }
+
+        $order->save();
+
+        // 🔥 PERBAIKAN: Hanya update item dengan stage "Butuh Desain" (6) ke "Desain" (1).
+        // Item "Siap Cetak" (2) tidak akan ikut berubah stage-nya.
+        OrderItem::where('order_id', $order->id)
+            ->where('order_stage_id', 6)
+            ->update([
+                'order_stage_id' => 1
+            ]);
+
+        return response()->json([
+            'message' => 'Desainer berhasil ditugaskan',
+            'data' => $order->load('designer', 'stage')
+        ]);
+    }
 
     public function getKurirOrders(Request $request)
     {
@@ -409,7 +405,7 @@ public function assignDesigner(Request $request, $id)
             if ($request->has('current_stage_id')) {
                 $order->current_stage_id = $request->current_stage_id;
                 
-                \App\Models\OrderItem::where('order_id', $order->id)->update([
+                OrderItem::where('order_id', $order->id)->update([
                     'order_stage_id' => $request->current_stage_id
                 ]);
             }
@@ -428,9 +424,6 @@ public function assignDesigner(Request $request, $id)
         }
     }
 
-    // 🔥 ==============================================================
-    // 🔥 TAMBAHKAN METODE BARU DI SINI UNTUK OPERATOR
-    // 🔥 ==============================================================
     public function updateItemStage(Request $request, $id)
     {
         try {
@@ -441,11 +434,9 @@ public function assignDesigner(Request $request, $id)
                 $item->save();
             }
 
-            // Otomatisasi Sinkronisasi Stage Induk (Global Order)
             $orderId = $item->order_id;
             $totalItems = \App\Models\OrderItem::where('order_id', $orderId)->count();
             
-            // Hitung item yang sudah selesai (stage ID 5)
             $finishedItems = \App\Models\OrderItem::where('order_id', $orderId)
                 ->where('order_stage_id', 5)
                 ->count();

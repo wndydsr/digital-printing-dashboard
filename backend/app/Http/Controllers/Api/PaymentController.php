@@ -147,7 +147,8 @@ class PaymentController extends Controller
             Config::$is3ds = true;
 
             // 🌟 DETEKSI PLATFORM VIA FLAG EKSPLISIT DARI FRONTEND
-            // (Referer header tidak reliable untuk request fetch/AJAX, jadi tidak dipakai lagi)
+            // (bukan dari Referer header, karena request fetch/AJAX seringkali tidak mengirim Referer)
+            // Frontend WAJIB kirim formData.append("platform", "admin") atau formData.append("platform", "customer")
             $platform = $request->input('platform', 'customer'); // default aman ke customer
 
             $params = [
@@ -161,14 +162,13 @@ class PaymentController extends Controller
                 ]
             ];
 
-            // 🌟 LOGIKA DINAMIS CALLBACKS MULTI-REPO
+            // 🌟 LOGIKA DINAMIS CALLBACKS ADMIN vs CUSTOMER
             // Catatan: callback ini hanya dipakai Midtrans sebagai fallback link internal
             // (misal tombol "kembali" di halaman VA/Bank Transfer, atau saat popup gagal load).
             // Navigasi utama tetap dikendalikan oleh onSuccess/onPending di JS masing-masing sisi.
             // TIDAK BOLEH null, karena jika null Midtrans fallback ke domain default mereka (example.com).
             if ($platform === 'admin') {
-                // Jalur Admin Kasir Dashboard: tetap kasih URL valid milik admin,
-                // walau navigasi sebenarnya ditangani modal popup lokal (<InvoiceOrder />)
+                // Jalur Admin Kasir Dashboard: navigasi sebenarnya ditangani modal popup lokal (<InvoiceOrder />)
                 $params['callbacks'] = [
                     'finish'   => 'https://admin.prinora.store/admin/pesanan',
                     'unfinish' => 'https://admin.prinora.store/admin/pesanan',
@@ -177,9 +177,9 @@ class PaymentController extends Controller
             } else {
                 // Jalur Customer E-Commerce: Menggunakan rute redirect halaman invoice
                 $params['callbacks'] = [
-                    'finish'   => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
-                    'unfinish' => 'https://ws-printing.hanifaslam.dev/invoice/' . $order->id,
-                    'error'    => 'https://ws-printing.hanifaslam.dev/my-account?tab=orders'
+                    'finish'   => 'https://prinora.store/invoice/' . $order->id,
+                    'unfinish' => 'https://prinora.store/invoice/' . $order->id,
+                    'error'    => 'https://prinora.store/my-account?tab=orders'
                 ];
             }
 

@@ -54,14 +54,13 @@ export default function RiwayatDesainPage() {
   useEffect(() => {
     const loadOrders = async () => {
       try {
-        // Direkomendasikan pakai endpoint khusus desainer agar memuat kepemilikan relasi desainer yang tepat
-        const data = await apiFetch("/designer/orders")
+        // 🔥 PERBAIKAN: Menambahkan parameter ?status=history agar backend meloloskan item di luar stage [1, 6]
+        const data = await apiFetch("/designer/orders?status=history")
         const result = Array.isArray(data) ? data : data.data || []
 
         const flattenedList: FlatRiwayatItem[] = []
 
         result.forEach((order: any) => {
-          // Ambil desainer dari level order induk atau level item produk (tergantung struktur API kamu)
           const hasDesigner = order.designer_id || order.designer || order.items?.some((i: any) => i.designer_id || i.designer)
           
           const orderStage = order.stage?.name || ""
@@ -73,10 +72,8 @@ export default function RiwayatDesainPage() {
               const itemStatus = item.stage?.status?.name || orderStatus
               const stageLower = itemStage.toLowerCase()
 
-              // 🔥 SYARAT KETAT RIWAYAT APPROVAL DESAINER:
-              // 1. Stage-nya saat ini harus sudah lolos approve (Siap Cetak / Cetak / Selesai)
-              // 2. Item/Order ini terbukti memiliki Desainer (pernah dikerjakan, bukan file siap cetak dari user langsung)
-              if (["siap cetak", "cetak", "selesai"].includes(stageLower) && hasDesigner) {
+              // Filter lokal untuk memastikan visualisasi data di tabel sudah aman & bersih
+              if (["siap cetak", "cetak", "selesai", "produksi"].includes(stageLower) && hasDesigner) {
                 flattenedList.push({
                   id: item.id,
                   order_id: order.id,

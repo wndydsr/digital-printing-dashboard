@@ -130,7 +130,8 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
             error={errors?.role?.[0]}
             options={[
               { label: "Operator", value: "operator" },
-              { label: "Desainer", value: "desainer" }
+              { label: "Desainer", value: "desainer" },
+              { label: "Kurir", value: "kurir" }
             ]}
           />
 

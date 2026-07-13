@@ -171,6 +171,7 @@ export default function KaryawanCreateModal({
             >
               <option value="operator">Operator</option>
               <option value="desainer">Desainer</option>
+              <option value="desainer">Kurir</option>
             </select>
             {errors.role && <p className="text-red-500 text-xs mt-1">{errors.role[0]}</p>}
           </div>

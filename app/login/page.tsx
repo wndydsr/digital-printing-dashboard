@@ -63,6 +63,8 @@ export default function LoginPage() {
         window.location.href = "/desainer";
       } else if (data.user.role === "operator") {
         window.location.href = "/operator";
+      } else if (data.user.role === "kurir") {
+        window.location.href = "/kurir";
       }
 
     } catch (error) {

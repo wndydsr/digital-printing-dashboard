@@ -345,31 +345,34 @@ class OrderController extends Controller
         return response()->download($path);
     }
 
-    public function assignDesigner(Request $request, $id)
-    {
-        $request->validate([
-            'designer_id' => 'required|exists:users,id'
-        ]);
+public function assignDesigner(Request $request, $id)
+{
+    $request->validate([
+        'designer_id' => 'required|exists:users,id'
+    ]);
 
-        $order = Order::find($id);
+    $order = Order::findOrFail($id);
 
-        if (!$order) {
-            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
-        }
+    $order->designer_id = $request->designer_id;
 
-        $order->designer_id = $request->designer_id;
-
-        if ($order->current_stage_id == 6) {
-            $order->current_stage_id = 1;
-        }
-
-        $order->save();
-
-        return response()->json([
-            'message' => 'Desainer berhasil ditugaskan',
-            'data' => $order
-        ]);
+    if ($order->current_stage_id == 6) {
+        $order->current_stage_id = 1;
     }
+
+    $order->save();
+
+    // Sinkronkan stage semua item
+    OrderItem::where('order_id', $order->id)
+        ->where('order_stage_id', 6)
+        ->update([
+            'order_stage_id' => 1
+        ]);
+
+    return response()->json([
+        'message' => 'Desainer berhasil ditugaskan',
+        'data' => $order->load('designer', 'stage')
+    ]);
+}
 
     public function getKurirOrders(Request $request)
     {

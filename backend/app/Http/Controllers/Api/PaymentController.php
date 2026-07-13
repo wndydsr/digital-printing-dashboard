@@ -76,6 +76,16 @@ class PaymentController extends Controller
                     $anyItemNeedsDesign = true;
                 }
 
+                $textCatatan = $item['catatan'] ?? null;
+
+                $cartItem = \App\Models\CartItem::whereHas('cart', function ($q) use ($user) {
+                    $q->where('customer_id', $user->id);
+                })->where('product_id', $product->id)->first();
+
+                if ($cartItem && empty($textCatatan)) {
+                    $textCatatan = $cartItem->catatan; // 👈 Menyelamatkan catatan dari keranjang e-commerce
+                }
+
                 $orderItem = OrderItem::create([
                     'order_id'       => $order->id,
                     'product_id'     => $product->id,
@@ -84,7 +94,7 @@ class PaymentController extends Controller
                     'lebar'          => $lebar,
                     'price'          => $hargaPerItem,
                     'subtotal'       => $subtotal,
-                    'catatan'        => $item['catatan'] ?? null,
+                    'catatan'        => $textCatatan,
                     'need_design'    => $itemNeedDesign,
                     'order_stage_id' => $itemSpecificStageId, // 🔥 Mengunci stage mandiri per produk
                     'details'        => isset($item['selectedOptions']) ? json_encode($item['selectedOptions']) : '{}',

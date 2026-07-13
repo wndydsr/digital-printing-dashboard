@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import {
   Plus,
   Eye,
@@ -26,6 +27,14 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+// 🔥 TAMBAHAN: modal invoice + dialog, dipakai untuk munculkan invoice setelah redirect balik dari Midtrans
+import InvoiceOrder from "@/components/ui/invoice-order"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // ─── 🛠️ INTERFACE FLAT ITEM PRODUK ───
 interface AdminFlatOrderItem {
@@ -54,7 +63,7 @@ interface Designer {
   name: string;
 }
 
-export default function AnalyticsPage() {
+function AnalyticsPageContent() {
   const [orders, setOrders] = useState<any[]>([])
   const [flatItems, setFlatItems] = useState<AdminFlatOrderItem[]>([]) 
   const [designers, setDesigners] = useState<Designer[]>([]) 
@@ -67,6 +76,13 @@ export default function AnalyticsPage() {
   const [openCreate, setOpenCreate] = useState(false)
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+
+  // 🔥 TAMBAHAN: state untuk modal invoice hasil redirect balik dari Midtrans (mis. DANA/e-wallet)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const [showRedirectInvoice, setShowRedirectInvoice] = useState(false)
+  const [redirectInvoiceData, setRedirectInvoiceData] = useState<any>(null)
+  const redirectInvoiceRef = useRef<HTMLDivElement>(null)
 
   const itemsPerPage = 10
 
@@ -210,6 +226,54 @@ const fetchOrders = () => {
     fetchOrders()
     fetchDesigners()
   }, [])
+
+  // 🔥 TAMBAHAN: deteksi redirect balik dari Midtrans (mis. DANA/GoPay/e-wallet yang redirect penuh)
+  // Midtrans menempelkan query params ke URL "finish": ?order_id=...&status_code=...&transaction_status=...
+  useEffect(() => {
+    const orderId = searchParams.get("order_id")
+    const transactionStatus = searchParams.get("transaction_status")
+
+    if (!orderId) return
+
+    const handleMidtransRedirectBack = async () => {
+      try {
+        const order = await apiFetch(`/orders/${orderId}`)
+        const orderData = order?.data || order
+
+        if (transactionStatus === "settlement" || transactionStatus === "capture" || transactionStatus === "pending") {
+          // Susun data untuk komponen InvoiceOrder, mengikuti bentuk yang sama seperti di PaymentModal
+          const mappedProducts = (orderData.items || []).map((item: any) => ({
+            product_name: item.product?.name || "-",
+            quantity: item.quantity || 1,
+            price: item.price || 0,
+          }))
+
+          setRedirectInvoiceData({
+            orderId: `ORD-${String(orderData.id).padStart(5, "0")}`,
+            customer: orderData.customer || null,
+            products: mappedProducts,
+            total: orderData.total_price || 0,
+            deliveryMethod: orderData.shipping_method || "pickup",
+            paymentMethod: transactionStatus === "pending" ? "Menunggu Pembayaran" : "Online (Midtrans)",
+          })
+          setShowRedirectInvoice(true)
+
+          // Refresh list order supaya status/stage ter-update
+          fetchOrders()
+        } else {
+          alert("Transaksi dibatalkan/gagal. Cek kembali status pesanan.")
+        }
+      } catch (err) {
+        console.error("Gagal memuat data order setelah redirect Midtrans:", err)
+      } finally {
+        // Bersihkan query string dari URL supaya modal tidak terbuka ulang saat refresh manual
+        router.replace("/admin/pesanan")
+      }
+    }
+
+    handleMidtransRedirectBack()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   return (
     <DashboardLayout>
@@ -378,7 +442,38 @@ const fetchOrders = () => {
         <OrderDetailModal open={openDetail} onClose={() => setOpenDetail(false)} order={selectedOrder} />
         <OrderCreateModal open={openCreate} onClose={() => setOpenCreate(false)} onSuccess={() => { fetchOrders(); setCurrentPage(1); }} />
         <DeleteModal open={openDelete} onClose={() => setOpenDelete(false)} onDelete={handleDelete} />
+
+        {/* 🔥 TAMBAHAN: Modal invoice khusus hasil redirect balik dari Midtrans (DANA/e-wallet dsb) */}
+        <Dialog open={showRedirectInvoice} onOpenChange={setShowRedirectInvoice}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
+            <DialogHeader>
+              <DialogTitle>Invoice Order</DialogTitle>
+            </DialogHeader>
+
+            {redirectInvoiceData && (
+              <InvoiceOrder
+                ref={redirectInvoiceRef}
+                orderId={redirectInvoiceData.orderId}
+                customer={redirectInvoiceData.customer}
+                products={redirectInvoiceData.products}
+                total={redirectInvoiceData.total}
+                deliveryMethod={redirectInvoiceData.deliveryMethod}
+                paymentMethod={redirectInvoiceData.paymentMethod}
+                hideButton={false}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
+  )
+}
+
+// 🔥 TAMBAHAN: bungkus dengan Suspense karena useSearchParams wajib berada di dalam Suspense boundary
+export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-gray-500">Memuat halaman pesanan...</div>}>
+      <AnalyticsPageContent />
+    </Suspense>
   )
 }

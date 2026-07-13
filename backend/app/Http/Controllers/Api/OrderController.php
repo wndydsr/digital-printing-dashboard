@@ -68,7 +68,7 @@ class OrderController extends Controller
             'stage.status:id,name',
             'designer'
         ])
-        // 🔥 FIX BERSAMA: Jika antrean aktif, muat yang designer_id milik user ATAU masih null (agar desainer bisa ambil/kerjakan)
+        // 🔥 FIX SINKRONISASI: Jika antrean aktif, muat yang designer_id milik user ATAU masih null (agar desainer bisa ambil/kerjakan)
         ->where(function($query) use ($user, $isHistory) {
             if ($isHistory) {
                 $query->where('designer_id', $user->id);
@@ -277,16 +277,16 @@ class OrderController extends Controller
                 $stageStr = strtolower($request->stage);
                 $stageId = null;
 
-                // 🔥 PERBAIKAN LOGIKA: Kunci ID stage secara mutlak agar relasi item tidak rusak/gagal update
-                if ($stageStr === 'desain') {
-                    $stageId = 1; // ID untuk stage "Desain"
+                // 🔥 PERBAIKAN MUTLAK: Deteksi string "desain" dari frontend desainer agar memetakan ID secara akurat
+                if ($stageStr === 'desain' || $stageStr === 'diproses') {
+                    $stageId = 1; // ID Tahap Kerja "Desain"
                     
-                    // Isi desainer ke level induk order jika desainer mengklik klaim tugas "Kerjakan"
+                    // Kunci kepemilikan desainer pada pesanan ini
                     if (empty($order->designer_id) && $request->user()) {
                         $order->designer_id = $request->user()->id;
                     }
                 } elseif ($stageStr === 'butuh desain') {
-                    $stageId = 6; // ID untuk stage "Butuh Desain"
+                    $stageId = 6; 
                 } else {
                     $stage = Stage::whereRaw(
                         'LOWER(name) = ?',
@@ -314,9 +314,10 @@ class OrderController extends Controller
 
             $order->save();
 
+            // 🔥 PERBAIKAN RELASI RESPONSE: Pastikan memuat struktur data lengkap yang sama seperti indeks antrean desainer
             return response()->json([
                 'message' => 'Order updated successfully',
-                'data' => $order->load('items.stage') 
+                'data' => $order->load(['items.stage.status', 'stage.status', 'designer']) 
             ]);
 
         } catch (\Throwable $e) {

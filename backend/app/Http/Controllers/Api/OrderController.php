@@ -48,15 +48,18 @@ class OrderController extends Controller
         return response()->json(['data' => $orders]);
     }
 
-    public function designerOrders(Request $request)
+   public function designerOrders(Request $request)
     {
         $user = $request->user();
+        
+        // Cek apakah frontend sedang meminta data riwayat/history
+        $isHistory = $request->query('status') === 'history';
+        $allowedStages = $isHistory ? [2, 3, 5] : [1, 6]; // 2: Siap Cetak, 3: Cetak, 5: Selesai
 
         $orders = Order::with([
             'customer:id,name',
-            // 🔥 HANYA BAWA ITEM YANG MEMANG BUTUH DESAIN (SIAP CETAK TIDAK IKUT)
-            'items' => function ($query) {
-                $query->whereIn('order_stage_id', [1, 6]); 
+            'items' => function ($query) use ($allowedStages) {
+                $query->whereIn('order_stage_id', $allowedStages); 
             },
             'items.product:id,name',
             'items.stage:id,name,status_id',
@@ -68,7 +71,6 @@ class OrderController extends Controller
         ->where('designer_id', $user->id)
         ->orderBy('created_at', 'desc')
         ->get()
-        // 🔥 FILTER AGAR ORDER YANG TIDAK PUNYA ANTRIAN DESAIN SAMA SEKALI TIDAK MUNCUL DI DESAINER
         ->filter(function ($order) {
             return $order->items->count() > 0;
         })

@@ -250,22 +250,34 @@ class OrderController extends Controller
         try {
             $order = Order::findOrFail($id);
 
-            if ($request->stage) {
-                $stage = Stage::whereRaw(
-                    'LOWER(name) = ?',
-                    [strtolower($request->stage)]
-                )->first();
+        if ($request->stage) {
 
-                if (!$stage) {
-                    return response()->json([
-                        'message' => 'Stage tidak ditemukan'
-                    ], 404);
-                }
+            $stage = Stage::whereRaw(
+                'LOWER(name) = ?',
+                [strtolower($request->stage)]
+            )->first();
 
-                $order->current_stage_id = $stage->id;
+            $order->current_stage_id = $stage->id;
+
+            // Kalau ada item tertentu yang sedang dikerjakan
+            if ($request->filled('order_item_id')) {
+
+                OrderItem::where('id', $request->order_item_id)
+                    ->update([
+                        'order_stage_id' => $stage->id
+                    ]);
+
+            } else {
+
+                OrderItem::where('order_id', $order->id)
+                    ->update([
+                        'order_stage_id' => $stage->id
+                    ]);
+
             }
+        }
 
-            $order->save();
+        $order->save();
 
             return response()->json([
                 'message' => 'Order updated successfully',

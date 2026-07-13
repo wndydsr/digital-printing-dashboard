@@ -68,7 +68,15 @@ class OrderController extends Controller
             'stage.status:id,name',
             'designer'
         ])
-        ->where('designer_id', $user->id)
+        // 🔥 FIX BERSAMA: Jika antrean aktif, muat yang designer_id milik user ATAU masih null (agar desainer bisa ambil/kerjakan)
+        ->where(function($query) use ($user, $isHistory) {
+            if ($isHistory) {
+                $query->where('designer_id', $user->id);
+            } else {
+                $query->where('designer_id', $user->id)
+                      ->orWhereNull('designer_id');
+            }
+        })
         ->orderBy('created_at', 'desc')
         ->get()
         ->filter(function ($order) {
@@ -154,7 +162,6 @@ class OrderController extends Controller
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
-                // 🔥 PERBAIKAN: Tentukan stage per item secara mandiri agar tidak menimpa status siap cetak
                 $itemStageId = 2; 
                 if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
                     $itemStageId = (!empty($item['designer_id']) || $defaultStageId === 1) ? 1 : 6;
@@ -164,7 +171,6 @@ class OrderController extends Controller
                     $itemStageId = (int) $request->input('current_stage_id', 2);
                 }
 
-
                 $textCatatan = $item['catatan'] ?? null;
 
                 $cartItem = \App\Models\CartItem::whereHas('cart', function ($q) use ($customerId) {
@@ -172,7 +178,7 @@ class OrderController extends Controller
                 })->where('product_id', $product->id)->first();
 
                 if ($cartItem && empty($textCatatan)) {
-                    $textCatatan = $cartItem->catatan; // 👈 Menyelamatkan catatan dari keranjang
+                    $textCatatan = $cartItem->catatan;
                 }
                 
                 $orderItem = OrderItem::create([
@@ -185,7 +191,7 @@ class OrderController extends Controller
                     'subtotal'       => $subtotal,
                     'catatan'        => $textCatatan,
                     'need_design'    => $item['need_design'] ?? false,
-                    'order_stage_id' => $itemStageId, // 🔥 Menggunakan stage mandiri hasil kalkulasi di atas
+                    'order_stage_id' => $itemStageId, 
                     'details'        => $item['fields'] ?? '{}',
                 ]);
 
@@ -238,7 +244,6 @@ class OrderController extends Controller
                 }
             } 
 
-            // 🔥 PERBAIKAN: Hapus kode massal update item bawaan yang menimpa status yang sudah diatur di dalam loop
             $order->update(['total_price' => $totalPrice]);
 
             if (!$request->input('is_direct', false)) {
@@ -269,23 +274,41 @@ class OrderController extends Controller
             $order = Order::findOrFail($id);
 
             if ($request->stage) {
-                $stage = Stage::whereRaw(
-                    'LOWER(name) = ?',
-                    [strtolower($request->stage)]
-                )->first();
+                $stageStr = strtolower($request->stage);
+                $stageId = null;
 
-                $order->current_stage_id = $stage->id;
-
-                if ($request->filled('order_item_id')) {
-                    OrderItem::where('id', $request->order_item_id)
-                        ->update([
-                            'order_stage_id' => $stage->id
-                        ]);
+                // 🔥 PERBAIKAN LOGIKA: Kunci ID stage secara mutlak agar relasi item tidak rusak/gagal update
+                if ($stageStr === 'desain') {
+                    $stageId = 1; // ID untuk stage "Desain"
+                    
+                    // Isi desainer ke level induk order jika desainer mengklik klaim tugas "Kerjakan"
+                    if (empty($order->designer_id) && $request->user()) {
+                        $order->designer_id = $request->user()->id;
+                    }
+                } elseif ($stageStr === 'butuh desain') {
+                    $stageId = 6; // ID untuk stage "Butuh Desain"
                 } else {
-                    OrderItem::where('order_id', $order->id)
-                        ->update([
-                            'order_stage_id' => $stage->id
-                        ]);
+                    $stage = Stage::whereRaw(
+                        'LOWER(name) = ?',
+                        [$stageStr]
+                    )->first();
+                    $stageId = $stage ? $stage->id : null;
+                }
+
+                if ($stageId) {
+                    $order->current_stage_id = $stageId;
+
+                    if ($request->filled('order_item_id')) {
+                        OrderItem::where('id', $request->order_item_id)
+                            ->update([
+                                'order_stage_id' => $stageId
+                            ]);
+                    } else {
+                        OrderItem::where('order_id', $order->id)
+                            ->update([
+                                'order_stage_id' => $stageId
+                            ]);
+                    }
                 }
             }
 
@@ -293,7 +316,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Order updated successfully',
-                'data' => $order
+                'data' => $order->load('items.stage') 
             ]);
 
         } catch (\Throwable $e) {
@@ -381,8 +404,6 @@ class OrderController extends Controller
 
         $order->save();
 
-        // 🔥 PERBAIKAN: Hanya update item dengan stage "Butuh Desain" (6) ke "Desain" (1).
-        // Item "Siap Cetak" (2) tidak akan ikut berubah stage-nya.
         OrderItem::where('order_id', $order->id)
             ->where('order_stage_id', 6)
             ->update([

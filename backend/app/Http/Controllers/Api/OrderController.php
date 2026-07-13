@@ -162,6 +162,17 @@ class OrderController extends Controller
                     $itemStageId = (int) $request->input('current_stage_id', 2);
                 }
 
+
+                $textCatatan = $item['catatan'] ?? null;
+
+                $cartItem = \App\Models\CartItem::whereHas('cart', function ($q) use ($customerId) {
+                    $q->where('customer_id', $customerId);
+                })->where('product_id', $product->id)->first();
+
+                if ($cartItem && empty($textCatatan)) {
+                    $textCatatan = $cartItem->catatan; // 👈 Menyelamatkan catatan dari keranjang
+                }
+                
                 $orderItem = OrderItem::create([
                     'order_id'       => $order->id,
                     'product_id'     => $product->id,
@@ -170,7 +181,7 @@ class OrderController extends Controller
                     'lebar'          => $lebar,
                     'price'          => $hargaPerItem,
                     'subtotal'       => $subtotal,
-                    'catatan'        => $item['catatan'] ?? null,
+                    'catatan'        => $textCatatan,
                     'need_design'    => $item['need_design'] ?? false,
                     'order_stage_id' => $itemStageId, // 🔥 Menggunakan stage mandiri hasil kalkulasi di atas
                     'details'        => $item['fields'] ?? '{}',

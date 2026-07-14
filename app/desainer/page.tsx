@@ -73,7 +73,7 @@ export default function Dashboard() {
     "selesai": "text-green-500 border-green-200 bg-green-50/30",
   }
 
-  // Mengambil maksimal 5 item produk yang butuh penanganan desainer (termasuk yang revisi tetap masuk antrian tabel)
+  // Hanya menampilkan yang aktif dalam proses desain dan menyembunyikan yang sudah selesai (approved)
   const latestFlatItems = flatItems
     .filter(item => ["butuh desain", "desain", "revisi"].includes(item.stage_name.toLowerCase()))
     .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
@@ -88,8 +88,30 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      const data = await apiFetch("/designer/orders")
-      const result = Array.isArray(data) ? data : data.data || []
+      const [activeRes, historyRes] = await Promise.all([
+        apiFetch("/designer/orders"),
+        apiFetch("/designer/orders?status=history")
+      ])
+
+      const activeData = Array.isArray(activeRes) ? activeRes : activeRes.data || []
+      const historyData = Array.isArray(historyRes) ? historyRes : historyRes.data || []
+      
+      const combinedResult = [...activeData, ...historyData]
+
+      // ─── FILTER DATA BERDASARKAN DROPDOWN PERIODE ───
+      const now = new Date()
+      const filteredResult = combinedResult.filter((order: any) => {
+        if (!order.order_date) return true
+        const orderDate = new Date(order.order_date.replace(" ", "T"))
+        if (isNaN(orderDate.getTime())) return true
+
+        const diffTime = Math.abs(now.getTime() - orderDate.getTime())
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+        if (selectedPeriod === "Last 7 days") return diffDays <= 7
+        if (selectedPeriod === "Last 90 days") return diffDays <= 90
+        return diffDays <= 30 // Default Last 30 days
+      })
 
       const flattenedList: FlatOrderItem[] = []
       
@@ -97,7 +119,9 @@ export default function Dashboard() {
       let dikerjakanItem = 0
       let selesaiApprovedItem = 0
 
-      result.forEach((order: any) => {
+      const processedItemIds = new Set<number>()
+
+      filteredResult.forEach((order: any) => {
         const orderStage = order.stage?.name || "Butuh Desain"
         const orderStatus = order.stage?.status?.name || "pending"
         
@@ -105,17 +129,18 @@ export default function Dashboard() {
 
         if (order.items && order.items.length > 0) {
           order.items.forEach((item: any) => {
+            if (processedItemIds.has(item.id)) return
+            processedItemIds.add(item.id)
+
             const itemStage = item.stage?.name || orderStage
             const itemStatus = item.stage?.status?.name || orderStatus
             const stageLower = itemStage.toLowerCase()
 
-            // Filter counter metrik per item produk
             if (stageLower === "butuh desain") {
               antrianItem++
             } else if (stageLower === "desain" || stageLower === "revisi") {
-              // Item berstatus revisi diakumulasikan ke metrik Dikerjakan agar desainer fokus menyelesaikannya
               dikerjakanItem++
-            } else if (["siap cetak", "cetak", "selesai"].includes(stageLower) && hasDesigner) {
+            } else if (["siap cetak", "cetak", "selesai", "produksi"].includes(stageLower) && hasDesigner) {
               selesaiApprovedItem++
             }
 
@@ -139,11 +164,11 @@ export default function Dashboard() {
       setCountSelesai(selesaiApprovedItem)
       setFlatItems(flattenedList)
 
-      // Grafik bulanan
+      // Grafik bulanan menggunakan data yang sudah difilter
       const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
       const monthlyData = months.map((m, i) => ({
         name: m,
-        total: result.filter((o: any) => {
+        total: filteredResult.filter((o: any) => {
           const date = new Date(o.order_date.replace(" ", "T"))
           return date.getMonth() === i
         }).length
@@ -172,6 +197,7 @@ export default function Dashboard() {
     }
   }
 
+  // 🔥 PERBAIKAN: Tambahkan selectedPeriod ke array dependensi agar loadData terpanggil saat dropdown berubah
   useEffect(() => {
     const role = localStorage.getItem("role")
     if (!role) {
@@ -182,7 +208,7 @@ export default function Dashboard() {
     if (role === "operator") { window.location.href = "/operator"; return; }
     
     loadData()
-  }, [])
+  }, [selectedPeriod])
 
   return (
     <DesainerLayout>
@@ -211,7 +237,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Metrik Tugas Diubah grid-cols-3 */}
+        {/* Metrik Tugas */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           {metricsData.map((metric, index) => (
             <Card key={index} className="hover:shadow-md transition-shadow cursor-pointer border-gray-200">

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Eye, CheckCircle2 } from "lucide-react"
+import { CheckCircle2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 import { OperatorLayout } from "@/components/layout/OperatorLayout"
@@ -43,7 +43,6 @@ export default function AntrianCetakPage() {
   const stageColorByName: Record<string, string> = {
     "siap cetak": "text-yellow-500 border-yellow-200 bg-yellow-50/30",
     cetak: "text-blue-500 border-blue-200 bg-blue-50/30",
-    selesai: "text-green-500 border-green-200 bg-green-50/30",
   }
 
   const fetchOrders = async () => {
@@ -57,8 +56,8 @@ export default function AntrianCetakPage() {
           const itemStage = item.stage?.name || order.stage?.name || "Siap Cetak"
           const stageLower = itemStage.toLowerCase()
 
-          // Filter: Hanya masukkan item yang sudah siap cetak, sedang dicetak, atau selesai
-          if (stageLower === "siap cetak" || stageLower === "cetak" || stageLower === "selesai") {
+          // 🔥 PERBAIKAN: "selesai" TIDAK lagi masuk antrian aktif — sudah dipindah ke halaman Riwayat
+          if (stageLower === "siap cetak" || stageLower === "cetak") {
             rows.push({
               id: order.id,
               item_id: item.id,
@@ -112,6 +111,8 @@ export default function AntrianCetakPage() {
         method: "PUT",
         body: JSON.stringify({ current_stage_id: 5 }), // 5 = Selesai
       })
+      // 🔥 Begitu selesai, item ini otomatis hilang dari antrian karena fetchOrders()
+      // menyaring "selesai" keluar dari daftar (sekarang tersimpan di halaman Riwayat)
       await fetchOrders()
     } catch (error) {
       console.error("Gagal menyelesaikan cetak item:", error)
@@ -199,22 +200,20 @@ export default function AntrianCetakPage() {
                           <div className="flex items-center justify-center gap-2">
                             {stageLower === "siap cetak" && (
                               <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => handleStartPrint(item.id, item.item_id)}>
-                                Mulai Cetak
+                                Lihat Detail
                               </Button>
                             )}
 
                             {stageLower === "cetak" && (
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleFinishPrint(item.item_id)}>
-                                <CheckCircle2 className="w-4 h-4 mr-1" />
-                                Selesai Cetak
-                              </Button>
-                            )}
-
-                            {stageLower === "selesai" && (
-                              <Button size="sm" variant="outline" onClick={() => router.push(`/operator/order/${item.id}?item=${item.item_id}`)}>
-                                <Eye className="w-4 h-4 mr-1" />
-                                Detail
-                              </Button>
+                              <>
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleFinishPrint(item.item_id)}>
+                                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                                  Selesai Cetak
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => router.push(`/operator/order/${item.id}?item=${item.item_id}`)}>
+                                  Detail
+                                </Button>
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -229,7 +228,7 @@ export default function AntrianCetakPage() {
               <span className="text-sm text-gray-500">
                 {filteredItems.length === 0
                   ? "0 of 0"
-                  : `${startIndex + 1} - ${Math.min(startIndex + itemsPerPage, filteredItems.length)} of {filteredItems.length} items`}
+                  : `${startIndex + 1} - ${Math.min(startIndex + itemsPerPage, filteredItems.length)} of ${filteredItems.length} items`}
               </span>
 
               {totalPages > 1 && (

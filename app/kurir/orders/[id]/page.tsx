@@ -58,7 +58,7 @@ export default function KurirOrderDetail() {
   return (
     <div className="min-h-screen bg-slate-50 p-4 pb-24 max-w-md mx-auto space-y-4">
       <button 
-        onClick={() => router.push("/kurir/dashboard")} 
+        onClick={() => router.push("/kurir")} 
         className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Kembali ke Antrean

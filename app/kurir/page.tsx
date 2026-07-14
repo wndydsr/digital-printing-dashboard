@@ -22,7 +22,7 @@ export default function KurirDashboard() {
         
         // 🌟 FILTER DATABASE DINAMIS: Mengambil stage 4 (Cetak/Siap Antar) DAN stage 5 (Selesai)
         const kurirJob = result.filter((order: any) => 
-          order.shipping_method === "delivery" && [4, 5].includes(order.current_stage_id)
+          order.shipping_method === "delivery" && order.current_stage_id === 4
         )
 
         setOrders(kurirJob)
@@ -40,11 +40,21 @@ export default function KurirDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 pb-10 max-w-md mx-auto">
-      <header className="mb-6 pt-4">
-        <h1 className="text-xl font-black text-gray-800 flex items-center gap-2">
-          <Truck className="text-blue-600" /> Antrean Kurir Prinora
-        </h1>
-        <p className="text-xs text-gray-500">Daftar barang siap kirim ke lokasi koordinat peta</p>
+      {/* 🔥 Mengubah susunan header menjadi flexbox agar tombol riwayat rapi di sisi kanan */}
+      <header className="mb-6 pt-4 flex justify-between items-start gap-4">
+        <div>
+          <h1 className="text-xl font-black text-gray-800 flex items-center gap-2">
+            <Truck className="text-blue-600 shrink-0" /> Antrean Kurir Prinora
+          </h1>
+          <p className="text-xs text-gray-500 mt-1">Daftar barang siap kirim ke lokasi koordinat peta</p>
+        </div>
+        
+        <Link 
+          href="/kurir/riwayat" 
+          className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-2 rounded-lg transition-colors shrink-0 shadow-xs"
+        >
+          Riwayat
+        </Link>
       </header>
 
       <div className="space-y-4">

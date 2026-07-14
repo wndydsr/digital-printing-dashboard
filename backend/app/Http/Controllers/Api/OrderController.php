@@ -445,7 +445,7 @@ class OrderController extends Controller
             'stage:id,name'
         ])
         ->where('shipping_method', 'delivery')
-        ->whereIn('current_stage_id', [self::STAGE_SIAP_CETAK, self::STAGE_CETAK])
+        ->whereIn('current_stage_id', [self::STAGE_CETAK, self::STAGE_SELESAI])
         ->orderBy('created_at', 'desc')
         ->get();
 

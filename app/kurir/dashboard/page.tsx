@@ -12,7 +12,7 @@ export default function KurirDashboard() {
   useEffect(() => {
     const fetchKurirOrders = async () => {
       try {
-        const data = await apiFetch("/orders")
+       const data = await apiFetch("/kurir/orders")
         
         const result = Array.isArray(data)
           ? data

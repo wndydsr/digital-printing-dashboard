@@ -50,42 +50,66 @@ export default function DashboardOperator() {
     if (role === "desainer") { window.location.href = "/desainer"; return; }
 
     const loadData = async () => {
-      try {
-        const data = await apiFetch("/orders")
-        const result = Array.isArray(data) ? data : data.data || []
+          try {
+            const data = await apiFetch("/orders")
+            const result = Array.isArray(data) ? data : data.data || []
 
-        const rows: OperatorFlatDashboardItem[] = []
-        result.forEach((order: any) => {
-          order.items?.forEach((item: any) => {
-            const itemStage = item.stage?.name || order.stage?.name || "Siap Cetak"
-            const stageLower = itemStage.toLowerCase()
+            // ─── FILTER BERDASARKAN PERIODE DROPDOWN ───
+            const now = new Date()
+            // 🔥 PERBAIKAN: Mengubah 'combinedResult' menjadi 'result'
+            const filteredResult = result.filter((order: any) => {
+              if (!order.order_date) return true
+              
+              const orderDateStr = order.order_date.includes(" ") 
+                ? order.order_date.replace(" ", "T") 
+                : order.order_date
+                
+              const orderDate = new Date(orderDateStr)
+              
+              if (isNaN(orderDate.getTime())) return true
 
-            if (stageLower === "siap cetak" || stageLower === "cetak" || stageLower === "selesai") {
-              rows.push({
-                id: order.id,
-                item_id: item.id,
-                order_code: order.order_code,
-                customer_name: order.customer?.name || "-",
-                product_name: item.product?.name || "-",
-                order_date: order.order_date,
-                created_at: order.created_at,
-                stage_name: itemStage,
-                status_name: item.stage?.status?.name || order.stage?.status?.name || "pending"
+              const diffTime = Math.abs(now.getTime() - orderDate.getTime())
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+              if (selectedPeriod === "Last 7 days") return diffDays <= 7
+              if (selectedPeriod === "Last 90 days") return diffDays <= 90
+              return diffDays <= 30
+            })
+
+            const rows: OperatorFlatDashboardItem[] = []
+            filteredResult.forEach((order: any) => {
+              order.items?.forEach((item: any) => {
+                const itemStage = item.stage?.name || order.stage?.name || "Siap Cetak"
+                const stageLower = itemStage.toLowerCase()
+
+                if (stageLower === "siap cetak" || stageLower === "cetak" || stageLower === "selesai") {
+                  rows.push({
+                    id: order.id,
+                    item_id: item.id,
+                    order_code: order.order_code,
+                    customer_name: order.customer?.name || "-",
+                    product_name: item.product?.name || "-",
+                    order_date: order.order_date,
+                    created_at: order.created_at,
+                    stage_name: itemStage,
+                    status_name: item.stage?.status?.name || order.stage?.status?.name || "pending"
+                  })
+                }
               })
-            }
-          })
-        })
+            })
 
-        rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        setFlatItems(rows)
-      } catch (error) {
-        console.error("Gagal memuat data dashboard operator:", error)
-      }
-    }
+            rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            setFlatItems(rows)
+          } catch (error) {
+            console.error("Gagal memuat data dashboard operator:", error)
+          }
+        }
     loadData()
-  }, [])
+  }, [selectedPeriod]) // 🔥 PERBAIKAN:selectedPeriod memicu penarikan data baru saat dropdown diklik
 
-  const latestItems = flatItems.slice(0, 10)
+  const latestItems = flatItems
+    .filter((item) => item.stage_name.toLowerCase() !== "selesai")
+    .slice(0, 5)
 
   // MetrikBox Akurat Berbasis Jumlah Produk Item Nyata
   const antrianCetak = flatItems.filter((i) => i.stage_name.toLowerCase() === "siap cetak").length
@@ -161,7 +185,7 @@ export default function DashboardOperator() {
                 <CardTitle className="text-lg font-semibold">Antrian Cetak Aktif</CardTitle>
                 <CardDescription>/orders ringkasan tugas cetak yang masuk</CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={() => router.push("/operator/antrian-cetak")}>
+              <Button variant="outline" size="sm" onClick={() => router.push("/operator/antrian")}>
                 <Eye className="w-4 h-4 mr-2" /> Lihat Semua
               </Button>
             </div>
@@ -202,16 +226,30 @@ export default function DashboardOperator() {
                           {item.status_name}
                         </Badge>
                       </TableCell>
+
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
                           {item.stage_name.toLowerCase() === "siap cetak" && (
-                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => handleStartPrint(item.id, item.item_id)}>Mulai Cetak</Button>
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => handleStartPrint(item.id, item.item_id)}>
+                              Mulai Cetak
+                            </Button>
                           )}
+                          
                           {item.stage_name.toLowerCase() === "cetak" && (
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleFinishPrint(item.item_id)}>Tandai Selesai</Button>
+                            <>
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleFinishPrint(item.item_id)}>
+                                Tandai Selesai
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => router.push(`/operator/order/${item.id}?item=${item.item_id}`)}>
+                                Detail
+                              </Button>
+                            </>
                           )}
+                          
                           {item.stage_name.toLowerCase() === "selesai" && (
-                            <Button size="sm" variant="outline" onClick={() => router.push(`/operator/order/${item.id}?item=${item.item_id}`)}>Detail</Button>
+                            <Button size="sm" variant="outline" onClick={() => router.push(`/operator/order/${item.id}?item=${item.item_id}`)}>
+                              Detail
+                            </Button>
                           )}
                         </div>
                       </TableCell>

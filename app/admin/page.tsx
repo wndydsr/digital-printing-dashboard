@@ -125,15 +125,34 @@ export default function Dashboard() {
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
-  const loadData = async () => {
+const loadData = async () => {
     try {
       const orderData = await apiFetch("/orders")
       const parsedOrders = Array.isArray(orderData) ? orderData : orderData.data || []
-      setOrders(parsedOrders)
+      
+      // ─── FILTER BERDASARKAN PERIODE DROPDOWN ───
+      const now = new Date()
+      const filteredOrders = parsedOrders.filter((o: Order) => {
+        // Penanganan parsing tanggal yang lebih aman & fleksibel
+        const orderDateStr = o.order_date ? o.order_date.replace(" ", "T") : o.created_at
+        const orderDate = new Date(orderDateStr)
+        
+        // Cek jika tanggal tidak valid
+        if (isNaN(orderDate.getTime())) return false
 
-      // ─── LOGIKA SINKRONISASI FLAT ITEM SEPERTI DI ANALYTICSPAGE ───
+        const diffTime = Math.abs(now.getTime() - orderDate.getTime())
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+        if (selectedPeriod === "Last 7 days") return diffDays <= 7
+        if (selectedPeriod === "Last 90 days") return diffDays <= 90
+        return diffDays <= 30 // Default Last 30 days
+      })
+
+      setOrders(filteredOrders)
+
+      // ─── LOGIKA SINKRONISASI FLAT ITEM ───
       const rows: FlatOrderItem[] = []
-      parsedOrders.forEach((order: any) => {
+      filteredOrders.forEach((order: any) => {
         if (order && Array.isArray(order.items)) {
           order.items.forEach((item: any) => {
             rows.push({
@@ -158,15 +177,17 @@ export default function Dashboard() {
       const designerData = await apiFetch("/users")
       setDesigners(Array.isArray(designerData) ? designerData : designerData.data || [])
 
+      // ─── PERBAIKAN GRAFIK BULANAN ───
       const months = [
         "Jan","Feb","Mar","Apr","May","Jun",
         "Jul","Aug","Sep","Oct","Nov","Dec"
       ]
       const monthlyData = months.map((m, i) => ({
         name: m,
-        total: parsedOrders.filter((o: Order) => {
-          const date = new Date(o.order_date.replace(" ", "T"))
-          return date.getMonth() === i
+        total: filteredOrders.filter((o: Order) => {
+          const orderDateStr = o.order_date ? o.order_date.replace(" ", "T") : o.created_at
+          const date = new Date(orderDateStr)
+          return !isNaN(date.getTime()) && date.getMonth() === i
         }).length
       }))
       setChartData(monthlyData)
@@ -224,12 +245,12 @@ export default function Dashboard() {
   ]
 
   useEffect(() => {
-    const role = localStorage.getItem("role");
-    if (role !== "admin") {
-      window.location.href = "/login";
-    }
-    loadData()
-  }, [])
+      const role = localStorage.getItem("role");
+      if (role !== "admin") {
+        window.location.href = "/login";
+      }
+      loadData()
+    }, [selectedPeriod]) // 🔥 PERBAIKAN: Menambahkan selectedPeriod agar loadData dipanggil otomatis saat filter berubah
 
   return (
     <DashboardLayout>

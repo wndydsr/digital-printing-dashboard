@@ -1,23 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Upload, FileText, Loader2, ArrowLeft, Download } from "lucide-react"
+import { FileText, Loader2, ArrowLeft, Download } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { DesainerLayout } from "@/components/layout/DesainerLayout"
 // 🛠️ TAMBAH useSearchParams UNTUK DETEKSI PRODUK YANG DI-KLIK DESAINER
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 
 export default function DetailPesananPage() {
-  const [file, setFile] = useState<File | null>(null)
-  const [revisi, setRevisi] = useState("")
-  const [showRevisi, setShowRevisi] = useState(false)
   const [order, setOrder] = useState<any>(null)
   const [activeItem, setActiveItem] = useState<any>(null) // 🛠️ STATE UNTUK MENAMPUNG 1 ITEM AKTIF
-  const [isUploading, setIsUploading] = useState(false)
   
   const router = useRouter()
   const params = useParams()
@@ -67,51 +62,16 @@ export default function DetailPesananPage() {
       return
     }
 
-  const blob = await response.blob()
-  const blobUrl = URL.createObjectURL(blob)
-  const link = document.createElement("a")
-  link.href = blobUrl
-  link.download = cleanPath.split("/").pop() || "download"
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
-}
-  // =========================
-  // HANDLE UPLOAD DESIGN
-  // =========================
-   const handleUploadDesign = async () => {
-    if (!file || !params?.id) {
-      alert("Silakan pilih file terlebih dahulu!")
-      return
-    }
-
-    setIsUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append("sender", "desainer")
-      formData.append("file", file)
-      // 🔥 FIX: Disamakan persis dengan isi pesan payload dari halaman obrolan
-      formData.append("message", "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.")
-      // formData.append("is_design", "1")
-      // if (itemId) formData.append("order_item_id", itemId)
-
-
-      await apiFetch(`/orders/${params.id}/messages`, {
-        method: "POST",
-        body: formData,
-      })
-
-      setFile(null)
-      // Langsung arahkan ke halaman chat diskusi agar desainer bisa melanjutkan obrolan
-      router.push(`/desainer/chat/${params.id}?item=${itemId || activeItem?.id || ""}`)
-      } catch (err) {
-        console.error("Gagal mengunggah desain:", err)
-        alert("Gagal mengunggah berkas desain ke ruang obrolan.")
-      } finally {
-        setIsUploading(false)
-      }
-    }
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = blobUrl
+    link.download = cleanPath.split("/").pop() || "download"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+  }
 
   // =========================
   // LOAD DATA PESANAN
@@ -220,10 +180,10 @@ export default function DetailPesananPage() {
               <CardTitle className="text-sm font-bold text-slate-700">Brief Permintaan Pelanggan</CardTitle>
             </CardHeader>
             <CardContent className="p-4 text-xs text-slate-600 whitespace-pre-line leading-relaxed flex-1 bg-white rounded-b-xl">
-              {activeItem?.design?.design_notes || activeItem?.catatan || order?.notes || (
+             {activeItem?.design?.design_notes || activeItem?.catatan || order?.notes || (
                 <span className="text-slate-400 italic">Tidak ada catatan instruksi khusus dari pelanggan.</span>
-              )}
-            </CardContent>
+              )}            
+              </CardContent>
           </Card>
         </div>
 
@@ -293,92 +253,6 @@ export default function DetailPesananPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* CARD INPUT UPLOAD PROGRESS DESAIN */}
-        <Card className="shadow-sm border-slate-200/80 rounded-xl">
-          <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
-            <CardTitle className="text-sm font-bold text-slate-700">Unggah File Hasil Desain</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 space-y-3">
-            <Input
-              type="file"
-              accept="image/*"
-              className="cursor-pointer file:text-purple-700 file:bg-purple-50 file:border-none file:text-xs text-xs h-9 rounded-lg"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-
-            {file && (
-              <div className="text-[11px] font-mono text-purple-600 bg-purple-50/60 p-2 rounded-lg border border-purple-100">
-                Siap dikirim: {file.name}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs h-8 rounded-lg"
-                onClick={() => setShowRevisi(true)}
-              >
-                Catatan Internal
-              </Button>
-
-              <Button
-                size="sm"
-                className="bg-purple-600 hover:bg-purple-700 text-xs h-8 font-bold"
-                onClick={handleUploadDesign}
-                disabled={isUploading}
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 size={13} className="animate-spin mr-1.5" />
-                    Mengirim...
-                  </>
-                ) : (
-                  <>
-                    <Upload size={13} className="mr-1.5" />
-                    Upload & Kirim ke Client
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* MODAL OVERLAY CATATAN REVISI INTERNAL */}
-        {showRevisi && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-            <div className="bg-white p-5 rounded-xl w-full max-w-sm space-y-3 shadow-xl">
-              <div>
-                <h2 className="font-bold text-sm text-slate-800">Catatan Tambahan Internal</h2>
-                <p className="text-[11px] text-slate-400">Pencatatan log perubahan revisi pengerjaan.</p>
-              </div>
-
-              <textarea
-                className="w-full border rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-purple-500 h-20 resize-none"
-                placeholder="Contoh: Font judul poster disesuaikan menjadi bold..."
-                value={revisi}
-                onChange={(e) => setRevisi(e.target.value)}
-              />
-
-              <div className="flex justify-end gap-2 text-xs font-bold">
-                <Button variant="ghost" size="sm" onClick={() => setShowRevisi(false)}>
-                  Batal
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-purple-600 hover:bg-purple-700 px-4"
-                  onClick={() => {
-                    setShowRevisi(false)
-                    setRevisi("")
-                  }}
-                >
-                  Simpan
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
 
       </div>
     </DesainerLayout>

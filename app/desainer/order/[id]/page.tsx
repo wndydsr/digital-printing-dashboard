@@ -220,7 +220,9 @@ export default function DetailPesananPage() {
               <CardTitle className="text-sm font-bold text-slate-700">Brief Permintaan Pelanggan</CardTitle>
             </CardHeader>
             <CardContent className="p-4 text-xs text-slate-600 whitespace-pre-line leading-relaxed flex-1 bg-white rounded-b-xl">
-              {activeItem?.notes || order?.notes || "Tidak ada catatan instruksi khusus dari pelanggan."}
+              {activeItem?.design?.design_notes || activeItem?.catatan || order?.notes || (
+                <span className="text-slate-400 italic">Tidak ada catatan instruksi khusus dari pelanggan.</span>
+              )}
             </CardContent>
           </Card>
         </div>

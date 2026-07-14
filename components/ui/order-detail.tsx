@@ -272,7 +272,11 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-gray-400 mb-1">Catatan Produksi</label>
-                          <p className="text-sm text-gray-600 leading-relaxed">{item.catatan || <span className="text-gray-300 italic">Tidak ada catatan</span>}</p>
+                          <p className="text-sm text-gray-600 leading-relaxed">
+                            {item.design?.design_notes || item.catatan || (
+                              <span className="text-gray-300 italic">Tidak ada catatan</span>
+                            )}
+                          </p>
                         </div>
                       </div>
 

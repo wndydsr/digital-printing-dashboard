@@ -28,7 +28,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
-            'role' => 'required|in:operator,desainer', // Pastikan role sesuai
+            'role' => 'required|in:operator,desainer,kurir', // Pastikan role sesuai
         ]);
 
         // 2. Simpan ke database

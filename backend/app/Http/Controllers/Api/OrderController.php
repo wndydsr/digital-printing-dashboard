@@ -15,6 +15,14 @@ use Illuminate\Support\Facades\File;
 
 class OrderController extends Controller
 {
+    // 🔥 KONSTANTA STAGE — SESUAI ISI TABEL order_stages DI DATABASE
+    const STAGE_BUTUH_DESAIN   = 1; // Sudah di-assign desainer, menunggu dikerjakan (tombol "Kerjakan")
+    const STAGE_SIAP_CETAK     = 2; // Desain sudah di-approve customer, siap masuk produksi cetak
+    const STAGE_DESAIN         = 3; // Sedang dikerjakan oleh desainer (tombol jadi "Detail")
+    const STAGE_CETAK          = 4; // Operator sedang mencetak
+    const STAGE_SELESAI        = 5; // Selesai produksi
+    const STAGE_ANTREAN_DESAIN = 6; // Order baru, belum ada desainer ditugaskan
+
     public function index()
     {
         $orders = Order::with([
@@ -51,10 +59,16 @@ class OrderController extends Controller
     public function designerOrders(Request $request)
     {
         $user = $request->user();
-        
+
         // Cek apakah frontend sedang meminta data riwayat/history
         $isHistory = $request->query('status') === 'history';
-        $allowedStages = $isHistory ? [2, 3, 5] : [1, 6]; // 2: Siap Cetak, 3: Cetak, 5: Selesai
+
+        // 🔥 PERBAIKAN: mapping stage yang benar sesuai isi tabel order_stages
+        // Antrian aktif desainer: Butuh Desain (1) + Desain (3)
+        // Riwayat desainer: Siap Cetak (2) + Cetak (4) + Selesai (5)
+        $allowedStages = $isHistory
+            ? [self::STAGE_SIAP_CETAK, self::STAGE_CETAK, self::STAGE_SELESAI]
+            : [self::STAGE_BUTUH_DESAIN, self::STAGE_DESAIN];
 
         $orders = Order::with([
             'customer:id,name',
@@ -68,7 +82,7 @@ class OrderController extends Controller
             'stage.status:id,name',
             'designer'
         ])
-        // 🔥 PERBAIKAN: Hapus orWhereNull. Hanya ambil orderan yang sudah di-assign Admin ke user ini
+        // Hanya ambil orderan yang sudah di-assign Admin ke user (desainer) ini
         ->where('designer_id', $user->id)
         ->orderBy('created_at', 'desc')
         ->get()
@@ -79,6 +93,7 @@ class OrderController extends Controller
 
         return response()->json($orders);
     }
+
     public function store(Request $request)
     {
         DB::beginTransaction();
@@ -91,7 +106,8 @@ class OrderController extends Controller
                 $customerId = $request->customer_id;
             }
 
-            $defaultStageId = 6; 
+            // 🔥 Default: order butuh desain tapi belum ada desainer = Antrean Desain (6)
+            $defaultStageId = self::STAGE_ANTREAN_DESAIN;
 
             $needsDesign = false;
             if ($request->has('items') && is_array($request->items)) {
@@ -111,11 +127,13 @@ class OrderController extends Controller
                         break;
                     }
                 }
-                $defaultStageId = $hasDesigner ? 1 : 6; 
-            } else if ($request->input('design_method') === 'ready-to-print' || $request->input('current_stage_id') == 2) {
-                $defaultStageId = 2; 
+                // 🔥 PERBAIKAN: Kalau sudah ada desainer sejak create -> Butuh Desain (1)
+                // Kalau belum ada desainer -> Antrean Desain (6)
+                $defaultStageId = $hasDesigner ? self::STAGE_BUTUH_DESAIN : self::STAGE_ANTREAN_DESAIN;
+            } else if ($request->input('design_method') === 'ready-to-print' || $request->input('current_stage_id') == self::STAGE_SIAP_CETAK) {
+                $defaultStageId = self::STAGE_SIAP_CETAK; 
             } else {
-                $defaultStageId = (int) $request->input('current_stage_id', 2);
+                $defaultStageId = (int) $request->input('current_stage_id', self::STAGE_SIAP_CETAK);
             }
 
             $order = Order::create([
@@ -154,13 +172,16 @@ class OrderController extends Controller
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
-                $itemStageId = 2; 
+                // 🔥 PERBAIKAN: Tentukan stage per item mandiri dengan mapping ID yang benar
+                $itemStageId = self::STAGE_SIAP_CETAK; 
                 if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
-                    $itemStageId = (!empty($item['designer_id']) || $defaultStageId === 1) ? 1 : 6;
+                    $itemStageId = (!empty($item['designer_id']) || $defaultStageId === self::STAGE_BUTUH_DESAIN)
+                        ? self::STAGE_BUTUH_DESAIN
+                        : self::STAGE_ANTREAN_DESAIN;
                 } else if ($request->input('design_method') === 'ready-to-print') {
-                    $itemStageId = 2;
+                    $itemStageId = self::STAGE_SIAP_CETAK;
                 } else {
-                    $itemStageId = (int) $request->input('current_stage_id', 2);
+                    $itemStageId = (int) $request->input('current_stage_id', self::STAGE_SIAP_CETAK);
                 }
 
                 $textCatatan = $item['catatan'] ?? null;
@@ -221,7 +242,7 @@ class OrderController extends Controller
                     }
                 }
 
-                if (!$designFile && $itemStageId === 2) {
+                if (!$designFile && $itemStageId === self::STAGE_SIAP_CETAK) {
                     $designFile = $item['dummy_file_name'] ?? 'design_beli_langsung_customer.pdf';
                 }
 
@@ -269,16 +290,18 @@ class OrderController extends Controller
                 $stageStr = strtolower($request->stage);
                 $stageId = null;
 
-                // 🔥 PERBAIKAN MUTLAK: Deteksi string "desain" dari frontend desainer agar memetakan ID secara akurat
+                // 🔥 PERBAIKAN: mapping nama stage ke ID yang BENAR sesuai tabel order_stages
                 if ($stageStr === 'desain' || $stageStr === 'diproses') {
-                    $stageId = 1; // ID Tahap Kerja "Desain"
-                    
-                    // Kunci kepemilikan desainer pada pesanan ini
+                    $stageId = self::STAGE_DESAIN; // 3 — sedang dikerjakan desainer
+
+                    // Kunci kepemilikan desainer pada pesanan ini (jaga-jaga kalau belum ke-assign)
                     if (empty($order->designer_id) && $request->user()) {
                         $order->designer_id = $request->user()->id;
                     }
                 } elseif ($stageStr === 'butuh desain') {
-                    $stageId = 6; 
+                    $stageId = self::STAGE_BUTUH_DESAIN; // 1
+                } elseif ($stageStr === 'antrean desain') {
+                    $stageId = self::STAGE_ANTREAN_DESAIN; // 6
                 } else {
                     $stage = Stage::whereRaw(
                         'LOWER(name) = ?',
@@ -306,7 +329,7 @@ class OrderController extends Controller
 
             $order->save();
 
-            // 🔥 PERBAIKAN RELASI RESPONSE: Pastikan memuat struktur data lengkap yang sama seperti indeks antrean desainer
+            // Pastikan memuat struktur data lengkap yang sama seperti indeks antrean desainer
             return response()->json([
                 'message' => 'Order updated successfully',
                 'data' => $order->load(['items.stage.status', 'stage.status', 'designer']) 
@@ -390,7 +413,23 @@ class OrderController extends Controller
 
         $order = Order::findOrFail($id);
         $order->designer_id = $request->designer_id;
+
+        // 🔥 PERBAIKAN: Assign desainer memindahkan stage dari
+        // Antrean Desain (6) -> Butuh Desain (1), BUKAN ke "Desain" (3).
+        // Stage "Desain" (3) baru terjadi saat desainer klik "Kerjakan".
+        if ($order->current_stage_id == self::STAGE_ANTREAN_DESAIN) {
+            $order->current_stage_id = self::STAGE_BUTUH_DESAIN;
+        }
+
         $order->save();
+
+        // Hanya update item dengan stage "Antrean Desain" (6) ke "Butuh Desain" (1).
+        // Item yang sudah di stage lain (mis. sudah "Desain" atau "Siap Cetak") tidak ikut berubah.
+        OrderItem::where('order_id', $order->id)
+            ->where('order_stage_id', self::STAGE_ANTREAN_DESAIN)
+            ->update([
+                'order_stage_id' => self::STAGE_BUTUH_DESAIN
+            ]);
 
         return response()->json([
             'message' => 'Desainer berhasil ditugaskan',
@@ -406,7 +445,7 @@ class OrderController extends Controller
             'stage:id,name'
         ])
         ->where('shipping_method', 'delivery')
-        ->whereIn('current_stage_id', [2, 4])
+        ->whereIn('current_stage_id', [self::STAGE_SIAP_CETAK, self::STAGE_CETAK])
         ->orderBy('created_at', 'desc')
         ->get();
 
@@ -454,11 +493,11 @@ class OrderController extends Controller
             $totalItems = \App\Models\OrderItem::where('order_id', $orderId)->count();
             
             $finishedItems = \App\Models\OrderItem::where('order_id', $orderId)
-                ->where('order_stage_id', 5)
+                ->where('order_stage_id', self::STAGE_SELESAI)
                 ->count();
 
             if ($totalItems === $finishedItems) {
-                Order::where('id', $orderId)->update(['current_stage_id' => 5]);
+                Order::where('id', $orderId)->update(['current_stage_id' => self::STAGE_SELESAI]);
             } else {
                 Order::where('id', $orderId)->update(['current_stage_id' => $item->order_stage_id]);
             }

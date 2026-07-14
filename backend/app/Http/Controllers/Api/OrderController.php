@@ -48,7 +48,7 @@ class OrderController extends Controller
         return response()->json(['data' => $orders]);
     }
 
-   public function designerOrders(Request $request)
+    public function designerOrders(Request $request)
     {
         $user = $request->user();
         
@@ -68,15 +68,8 @@ class OrderController extends Controller
             'stage.status:id,name',
             'designer'
         ])
-        // 🔥 FIX SINKRONISASI: Jika antrean aktif, muat yang designer_id milik user ATAU masih null (agar desainer bisa ambil/kerjakan)
-        ->where(function($query) use ($user, $isHistory) {
-            if ($isHistory) {
-                $query->where('designer_id', $user->id);
-            } else {
-                $query->where('designer_id', $user->id)
-                      ->orWhereNull('designer_id');
-            }
-        })
+        // 🔥 PERBAIKAN: Hapus orWhereNull. Hanya ambil orderan yang sudah di-assign Admin ke user ini
+        ->where('designer_id', $user->id)
         ->orderBy('created_at', 'desc')
         ->get()
         ->filter(function ($order) {
@@ -86,7 +79,6 @@ class OrderController extends Controller
 
         return response()->json($orders);
     }
-
     public function store(Request $request)
     {
         DB::beginTransaction();
@@ -398,18 +390,7 @@ class OrderController extends Controller
 
         $order = Order::findOrFail($id);
         $order->designer_id = $request->designer_id;
-
-        if ($order->current_stage_id == 6) {
-            $order->current_stage_id = 1;
-        }
-
         $order->save();
-
-        OrderItem::where('order_id', $order->id)
-            ->where('order_stage_id', 6)
-            ->update([
-                'order_stage_id' => 1
-            ]);
 
         return response()->json([
             'message' => 'Desainer berhasil ditugaskan',

@@ -1,10 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import {
-  Eye,
-  MessageCircle,
-} from "lucide-react"
+import { Eye, MessageCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,10 +14,9 @@ import { apiFetch } from "@/lib/api"
 import { useRouter } from "next/navigation"
 import { DesainerLayout } from "@/components/layout/DesainerLayout"
 
-// ─── 🛠️ MODIFIKASI INTERFACE AGAR STRUKTUR DATA UTAMANYA PER ITEM ───
 interface OrderItem {
-  id: number // ID Item Produk/Detail Order
-  order_id: number // ID Induk Pesanan
+  id: number 
+  order_id: number 
   order_code: string
   customer_name: string
   order_date: string
@@ -35,10 +31,8 @@ interface ApiOrder {
   customer?: { name: string }
   order_date: string
   items?: {
-    id: number // ID Item Detail
+    id: number 
     product?: { name: string }
-    // Tambahkan field stage/status per item jika backend kamu mendukungnya per item produk,
-    // Jika tidak, kita bisa fallback menggunakan stage global milik Order-nya.
     stage?: { name: string; status?: { name: string } } 
   }[]
   stage?: {
@@ -48,7 +42,7 @@ interface ApiOrder {
 }
 
 export default function AntrianPage() {
-  const [flatItems, setFlatItems] = useState<OrderItem[]>([]) // Menggunakan array hasil pecahan per item
+  const [flatItems, setFlatItems] = useState<OrderItem[]>([]) 
   const [search, setSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -73,27 +67,22 @@ export default function AntrianPage() {
     try {
       const data = await apiFetch("/designer/orders")
       const result = Array.isArray(data) ? data : data.data || []
-
-      // ─── 🛠️ PROSES FLAT MAP: MEMECAH 1 ORDER MENJADI BEBERAPA BARIS ITEM ───
       const flattenedList: OrderItem[] = []
 
       result.forEach((order: ApiOrder) => {
-        // Ambil info stage global pesanan sebagai fallback
         const orderStage = order.stage?.name || "Butuh Desain"
         const orderStatus = order.stage?.status?.name || "pending"
 
         if (order.items && order.items.length > 0) {
           order.items.forEach((item) => {
-            // Tentukan stage per item jika ada, kalau tidak ada pakai data dari order induk
             const itemStage = item.stage?.name || orderStage
             const itemStatus = item.stage?.status?.name || orderStatus
-
-            // Filter agar hanya item yang butuh penanganan desainer yang masuk list
             const stageLower = itemStage.toLowerCase()
+            
             if (stageLower === "butuh desain" || stageLower === "desain" || stageLower === "revisi") {
               flattenedList.push({
-                id: item.id, // ID Item produk untuk keperluan pengerjaan spesifik
-                order_id: order.id, // Simpan ID induk untuk routing / chat
+                id: item.id, 
+                order_id: order.id, 
                 order_code: order.order_code,
                 customer_name: order.customer?.name || "-",
                 order_date: order.order_date,
@@ -116,7 +105,6 @@ export default function AntrianPage() {
     fetchOrders()
   }, [])
 
-  // 🔍 SEARCH (Disunting agar langsung mencari properti item hasil pecahan)
   const filteredItems = flatItems.filter((item) => {
     const keyword = search.toLowerCase()
     return (
@@ -126,40 +114,52 @@ export default function AntrianPage() {
     )
   })
 
-  // 📄 PAGINATION
   const startIndex = (currentPage - 1) * itemsPerPage
   const currentData = filteredItems.slice(startIndex, startIndex + itemsPerPage)
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage)
 
-  // 🔄 START DESIGN
-  // Jika backend kamu mengupdate status per item detail, ubah URL API ini menuju `/order-items/${itemId}`
+  // 🔄 START DESIGN (Optimistic Update - Anti Delay)
   const handleStartDesign = async (itemId: number, orderId: number) => {
     try {
       await apiFetch(`/orders/${orderId}`, {
         method: "PUT",
         body: JSON.stringify({
           stage: "desain",
-          order_item_id: itemId // Menyisipkan info item yang dipilih desainer
+          order_item_id: itemId 
         })
       })
 
-      // Arahkan desainer langsung ke halaman kerja item tersebut
-      router.push(`/desainer/order/${orderId}?item=${itemId}`)
+      // 🔥 UPDATE STATE LOKAL SECARA INSTAN
+      setFlatItems((prevItems) =>
+        prevItems.map((item) => {
+          if (item.id === itemId) {
+            return {
+              ...item,
+              stage_name: "desain",     // Paksa huruf kecil agar warna badge berubah biru
+              status_name: "diproses",   // Otomatis menukar tombol Kerjakan -> Detail
+            };
+          }
+          return item;
+        })
+      );
+
+      // Beri waktu 300ms untuk transisi mata melihat perubahan baris tabel sebelum pindah halaman
+      setTimeout(() => {
+        router.push(`/desainer/order/${orderId}?item=${itemId}`)
+      }, 300);
+
     } catch (err) {
-      console.error(err)
+      console.error("Gagal memperbarui antrian tugas:", err)
     }
   }
 
   return (
     <DesainerLayout>
       <div className="space-y-8">
-
-        {/* HEADER */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Antrian Tugas (Per Produk)</h1>
         </div>
 
-        {/* SEARCH */}
         <Input
           placeholder="Cari produk atau nomor pesanan..."
           value={search}
@@ -170,16 +170,13 @@ export default function AntrianPage() {
           className="max-w-sm"
         />
 
-        {/* TABLE */}
         <Card className="w-full border-gray-200">
           <CardContent className="p-0">
-
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50/50">
                   <TableHead>No Pesanan</TableHead>
                   <TableHead>Pelanggan</TableHead>
-                  {/* 🛠️ Mengubah Header Dari "Produk" menjadi "Item yang Dikerjakan" */}
                   <TableHead>Item Produk</TableHead>
                   <TableHead>Tanggal</TableHead>
                   <TableHead>Tahap</TableHead>
@@ -190,6 +187,7 @@ export default function AntrianPage() {
 
               <TableBody>
                 {currentData.map((item) => {
+                  const stage = item.stage_name.toLowerCase()
                   const status = item.status_name.toLowerCase()
 
                   return (
@@ -197,14 +195,10 @@ export default function AntrianPage() {
                       <TableCell className="text-blue-500 font-medium">
                         {item.order_code}
                       </TableCell>
-
                       <TableCell>{item.customer_name}</TableCell>
-                      
-                      {/* 🛠️ Menampilkan SATU nama produk secara mutlak, bukan join string koma lagi */}
                       <TableCell className="font-medium text-gray-900">
                         {item.product_name}
                       </TableCell>
-
                       <TableCell className="text-gray-500 text-sm">
                         {new Date(item.order_date).toLocaleString('en-US', {
                           timeZone: 'Asia/Jakarta',
@@ -212,18 +206,16 @@ export default function AntrianPage() {
                           hour: '2-digit', minute: '2-digit', hour12: true
                         })}
                       </TableCell>
-
                       <TableCell>
                         <Badge
                           variant="outline"
                           className={`rounded-md px-3 py-1 font-normal border ${
-                            stageColorByName[item.stage_name.toLowerCase()] || "text-gray-500 border-gray-200 bg-gray-50"
+                            stageColorByName[stage] || "text-gray-500 border-gray-200 bg-gray-50"
                           }`}
                         >
                           {item.stage_name}
                         </Badge>
                       </TableCell>
-
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -234,11 +226,11 @@ export default function AntrianPage() {
                           {item.status_name}
                         </Badge>
                       </TableCell>
-
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
-
-                          {(status === "pending" || status === "revisi") && (
+                          
+                          {/* 🔥 KONDISI TOMBOL BERDASARKAN TAHAP KERJA (Lebih Akurat & Instan) */}
+                          {(stage === "butuh desain" || stage === "revisi") ? (
                             <Button
                               size="sm"
                               className="bg-blue-600 hover:bg-blue-700"
@@ -246,9 +238,7 @@ export default function AntrianPage() {
                             >
                               Kerjakan
                             </Button>
-                          )}
-
-                          {status === "diproses" && (
+                          ) : (
                             <Button
                               size="sm"
                               variant="outline"
@@ -268,7 +258,6 @@ export default function AntrianPage() {
                             <MessageCircle size={14} />
                             Chat
                           </Button>
-
                         </div>
                       </TableCell>
                     </TableRow>
@@ -277,12 +266,10 @@ export default function AntrianPage() {
               </TableBody>
             </Table>
 
-            {/* PAGINATION */}
             <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
               <span className="text-sm text-gray-500">
                 {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredItems.length)} of {filteredItems.length}
               </span>
-
               <Pagination className="mx-0 w-auto justify-end">
                 <PaginationContent>
                   <PaginationItem>
@@ -291,7 +278,6 @@ export default function AntrianPage() {
                       onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     />
                   </PaginationItem>
-
                   {Array.from({ length: totalPages }, (_, i) => (
                     <PaginationItem key={i}>
                       <PaginationLink
@@ -303,7 +289,6 @@ export default function AntrianPage() {
                       </PaginationLink>
                     </PaginationItem>
                   ))}
-
                   <PaginationItem>
                     <PaginationNext
                       href="#"
@@ -313,10 +298,8 @@ export default function AntrianPage() {
                 </PaginationContent>
               </Pagination>
             </div>
-
           </CardContent>
         </Card>
-
       </div>
     </DesainerLayout>
   )

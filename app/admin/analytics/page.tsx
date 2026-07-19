@@ -57,43 +57,93 @@ export default function AnalyticsPage() {
     contentRef: analyticsInvoiceRef,
   })
 
-  useEffect(() => {
+ useEffect(() => {
     const load = async () => {
       try {
         const data = await apiFetch("/laporan")
+        const rawTransactions = data.transactions || []
+
+        // ─── 1. FILTER BERDASARKAN PERIODE DROPDOWN ───
+        const now = new Date()
+        const filteredTransactions = rawTransactions.filter((order: any) => {
+          if (timeRange === "all") return true
+          
+          const orderDateStr = order.date ? order.date.replace(" ", "T") : order.created_at
+          if (!orderDateStr) return true
+
+          const orderDate = new Date(orderDateStr)
+          if (isNaN(orderDate.getTime())) return true
+
+          const diffTime = Math.abs(now.getTime() - orderDate.getTime())
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+          if (timeRange === "7d") return diffDays <= 7
+          if (timeRange === "90d") return diffDays <= 90
+          if (timeRange === "1y") return diffDays <= 365
+          return diffDays <= 30 // Default 30d
+        })
+
         const bulan = [
           "Jan","Feb","Mar","Apr","Mei","Jun",
           "Jul","Agu","Sep","Okt","Nov","Des"
         ]
 
-        setRevenueData(
-          (data.pendapatan_chart || []).map((item: any) => ({
-            name: bulan[item.bulan - 1],
-            total: item.total
-          }))
-        )
+        // ─── 2. SEKARANG GRAFIK DIHITUNG DINAMIS DARI DATA YANG SUDAH TERFILTER ───
+        const monthlyRevenueMap = Array(12).fill(0)
+        const monthlyOrderMap = Array(12).fill(0)
 
-        setOrderData(
-          (data.pesanan_chart || []).map((item: any) => ({
-            name: bulan[item.bulan - 1],
-            total: item.total
-          }))
-        )
-
-        setTransactions(data.transactions || [])
-
-        setKpi({
-          total_pendapatan: data.total_pendapatan || 0,
-          total_pesanan: data.total_pesanan || 0,
-          pesanan_selesai: data.pesanan_selesai || 0,
-          pesanan_pending: data.pesanan_pending || 0,
+        filteredTransactions.forEach((order: any) => {
+          const orderDateStr = order.date ? order.date.replace(" ", "T") : order.created_at
+          const date = new Date(orderDateStr)
+          if (!isNaN(date.getTime())) {
+            const monthIndex = date.getMonth() // 0 = Jan, 11 = Des
+            monthlyRevenueMap[monthIndex] += Number(order.total || 0)
+            monthlyOrderMap[monthIndex] += 1
+          }
         })
+
+        // Format ulang data agar dibaca Recharts dengan benar
+        const dynamicRevenueChart = bulan.map((m, i) => ({
+          name: m,
+          total: monthlyRevenueMap[i]
+        }))
+
+        const dynamicOrderChart = bulan.map((m, i) => ({
+          name: m,
+          total: monthlyOrderMap[i]
+        }))
+
+        setRevenueData(dynamicRevenueChart)
+        setOrderData(dynamicOrderChart)
+        setTransactions(filteredTransactions)
+
+    // ─── REKALKULASI KPI BOX SECARA REAL-TIME ───
+    const totalPendapatan = filteredTransactions.reduce((acc: number, curr: any) => acc + Number(curr.total || 0), 0)
+
+    // Pengecekan dibuat mencakup kata kunci "selesai", "success", "completed", atau "cetak"
+    const pesananSelesai = filteredTransactions.filter((t: any) => {
+      const statusLower = (t.status || "").toLowerCase()
+      return statusLower === "selesai" || statusLower === "success" || statusLower === "completed"
+    }).length
+
+    // Pengecekan pending / dikerjakan mencakup kata kunci "pending", "diproses", atau "proses"
+    const pesananPending = filteredTransactions.filter((t: any) => {
+      const statusLower = (t.status || "").toLowerCase()
+      return statusLower === "pending" || statusLower === "diproses" || statusLower === "proses" || statusLower === "cetak"
+    }).length
+
+    setKpi({
+      total_pendapatan: totalPendapatan,
+      total_pesanan: filteredTransactions.length,
+      pesanan_selesai: pesananSelesai,
+      pesanan_pending: pesananPending,
+    })
       } catch (err) {
         console.error("Laporan error:", err)
       }
     }
     load()
-  }, [])
+  }, [timeRange])
 
   return (
     <DashboardLayout>
@@ -183,7 +233,7 @@ export default function AnalyticsPage() {
                         <XAxis dataKey="name" />
                         <YAxis />
                         <Tooltip />
-                        <Area dataKey="total" stroke="#22c55e" fill="#22c55e" />
+                        <Area type="monotone" dataKey="total" stroke="#22c55e" fill="#22c55e" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -229,43 +279,51 @@ export default function AnalyticsPage() {
                   </TableHeader>
 
                   <TableBody>
-                    {latestOrders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell className="text-blue-500 font-medium">
-                          {order.invoice}
-                        </TableCell>
-                        <TableCell>{order.customer?.name}</TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            {order.products?.map((item: any, index: number) => (
-                              <div key={index} className="text-sm">
-                                {item.product_name}
-                              </div>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          Rp {Number(order.total || 0).toLocaleString("id-ID")}
-                        </TableCell>
-                        <TableCell>{order.date || "-"}</TableCell>
-                        <TableCell>
-                          <Badge className="bg-green-100 text-green-600">
-                            {order.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedInvoice(order)
-                              setShowInvoice(true)
-                            }}
-                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border hover:bg-gray-100 transition"
-                          >
-                            <FileText className="w-4 h-4 text-blue-600" />
-                          </button>
+                    {latestOrders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-10 text-gray-500">
+                          Tidak ada riwayat transaksi pada periode ini
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      latestOrders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell className="text-blue-500 font-medium">
+                            {order.invoice}
+                          </TableCell>
+                          <TableCell>{order.customer?.name}</TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              {order.products?.map((item: any, index: number) => (
+                                <div key={index} className="text-sm">
+                                  {item.product_name}
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            Rp {Number(order.total || 0).toLocaleString("id-ID")}
+                          </TableCell>
+                          <TableCell>{order.date || "-"}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-100 text-green-600">
+                              {order.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <button
+                              onClick={() => {
+                                setSelectedInvoice(order)
+                                setShowInvoice(true)
+                              }}
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border hover:bg-gray-100 transition"
+                            >
+                              <FileText className="w-4 h-4 text-blue-600" />
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -282,7 +340,6 @@ export default function AnalyticsPage() {
 
             {selectedInvoice && (
               <>
-                {/* ─── 🛠️ MASUKKAN REF DAN HIDEBUTTON KE SINI ─── */}
                 <InvoiceOrder
                   ref={analyticsInvoiceRef}
                   orderId={selectedInvoice.invoice}
@@ -294,7 +351,6 @@ export default function AnalyticsPage() {
                   hideButton={true}
                 />
 
-                {/* ─── 🛠️ TOMBOL KONTROL YANG DISERAGAMKAN DENGAN MODAL PAYMENT ─── */}
                 <div className="flex gap-3 mt-5 print:hidden">
                   <button
                     onClick={() => setShowInvoice(false)}

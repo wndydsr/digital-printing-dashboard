@@ -168,7 +168,8 @@ class OrderController extends Controller
                     }
                 }
 
-                $hargaPerItem = ($product->is_custom && $luasM2 > 0) ? ($luasM2 * $hargaPerMeter) : $hargaPerMeter;
+                $product_is_custom = $product->is_custom == 1 || $product->is_custom === true;
+                $hargaPerItem = ($product_is_custom && $luasM2 > 0) ? ($luasM2 * $hargaPerMeter) : $hargaPerMeter;
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
@@ -205,7 +206,7 @@ class OrderController extends Controller
                     'catatan'        => $textCatatan,
                     'need_design'    => $item['need_design'] ?? false,
                     'order_stage_id' => $itemStageId, 
-                    'details'        => $item['fields'] ?? '{}',
+                    'details'        => $item['fields'] ?? '{}', 
                 ]);
 
                 $designFile = null;

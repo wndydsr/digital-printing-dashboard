@@ -6,22 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DesainerLayout } from "@/components/layout/DesainerLayout"
-// 🛠️ TAMBAH useSearchParams UNTUK DETEKSI PRODUK YANG DI-KLIK DESAINER
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 
 export default function DetailPesananPage() {
   const [order, setOrder] = useState<any>(null)
-  const [activeItem, setActiveItem] = useState<any>(null) // 🛠️ STATE UNTUK MENAMPUNG 1 ITEM AKTIF
+  const [activeItem, setActiveItem] = useState<any>(null)
   
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
 
-  // ─── 🛠️ AMBIL QUERY ITEM ID DARI URL (CONTOH: ?item=5) ───
   const itemId = searchParams.get("item")
 
-  // ─── 🛠️ FIX PARSE JSON ARRAY AGAR NAMA FILE UTUH DARI ACTIVE ITEM ───
   const designFiles = (() => {
     if (!activeItem) return []
     
@@ -30,7 +27,6 @@ export default function DetailPesananPage() {
     
     let referenceFiles: string[] = []
     
-    // Jika data dari DB berbentuk string JSON "[file1.jpg, ...]", kita bongkar jadi array objek
     if (typeof rawRefFiles === "string") {
       try {
         referenceFiles = JSON.parse(rawRefFiles)
@@ -41,7 +37,16 @@ export default function DetailPesananPage() {
       referenceFiles = rawRefFiles
     }
 
-    return [...designFile, ...referenceFiles]
+    const combinedFiles = [...designFile, ...referenceFiles]
+
+    const uniqueFiles = Array.from(
+      new Set(
+        combinedFiles
+         .filter((file) => typeof file === "string" && file.trim() !== "" && file.includes("/"))
+      )
+    )
+
+    return uniqueFiles
   })()
 
   // =========================
@@ -49,9 +54,11 @@ export default function DetailPesananPage() {
   // =========================
   const handleDownload = async (filepath: string) => {
     const cleanPath = filepath.replace(/^\/?storage\//, "")
-    const token = localStorage.getItem("token") // sesuaikan dengan key token kamu
+    const token = localStorage.getItem("token") // sesuaikan dengan key token kamu4
 
-    const response = await fetch(`https://api.prinora.store/api/download/design/${cleanPath}`, {
+    const safePath = cleanPath.replace(/ /g, "%20")
+
+    const response = await fetch(`https://api.prinora.store/api/download/design/${safePath}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

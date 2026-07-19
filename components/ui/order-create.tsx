@@ -310,7 +310,30 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           formData.append(`items[${index}][designer_id]`, p.designer_id)
         }
 
-        formData.append(`items[${index}][fields]`, JSON.stringify(p.fields || {}))
+        // 🌟 MENGUMPULKAN TEKS ATRIBUT PILIHAN KASIR
+        const selectedAttributes: Record<string, string> = {};
+
+        const targetProduct = catalogProducts.find((cp) => cp.id == p.product_id);
+        targetProduct?.attributes?.forEach((attr: any) => {
+          const selectedValueId = p.attributes?.[attr.id];
+          if (selectedValueId) {
+            const valueData = attr.values?.find((v: any) => String(v.id) === String(selectedValueId));
+            if (valueData) {
+              // Hasilnya berbentuk text: {"Bahan": "Flexy China", "Laminasi": "Glossy"}
+              selectedAttributes[attr.name || "Atribut"] = valueData.name;
+            }
+          }
+        });
+
+        // Gabungkan dynamic fields kustom bawaan asli dengan text atribut pilihan
+        const combinedDetails = {
+          ...(p.fields || {}),
+          ...selectedAttributes
+        };
+
+        // Dikirim ke backend sebagai satu kesatuan objek details
+        formData.append(`items[${index}][fields]`, JSON.stringify(combinedDetails));
+
         formData.append(`items[${index}][panjang]`, p.panjang || 0)
         formData.append(`items[${index}][lebar]`, p.lebar || 0)
 
@@ -320,9 +343,10 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           })
         }
 
-        p.design_files?.forEach((file: File) => {
-          formData.append(`items[${index}][design_file][]`, file)
-        })
+        if (p.design_files && p.design_files.length > 0) {
+          // Kirim file pertama langsung tanpa tanda kurung siku [] di ujungnya
+          formData.append(`items[${index}][design_file]`, p.design_files[0])
+        }
 
         p.support_files?.forEach((file: File) => {
           formData.append(`items[${index}][reference_files][]`, file)
@@ -462,8 +486,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                   <div className="absolute z-50 mt-2 w-full bg-white border rounded-lg shadow-lg max-h-52 overflow-y-auto">
                     {filteredCustomers.map((item) => (
                       <button
-                        key={item.id}
                         type="button"
+                        key={item.id}
                         onClick={() => {
                           setCustomer(item)
                           setPhoneSearch(item.phone)
@@ -645,28 +669,6 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                             />
                             <span className="text-sm font-medium text-gray-700">Butuh desain dari desainer kita</span>
                           </div>
-
-                          {/* 🔥 DROPDOWN DESAINER MUNCUL JIKA CHECKBOX DICENTANG */}
-                          {p.need_design && (
-                            <div className="pl-5 pt-1">
-                              <p className="text-[10px] text-gray-500 mb-1">Pilih Desainer (Opsional - Jika dikosongkan akan masuk Antrean Desain)</p>
-                              <Select 
-                                value={p.designer_id || ""} 
-                                onValueChange={(val) => updateField(p.id, "designer_id", val)}
-                              >
-                                <SelectTrigger className="h-9 bg-white max-w-sm">
-                                  <SelectValue placeholder="Pilih Desainer..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {designers.map((d: any) => (
-                                    <SelectItem key={d.id} value={String(d.id)}>
-                                      {d.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
                         </div>
 
                         {/* UPLOAD AREA */}
@@ -854,6 +856,22 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                     description: "Minimal pilih 1 produk",
                     variant: "destructive",
                   })
+                }
+
+                // 🌟 BLOK VALIDASI ATRIBUT WAJIB BARU
+                for (const item of validProducts) {
+                  const targetProduct = catalogProducts.find((cp) => cp.id == item.product_id);
+                  if (targetProduct && targetProduct.attributes && targetProduct.attributes.length > 0) {
+                    for (const attr of targetProduct.attributes) {
+                      if (!item.attributes || !item.attributes[attr.id]) {
+                        return toast({
+                          title: "Atribut Belum Lengkap",
+                          description: `Silakan pilih opsi '${attr.name}' terlebih dahulu untuk produk ${targetProduct.name}.`,
+                          variant: "destructive",
+                        })
+                      }
+                    }
+                  }
                 }
 
                 setShowCheckout(true)

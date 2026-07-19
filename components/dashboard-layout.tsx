@@ -104,9 +104,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/admin/settings" className="w-full cursor-pointer">
+                {/* <Link href="/admin/settings" className="w-full cursor-pointer">
                   Settings
-                </Link>
+                </Link> */}
               </DropdownMenuItem>
               
               <DropdownMenuSeparator />

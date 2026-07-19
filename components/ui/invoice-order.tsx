@@ -9,7 +9,7 @@ interface Props {
   customer: any
   products: any[]
   total: number
-  deliveryMethod: string
+  deliveryMethod?: string // 🌟 Hanya diubah menjadi opsional agar tidak error
   paymentMethod: string
   hideButton?: boolean
 }
@@ -75,10 +75,13 @@ const InvoiceOrder = forwardRef<HTMLDivElement, Props>(
             <div>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Payment Details</p>
               <div className="mt-1.5 space-y-1 text-xs font-medium text-gray-700">
-                <p className="flex justify-between">
-                  <span className="text-gray-400 font-normal">Method:</span>
-                  <span className="capitalize text-gray-900">{deliveryMethod}</span>
-                </p>
+                {/* 🌟 Baris ini hanya tampil jika deliveryMethod memiliki isi (tidak kosong/undefined) */}
+                {deliveryMethod && (
+                  <p className="flex justify-between">
+                    <span className="text-gray-400 font-normal">Method:</span>
+                    <span className="capitalize text-gray-900">{deliveryMethod}</span>
+                  </p>
+                )}
                 <p className="flex justify-between">
                   <span className="text-gray-400 font-normal">Payment:</span>
                   <span className="uppercase text-blue-600 font-bold">{paymentMethod}</span>

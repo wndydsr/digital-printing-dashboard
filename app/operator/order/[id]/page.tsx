@@ -18,6 +18,8 @@ interface Order {
   items?: {
     id: number
     quantity?: number
+    panjang?: number | string
+    lebar?: number | string
     details?: any
     catatan?: string
     order_stage_id?: number
@@ -125,6 +127,27 @@ export default function OperatorOrderDetailPage() {
   const activeItem = order.items?.find((item) => String(item.id) === String(focusedItemId)) || order.items?.[0]
   const currentItemStageName = activeItem?.stage?.name?.toLowerCase() || order.stage?.name?.toLowerCase() || ""
 
+  const itemDetails = (() => {
+    if (!activeItem?.details) return {}
+    
+    try {
+      // Pembongkaran tahap pertama
+      let parsed = typeof activeItem.details === "string" 
+        ? JSON.parse(activeItem.details) 
+        : activeItem.details
+
+      // 🔥 KUNCI UTAMA: Jika setelah di-parse masih string JSON, bongkar sekali lagi!
+      if (typeof parsed === "string") {
+        parsed = JSON.parse(parsed)
+      }
+      
+      return parsed || {}
+    } catch (e) {
+      console.error("Gagal memetakan spesifikasi atribut produksi:", e)
+      return {}
+    }
+  })()
+
   return (
     <OperatorLayout>
       <div className="space-y-6">
@@ -146,11 +169,21 @@ export default function OperatorOrderDetailPage() {
                 <CardContent className="space-y-4">
                   <p><strong>Nama Barang:</strong> {activeItem.product?.name}</p>
                   <p><strong>Jumlah Produksi:</strong> {activeItem.quantity || 0} pcs</p>
+
+                 {(Number(activeItem.panjang) > 0 || Number(activeItem.lebar) > 0) && (
+                    <p>
+                      <strong>Ukuran Dimensi:</strong>{" "}
+                      <span className="font-semibold text-slate-800">
+                        {/* Menggunakan Math.round agar desainer/operator melihat angka bulat murni */}
+                        {Math.round(Number(activeItem.panjang))} cm x {Math.round(Number(activeItem.lebar))} cm
+                      </span>
+                    </p>
+                  )}
                   <div>
                     <strong>Kustomisasi Spesifikasi:</strong>
                     {activeItem.details ? (
                       <div className="space-y-1 mt-2 bg-white p-3 rounded-lg border">
-                        {Object.entries(typeof activeItem.details === "string" ? JSON.parse(activeItem.details) : activeItem.details).map(([key, value]) => (
+                        {Object.entries(itemDetails).map(([key, value]) => (
                           <div key={key} className="flex justify-between border-b pb-1 text-sm">
                             <span className="text-gray-500">{formatLabel(key)}</span>
                             <span className="font-medium">{String(value)}</span>

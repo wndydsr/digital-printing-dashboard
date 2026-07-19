@@ -269,8 +269,9 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                         <div className="bg-white p-4 border border-slate-100 rounded-xl shadow-xs">
                           <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dimensi Ukuran</label>
                           <div className="flex gap-4 text-xs font-semibold text-gray-700">
-                            <p>Panjang: <span className="text-gray-900 font-bold">{item.panjang} cm</span></p>
-                            <p>Lebar: <span className="text-gray-900 font-bold">{item.lebar} cm</span></p>
+                            {/* 🔥 Menggunakan Math.round agar desimal .00 hilang total dari modal admin */}
+                            <p>Panjang: <span className="text-gray-900 font-bold">{Math.round(Number(item.panjang))} cm</span></p>
+                            <p>Lebar: <span className="text-gray-900 font-bold">{Math.round(Number(item.lebar))} cm</span></p>
                           </div>
                         </div>
                       )}
@@ -373,7 +374,20 @@ function getFileUrl(file: string | null | undefined) {
 }
 
 function parseJSON(data: any) { 
-  try { return typeof data === "string" ? JSON.parse(data) : data || {} } catch { return {} } 
+  try { 
+    if (!data) return {};
+    
+    let parsed = typeof data === "string" ? JSON.parse(data) : data;
+    
+    if (typeof parsed === "string") {
+      parsed = JSON.parse(parsed);
+    }
+    
+    return parsed || {};
+  } catch (e) { 
+    console.error("Gagal parsing data details:", e);
+    return {}; 
+  } 
 }
 
 function formatLabel(key: string) { 

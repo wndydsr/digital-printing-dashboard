@@ -280,7 +280,9 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                       )}
 
                       {/* FILE AREA: FILE DESAIN SIAP CETAK */}
-                      {item.design?.design_file && (() => {
+                      {item.design?.design_file && 
+                      String(item.need_design) !== "1" && 
+                      item.need_design !== true && (() => {
                         const fileUrl = getFileUrl(item.design.design_file);
                         if (!fileUrl) return null;
                         return (

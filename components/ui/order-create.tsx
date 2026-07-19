@@ -333,6 +333,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
         // Dikirim ke backend sebagai satu kesatuan objek details
         formData.append(`items[${index}][fields]`, JSON.stringify(combinedDetails));
+        formData.append(`items[${index}][selectedOptions]`, JSON.stringify(combinedDetails));
 
         formData.append(`items[${index}][panjang]`, p.panjang || 0)
         formData.append(`items[${index}][lebar]`, p.lebar || 0)

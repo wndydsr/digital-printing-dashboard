@@ -121,9 +121,25 @@ export default function DetailPesananPage() {
   }
 
   // Ambil rincian json kustom detail dari satu produk terpilih
-  const itemDetails = typeof activeItem.details === "string" 
-    ? JSON.parse(activeItem.details) 
-    : activeItem.details || {}
+  const itemDetails = (() => {
+      if (!activeItem?.details) return {}
+      
+      try {
+        // Jika data berupa string JSON ganda atau tunggal, bongkar secara rekursif
+        let parsed = typeof activeItem.details === "string" 
+          ? JSON.parse(activeItem.details) 
+          : activeItem.details
+
+        if (typeof parsed === "string") {
+          parsed = JSON.parse(parsed)
+        }
+        
+        return parsed || {}
+      } catch (e) {
+        console.error("Gagal memuat atribut spesifikasi cetak desainer:", e)
+        return {}
+      }
+    })()
 
   return (
     <DesainerLayout>

@@ -264,14 +264,25 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                         </div>
                       </div>
 
-                      {/* DYNAMIC FIELDS */}
+                      {/* AREA UKURAN PRODUK CUSTOM (KODE LAMA NYA) */}
+                      {(Number(item.panjang) > 0 || Number(item.lebar) > 0) && (
+                        <div className="bg-white p-4 border border-slate-100 rounded-xl shadow-xs">
+                          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dimensi Ukuran</label>
+                          <div className="flex gap-4 text-xs font-semibold text-gray-700">
+                            <p>Panjang: <span className="text-gray-900 font-bold">{item.panjang} cm</span></p>
+                            <p>Lebar: <span className="text-gray-900 font-bold">{item.lebar} cm</span></p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 🌟 AREA PEMETAAN DATA SPESIFIKASI DAN ATRIBUT PILIHAN LANGSUNG DARI DETAILS */}
                       {item.details && Object.keys(parseJSON(item.details)).length > 0 && (
                         <div className="bg-white p-4 border border-slate-100 rounded-xl shadow-xs">
-                          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Spesifikasi Kustom</label>
+                          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Spesifikasi & Atribut Pilihan</label>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {Object.entries(parseJSON(item.details)).map(([key, value]: any) => (
                               <div key={key} className="bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
-                                <span className="block text-[10px] text-gray-400 font-medium">{formatLabel(key)}</span>
+                                <span className="block text-[10px] text-indigo-500 font-bold uppercase tracking-wide">{formatLabel(key)}</span>
                                 <span className="text-xs font-bold text-gray-700 block mt-0.5">{formatValue(value)}</span>
                               </div>
                             ))}

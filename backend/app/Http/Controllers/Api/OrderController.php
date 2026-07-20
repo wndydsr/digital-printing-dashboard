@@ -22,6 +22,8 @@ class OrderController extends Controller
     const STAGE_CETAK          = 4; // Operator sedang mencetak
     const STAGE_SELESAI        = 5; // Selesai produksi
     const STAGE_ANTREAN_DESAIN = 6; // Order baru, belum ada desainer ditugaskan
+    const STAGE_MENUNGGU_PEMBAYARAN = 7; // Sesuaikan dengan ID di tabel order_stages database
+    const STAGE_DIBATALKAN     = 8;
 
     public function index()
     {
@@ -127,8 +129,7 @@ class OrderController extends Controller
                         break;
                     }
                 }
-                // 🔥 PERBAIKAN: Kalau sudah ada desainer sejak create -> Butuh Desain (1)
-                // Kalau belum ada desainer -> Antrean Desain (6)
+               
                 $defaultStageId = $hasDesigner ? self::STAGE_BUTUH_DESAIN : self::STAGE_ANTREAN_DESAIN;
             } else if ($request->input('design_method') === 'ready-to-print' || $request->input('current_stage_id') == self::STAGE_SIAP_CETAK) {
                 $defaultStageId = self::STAGE_SIAP_CETAK; 
@@ -513,6 +514,39 @@ class OrderController extends Controller
             return response()->json([
                 'error' => 'Gagal memperbarui status item: ' . $e->getMessage()
             ], 500);
+        }
+    }
+    
+    public function cancelOrder($id)
+    {
+        DB::beginTransaction();
+        try {
+            $order = Order::findOrFail($id);
+
+            // Validasi: Pesanan hanya boleh dibatalkan jika masih berstatus Menunggu Pembayaran
+            if ($order->current_stage_id != self::STAGE_MENUNGGU_PEMBAYARAN) {
+                return response()->json([
+                    'message' => 'Pesanan tidak dapat dibatalkan karena sudah diproses.'
+                ], 400);
+            }
+
+            // Ubah status order global dan item-itemnya menjadi Dibatalkan
+            $order->current_stage_id = self::STAGE_DIBATALKAN;
+            $order->save();
+
+            OrderItem::where('order_id', $order->id)->update([
+                'order_stage_id' => self::STAGE_DIBATALKAN
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pesanan berhasil dibatalkan.'
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }

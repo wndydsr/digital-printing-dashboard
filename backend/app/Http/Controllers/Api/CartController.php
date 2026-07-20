@@ -21,7 +21,7 @@ class CartController extends Controller
 
         // Pastikan with('product') mengambil data relasi dengan benar
         $cartItems = CartItem::where('cart_id', $cart->id)
-            ->with('product') 
+            ->with(['product.attributes.values']) 
             ->get();
 
         return response()->json($cartItems);

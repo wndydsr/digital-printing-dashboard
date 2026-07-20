@@ -16,14 +16,14 @@ use Illuminate\Support\Facades\File;
 class OrderController extends Controller
 {
     // 🔥 KONSTANTA STAGE — SESUAI ISI TABEL order_stages DI DATABASE
-    const STAGE_BUTUH_DESAIN     = 1; // Sudah di-assign desainer, menunggu dikerjakan (tombol "Kerjakan")
-    const STAGE_SIAP_CETAK       = 2; // Desain sudah di-approve customer, siap masuk produksi cetak
-    const STAGE_DESAIN           = 3; // Sedang dikerjakan oleh desainer (tombol jadi "Detail")
-    const STAGE_CETAK            = 4; // Operator sedang mencetak
-    const STAGE_SELESAI          = 5; // Selesai produksi
-    const STAGE_ANTREAN_DESAIN   = 6; // Order baru, belum ada desainer ditugaskan
-    const STAGE_MENUNGGU_PEMBAYARAN = 7; // Menunggu pembayaran
-    const STAGE_DIBATALKAN       = 8; // Dibatalkan / Kedaluwarsa
+    const STAGE_BUTUH_DESAIN   = 1; // Sudah di-assign desainer, menunggu dikerjakan (tombol "Kerjakan")
+    const STAGE_SIAP_CETAK     = 2; // Desain sudah di-approve customer, siap masuk produksi cetak
+    const STAGE_DESAIN         = 3; // Sedang dikerjakan oleh desainer (tombol jadi "Detail")
+    const STAGE_CETAK          = 4; // Operator sedang mencetak
+    const STAGE_SELESAI        = 5; // Selesai produksi
+    const STAGE_ANTREAN_DESAIN = 6; // Order baru, belum ada desainer ditugaskan
+    const STAGE_MENUNGGU_PEMBAYARAN = 7; // Sesuaikan dengan ID di tabel order_stages database
+    const STAGE_DIBATALKAN     = 8;
 
     public function index()
     {
@@ -44,14 +44,6 @@ class OrderController extends Controller
 
     public function getCustomerOrders($customer_id)
     {
-        // 🔥 Cek otomatis: Ubah status ke Dibatalkan jika melewati expired_at (30 menit)
-        Order::where('customer_id', $customer_id)
-        ->where('current_stage_id', self::STAGE_MENUNGGU_PEMBAYARAN)
-        ->where('created_at', '<=', now()->subMinutes(30))
-        ->update([
-            'current_stage_id' => self::STAGE_DIBATALKAN
-        ]);
-
         $orders = Order::with([
             'customer:id,name',
             'order_items.product:id,name,price,photo',
@@ -73,6 +65,7 @@ class OrderController extends Controller
         // Cek apakah frontend sedang meminta data riwayat/history
         $isHistory = $request->query('status') === 'history';
 
+        // 🔥 PERBAIKAN: mapping stage yang benar sesuai isi tabel order_stages
         // Antrian aktif desainer: Butuh Desain (1) + Desain (3)
         // Riwayat desainer: Siap Cetak (2) + Cetak (4) + Selesai (5)
         $allowedStages = $isHistory
@@ -91,6 +84,7 @@ class OrderController extends Controller
             'stage.status:id,name',
             'designer'
         ])
+        // Hanya ambil orderan yang sudah di-assign Admin ke user (desainer) ini
         ->where('designer_id', $user->id)
         ->orderBy('created_at', 'desc')
         ->get()
@@ -114,11 +108,33 @@ class OrderController extends Controller
                 $customerId = $request->customer_id;
             }
 
-            // 🔥 Default order baru selalu masuk ke Menunggu Pembayaran (Stage 7)
-            $defaultStageId = self::STAGE_MENUNGGU_PEMBAYARAN;
+            // 🔥 Default: order butuh desain tapi belum ada desainer = Antrean Desain (6)
+            $defaultStageId = self::STAGE_ANTREAN_DESAIN;
 
-            if ($request->has('current_stage_id')) {
-                $defaultStageId = (int) $request->input('current_stage_id');
+            $needsDesign = false;
+            if ($request->has('items') && is_array($request->items)) {
+                foreach ($request->items as $item) {
+                    if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
+                        $needsDesign = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($needsDesign) {
+                $hasDesigner = false;
+                foreach ($request->items as $item) {
+                    if (!empty($item['designer_id'])) {
+                        $hasDesigner = true;
+                        break;
+                    }
+                }
+               
+                $defaultStageId = $hasDesigner ? self::STAGE_BUTUH_DESAIN : self::STAGE_ANTREAN_DESAIN;
+            } else if ($request->input('design_method') === 'ready-to-print' || $request->input('current_stage_id') == self::STAGE_SIAP_CETAK) {
+                $defaultStageId = self::STAGE_SIAP_CETAK; 
+            } else {
+                $defaultStageId = (int) $request->input('current_stage_id', self::STAGE_SIAP_CETAK);
             }
 
             $order = Order::create([
@@ -158,6 +174,7 @@ class OrderController extends Controller
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
+                // 🔥 PERBAIKAN: Tentukan stage per item mandiri dengan mapping ID yang benar
                 $itemStageId = self::STAGE_SIAP_CETAK; 
                 if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
                     $itemStageId = (!empty($item['designer_id']) || $defaultStageId === self::STAGE_BUTUH_DESAIN)
@@ -275,15 +292,18 @@ class OrderController extends Controller
                 $stageStr = strtolower($request->stage);
                 $stageId = null;
 
+                // 🔥 PERBAIKAN: mapping nama stage ke ID yang BENAR sesuai tabel order_stages
                 if ($stageStr === 'desain' || $stageStr === 'diproses') {
-                    $stageId = self::STAGE_DESAIN; 
+                    $stageId = self::STAGE_DESAIN; // 3 — sedang dikerjakan desainer
+
+                    // Kunci kepemilikan desainer pada pesanan ini (jaga-jaga kalau belum ke-assign)
                     if (empty($order->designer_id) && $request->user()) {
                         $order->designer_id = $request->user()->id;
                     }
                 } elseif ($stageStr === 'butuh desain') {
-                    $stageId = self::STAGE_BUTUH_DESAIN; 
+                    $stageId = self::STAGE_BUTUH_DESAIN; // 1
                 } elseif ($stageStr === 'antrean desain') {
-                    $stageId = self::STAGE_ANTREAN_DESAIN; 
+                    $stageId = self::STAGE_ANTREAN_DESAIN; // 6
                 } else {
                     $stage = Stage::whereRaw(
                         'LOWER(name) = ?',
@@ -311,6 +331,7 @@ class OrderController extends Controller
 
             $order->save();
 
+            // Pastikan memuat struktur data lengkap yang sama seperti indeks antrean desainer
             return response()->json([
                 'message' => 'Order updated successfully',
                 'data' => $order->load(['items.stage.status', 'stage.status', 'designer']) 
@@ -395,12 +416,17 @@ class OrderController extends Controller
         $order = Order::findOrFail($id);
         $order->designer_id = $request->designer_id;
 
+        // 🔥 PERBAIKAN: Assign desainer memindahkan stage dari
+        // Antrean Desain (6) -> Butuh Desain (1), BUKAN ke "Desain" (3).
+        // Stage "Desain" (3) baru terjadi saat desainer klik "Kerjakan".
         if ($order->current_stage_id == self::STAGE_ANTREAN_DESAIN) {
             $order->current_stage_id = self::STAGE_BUTUH_DESAIN;
         }
 
         $order->save();
 
+        // Hanya update item dengan stage "Antrean Desain" (6) ke "Butuh Desain" (1).
+        // Item yang sudah di stage lain (mis. sudah "Desain" atau "Siap Cetak") tidak ikut berubah.
         OrderItem::where('order_id', $order->id)
             ->where('order_stage_id', self::STAGE_ANTREAN_DESAIN)
             ->update([
@@ -490,19 +516,21 @@ class OrderController extends Controller
             ], 500);
         }
     }
-
+    
     public function cancelOrder($id)
     {
         DB::beginTransaction();
         try {
             $order = Order::findOrFail($id);
 
+            // Validasi: Pesanan hanya boleh dibatalkan jika masih berstatus Menunggu Pembayaran
             if ($order->current_stage_id != self::STAGE_MENUNGGU_PEMBAYARAN) {
                 return response()->json([
                     'message' => 'Pesanan tidak dapat dibatalkan karena sudah diproses.'
                 ], 400);
             }
 
+            // Ubah status order global dan item-itemnya menjadi Dibatalkan
             $order->current_stage_id = self::STAGE_DIBATALKAN;
             $order->save();
 

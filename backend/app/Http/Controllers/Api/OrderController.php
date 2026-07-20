@@ -44,6 +44,13 @@ class OrderController extends Controller
 
     public function getCustomerOrders($customer_id)
     {
+        Order::where('customer_id', $customer_id)
+        ->where('current_stage_id', self::STAGE_MENUNGGU_PEMBAYARAN)
+        ->where('expired_at', '<=', now())
+        ->update([
+            'current_stage_id' => self::STAGE_DIBATALKAN
+        ]);
+        
         $orders = Order::with([
             'customer:id,name',
             'order_items.product:id,name,price,photo',
@@ -149,6 +156,8 @@ class OrderController extends Controller
                 'shipping_latitude' => $request->input('shipping_latitude'),
                 'shipping_longitude'=> $request->input('shipping_longitude'),
                 'designer_id'       => null,
+                'payment_method'    => $request->input('payment_method'),
+                'expired_at'        => now()->addMinutes(30),
             ]);
 
             $totalPrice = 0;
@@ -516,7 +525,7 @@ class OrderController extends Controller
             ], 500);
         }
     }
-    
+
     public function cancelOrder($id)
     {
         DB::beginTransaction();

@@ -118,15 +118,18 @@ export default function PaymentModal({
             alert("Pembayaran Admin Kasir Berhasil!");
             setConfirmationDone(true);
             setShowInvoice(true);
+            onClose();
           },
           onPending: function (result: any) {
             alert("Menunggu transaksi diselesaikan oleh pihak customer.");
             setConfirmationDone(true);
             setShowInvoice(true);
+            onClose();
           },
           onError: function (result: any) {
             alert("Sistem mencatat transaksi Midtrans gagal/ditolak.");
             setConfirmationDone(false);
+            onClose();
           },
           onClose: function () {
             setIsSubmitting(false);

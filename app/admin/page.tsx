@@ -153,8 +153,18 @@ const loadData = async () => {
       // ─── LOGIKA SINKRONISASI FLAT ITEM ───
       const rows: FlatOrderItem[] = []
       filteredOrders.forEach((order: any) => {
+        // 🌟 Filter out order yang masih Menunggu Pembayaran (Stage 7) atau Dibatalkan (Stage 8)
+        if (order.current_stage_id === 7 || order.current_stage_id === 8) {
+          return; // Skip/Abaikan transaksi yang belum lunas atau batal
+        }
+
         if (order && Array.isArray(order.items)) {
           order.items.forEach((item: any) => {
+            // 🌟 Filter item jika level item juga masih di Stage 7 atau 8
+            if (item.order_stage_id === 7 || item.order_stage_id === 8) {
+              return;
+            }
+
             rows.push({
               id: order.id,
               item_id: item.id,
@@ -399,7 +409,11 @@ const loadData = async () => {
 
                       {/* Alokasi Tugas Desainer (Dropdown Berbasis Shacdn UI Select dari AnalyticsPage) */}
                       <TableCell className="min-w-[160px]">
-                        {["siap cetak", "cetak", "selesai"].includes(item.stage_name.toLowerCase()) ? (
+                        {item.stage_name.toLowerCase() === "menunggu pembayaran" ? (
+                          <Badge variant="outline" className="rounded-md px-2.5 py-1 font-normal text-amber-600 border-amber-200 bg-amber-50">
+                            Menunggu Pembayaran
+                          </Badge>
+                        ) : ["siap cetak", "cetak", "selesai"].includes(item.stage_name.toLowerCase()) ? (
                           <Badge variant="outline" className="rounded-md px-2.5 py-1 font-normal text-gray-400 border-gray-200 bg-gray-50/50">
                             File Siap Cetak (Langsung)
                           </Badge>

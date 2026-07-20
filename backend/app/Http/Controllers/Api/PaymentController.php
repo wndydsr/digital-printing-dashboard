@@ -14,7 +14,13 @@ use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
- public function checkout(Request $request)
+    // 🌟 KONSTANTA STAGE
+    const STAGE_PENDING_PAYMENT = 7; // Menunggu Pembayaran
+    const STAGE_SIAP_CETAK      = 2; // Siap Cetak
+    const STAGE_ANTREAN_DESAIN  = 6; // Antrean Desain
+    const STAGE_BATAL           = 8; // Selesai / Batal
+
+    public function checkout(Request $request)
     {
         $user = $request->user();
         $totalHarga = $request->input('totalHarga');
@@ -29,14 +35,14 @@ class PaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            // 1. Buat Order Utama (Sebagai penampung global transaksi)
+            // 1. Buat Order Utama (Set Stage Awal ke 7 / Menunggu Pembayaran)
             $order = Order::create([
                 'customer_id'        => $request->input('customer_id') ?? $user->id,
                 'order_date'         => now(),
                 'total_price'        => $totalHarga,
                 'notes'              => $request->notes,
                 'created_by'         => 1,
-                'current_stage_id'   => 6, // Fallback order utama
+                'current_stage_id'   => self::STAGE_PENDING_PAYMENT, // 👈 Terkunci di Stage 7
                 'shipping_method'    => $request->input('shipping_method', 'pickup'),
                 'shipping_cost'      => $request->input('shipping_cost', 0),
                 'shipping_latitude'  => $request->input('shipping_method') === 'delivery' ? $request->input('shipping_latitude') : null,
@@ -44,9 +50,7 @@ class PaymentController extends Controller
                 'designer_id'        => null,
             ]);
 
-            $anyItemNeedsDesign = false;
-
-            // 2. Loop Items & Alokasikan Stage Mandiri Per Item
+            // 2. Loop Items & Set Stage Awal Item Ke Stage 7
             foreach ($request->input('items') as $index => $item) {
                 $product = Product::findOrFail($item['product_id'] ?? $item['id']);
                 $qty = (int) $item['quantity'];
@@ -66,15 +70,7 @@ class PaymentController extends Controller
                 $hargaPerItem = ($product->is_custom && $luasM2 > 0) ? ($luasM2 * $hargaPerMeter) : $hargaPerMeter;
                 $subtotal = $hargaPerItem * $qty;
 
-                // Tentukan status kedudukan desain per produk item
                 $itemNeedDesign = isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN);
-                
-                // 🔥 KUNCI UTAMA: Tentukan Stage ID Spesifik Per Produk Item
-                $itemSpecificStageId = $itemNeedDesign ? 6 : 2; // 6 = Antrean Desain, 2 = Siap Cetak
-
-                if ($itemNeedDesign) {
-                    $anyItemNeedsDesign = true;
-                }
 
                 $textCatatan = $item['catatan'] ?? null;
 
@@ -83,7 +79,7 @@ class PaymentController extends Controller
                 })->where('product_id', $product->id)->first();
 
                 if ($cartItem && empty($textCatatan)) {
-                    $textCatatan = $cartItem->catatan; // 👈 Menyelamatkan catatan dari keranjang e-commerce
+                    $textCatatan = $cartItem->catatan;
                 }
 
                 $orderItem = OrderItem::create([
@@ -96,7 +92,7 @@ class PaymentController extends Controller
                     'subtotal'       => $subtotal,
                     'catatan'        => $textCatatan,
                     'need_design'    => $itemNeedDesign,
-                    'order_stage_id' => $itemSpecificStageId, // 🔥 Mengunci stage mandiri per produk
+                    'order_stage_id' => self::STAGE_PENDING_PAYMENT, // 👈 Item dikunci di Stage 7
                     'details'        => isset($item['selectedOptions']) ? json_encode($item['selectedOptions']) : '{}',
                 ]);
 
@@ -139,10 +135,6 @@ class PaymentController extends Controller
                 }
             }
 
-            // Atur status utama order pembungkus (ikut ke antrean jika ada salah satu yang butuh desain)
-            $globalStageId = $anyItemNeedsDesign ? 6 : 2;
-            $order->update(['current_stage_id' => $globalStageId]);
-
             // Bersihkan keranjang belanja
             if (!$request->input('is_direct', false)) {
                 \App\Models\CartItem::whereHas('cart', function ($q) use ($user) {
@@ -156,10 +148,7 @@ class PaymentController extends Controller
             Config::$isSanitized = true;
             Config::$is3ds = true;
 
-            // 🌟 DETEKSI PLATFORM VIA FLAG EKSPLISIT DARI FRONTEND
-            // (bukan dari Referer header, karena request fetch/AJAX seringkali tidak mengirim Referer)
-            // Frontend WAJIB kirim formData.append("platform", "admin") atau formData.append("platform", "customer")
-            $platform = $request->input('platform', 'customer'); // default aman ke customer
+            $platform = $request->input('platform', 'customer');
 
             $params = [
                 'transaction_details' => [
@@ -172,20 +161,13 @@ class PaymentController extends Controller
                 ]
             ];
 
-            // 🌟 LOGIKA DINAMIS CALLBACKS ADMIN vs CUSTOMER
-            // Catatan: callback ini hanya dipakai Midtrans sebagai fallback link internal
-            // (misal tombol "kembali" di halaman VA/Bank Transfer, atau saat popup gagal load).
-            // Navigasi utama tetap dikendalikan oleh onSuccess/onPending di JS masing-masing sisi.
-            // TIDAK BOLEH null, karena jika null Midtrans fallback ke domain default mereka (example.com).
             if ($platform === 'admin') {
-                // Jalur Admin Kasir Dashboard: navigasi sebenarnya ditangani modal popup lokal (<InvoiceOrder />)
                 $params['callbacks'] = [
                     'finish'   => 'https://admin.prinora.store/admin/pesanan',
                     'unfinish' => 'https://admin.prinora.store/admin/pesanan',
                     'error'    => 'https://admin.prinora.store/admin/pesanan',
                 ];
             } else {
-                // Jalur Customer E-Commerce: Menggunakan rute redirect halaman invoice
                 $params['callbacks'] = [
                     'finish'   => 'https://prinora.store/invoice/' . $order->id,
                     'unfinish' => 'https://prinora.store/invoice/' . $order->id,
@@ -225,16 +207,24 @@ class PaymentController extends Controller
 
             if ($order) {
                 if ($transactionStatus == 'settlement') {
-                    // 🔥 PERBAIKAN NOTIFIKASI: Jangan timpa massal! 
-                    // Pertahankan status asli masing-masing item saat pembayaran lunas.
+                    // 🌟 PEMBAYARAN LUNAS: Baru alokasikan stage asli masing-masing item
+                    $anyNeedDesign = false;
                     foreach ($order->items as $item) {
-                        $itemStage = ($item->need_design == 1) ? 6 : 2;
+                        $itemStage = ($item->need_design == 1) ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
                         $item->update(['order_stage_id' => $itemStage]);
+                        
+                        if ($item->need_design == 1) {
+                            $anyNeedDesign = true;
+                        }
                     }
+
+                    // Update stage utama order pembungkus
+                    $globalStage = $anyNeedDesign ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
+                    $order->update(['current_stage_id' => $globalStage]);
+
                 } else if (in_array($transactionStatus, ['deny', 'expire', 'cancel'])) {
-                    // Jika batal/kedaluwarsa, seluruh item dan order induk diubah menjadi Batal (5)
-                    $order->update(['current_stage_id' => 5]);
-                    OrderItem::where('order_id', $order->id)->update(['order_stage_id' => 5]);
+                    $order->update(['current_stage_id' => self::STAGE_BATAL]);
+                    OrderItem::where('order_id', $order->id)->update(['order_stage_id' => self::STAGE_BATAL]);
                 }
             }
 

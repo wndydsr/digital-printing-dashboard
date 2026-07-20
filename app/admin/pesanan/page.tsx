@@ -109,7 +109,7 @@ function AnalyticsPageContent() {
     "selesai": "text-green-500 border-green-200 bg-green-50/30",
   }
 
-const fetchOrders = () => {
+  const fetchOrders = () => {
     apiFetch(`/orders`)
       .then((data: any) => {
         const result = Array.isArray(data) ? data : data.data || []
@@ -118,8 +118,18 @@ const fetchOrders = () => {
         const rows: AdminFlatOrderItem[] = [] 
         
         result.forEach((order: any) => {
+          // 🌟 1. Abaikan order induk jika berada di Stage 7 (Menunggu Pembayaran) atau Stage 8 (Dibatalkan)
+          if (order.current_stage_id === 7 || order.current_stage_id === 8) {
+            return;
+          }
+
           if (order && Array.isArray(order.items)) {
             order.items.forEach((item: any) => {
+              // 🌟 2. Abaikan detail item jika berada di Stage 7 atau Stage 8
+              if (item.order_stage_id === 7 || item.order_stage_id === 8) {
+                return;
+              }
+
               rows.push({
                 id: order.id, 
                 item_id: item.id,
@@ -130,7 +140,6 @@ const fetchOrders = () => {
                 product_name: item.product?.name || "-",
                 quantity: item.quantity || 1,
                 subtotal: item.subtotal || (Number(item.price || 0) * Number(item.quantity || 1)),
-                // 🔥 SINKRONISASI AMAN: Jika item.stage null (karena data database NULL), pakai stage order induk
                 stage_name: item.stage?.name || order.stage?.name || "Antrean Desain",
                 created_at: order.created_at || new Date().toISOString(), 
                 order_date: order.order_date || new Date().toISOString(),
@@ -148,10 +157,9 @@ const fetchOrders = () => {
       })
       .catch((err) => {
         console.error("🔴 Error fetching orders:", err)
-        setFlatItems([]) // Cegah crash jika API putus
+        setFlatItems([])
       })
   }
-
   const fetchDesigners = () => {
     apiFetch(`/users?role=desainer`)
       .then((data: any) => {
@@ -352,9 +360,13 @@ const fetchOrders = () => {
 
                     {/* Alokasi Tugas Desainer */}
                     <TableCell className="min-w-[160px]">
-                      {item.stage_name.toLowerCase() === "siap cetak" || 
-                      item.stage_name.toLowerCase() === "cetak" || 
-                      item.stage_name.toLowerCase() === "selesai" ? (
+                      {item.stage_name.toLowerCase() === "menunggu pembayaran" ? (
+                        <Badge variant="outline" className="rounded-md px-2.5 py-1 font-normal text-amber-600 border-amber-200 bg-amber-50">
+                          Menunggu Pembayaran
+                        </Badge>
+                      ) : item.stage_name.toLowerCase() === "siap cetak" || 
+                        item.stage_name.toLowerCase() === "cetak" || 
+                        item.stage_name.toLowerCase() === "selesai" ? (
                         <Badge variant="outline" className="rounded-md px-2.5 py-1 font-normal text-gray-400 border-gray-200 bg-gray-50/50">
                           File Siap Cetak (Langsung)
                         </Badge>

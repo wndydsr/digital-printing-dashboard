@@ -14,11 +14,15 @@ use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
-    // 🌟 KONSTANTA STAGE
-    const STAGE_PENDING_PAYMENT = 7; // Menunggu Pembayaran
-    const STAGE_SIAP_CETAK      = 2; // Siap Cetak
-    const STAGE_ANTREAN_DESAIN  = 6; // Antrean Desain
-    const STAGE_BATAL           = 8; // Selesai / Batal
+    // 🌟 KONSTANTA STAGE — DISAMAKAN DENGAN DATABASE & ORDER CONTROLLER
+    const STAGE_BUTUH_DESAIN        = 1;
+    const STAGE_SIAP_CETAK          = 2; // Siap Cetak (Jika tidak butuh desain)
+    const STAGE_DESAIN              = 3;
+    const STAGE_CETAK               = 4;
+    const STAGE_SELESAI             = 5;
+    const STAGE_ANTREAN_DESAIN      = 6; // Antrean Desain (Jika butuh desain)
+    const STAGE_MENUNGGU_PEMBAYARAN = 7; // Menunggu Pembayaran (Default awal)
+    const STAGE_DIBATALKAN          = 8; // Batal / Kedaluwarsa
 
     public function checkout(Request $request)
     {
@@ -42,7 +46,7 @@ class PaymentController extends Controller
                 'total_price'        => $totalHarga,
                 'notes'              => $request->notes,
                 'created_by'         => 1,
-                'current_stage_id'   => self::STAGE_PENDING_PAYMENT, // 👈 Terkunci di Stage 7
+                'current_stage_id'   => self::STAGE_MENUNGGU_PEMBAYARAN, // 👈 Terkunci di Stage 7
                 'shipping_method'    => $request->input('shipping_method', 'pickup'),
                 'shipping_cost'      => $request->input('shipping_cost', 0),
                 'shipping_latitude'  => $request->input('shipping_method') === 'delivery' ? $request->input('shipping_latitude') : null,
@@ -92,7 +96,7 @@ class PaymentController extends Controller
                     'subtotal'       => $subtotal,
                     'catatan'        => $textCatatan,
                     'need_design'    => $itemNeedDesign,
-                    'order_stage_id' => self::STAGE_PENDING_PAYMENT, // 👈 Item dikunci di Stage 7
+                    'order_stage_id' => self::STAGE_MENUNGGU_PEMBAYARAN, // 👈 Item dikunci di Stage 7
                     'details'        => isset($item['selectedOptions']) ? json_encode($item['selectedOptions']) : '{}',
                 ]);
 
@@ -202,12 +206,18 @@ class PaymentController extends Controller
             $notif = new Notification();
             $transactionStatus = $notif->transaction_status;
             $orderId = $notif->order_id;
+            $fraudStatus = $notif->fraud_status ?? null;
 
             $order = Order::with('items')->find($orderId);
 
             if ($order) {
-                if ($transactionStatus == 'settlement') {
-                    // 🌟 PEMBAYARAN LUNAS: Baru alokasikan stage asli masing-masing item
+                // 🔥 Tangkap semua jenis indikator sukses pembayaran dari Midtrans
+                $isSuccess = ($transactionStatus == 'settlement') || 
+                             ($transactionStatus == 'success') || 
+                             ($transactionStatus == 'capture' && $fraudStatus == 'accept');
+
+                if ($isSuccess) {
+                    // PEMBAYARAN LUNAS: Alokasikan stage asli masing-masing item
                     $anyNeedDesign = false;
                     foreach ($order->items as $item) {
                         $itemStage = ($item->need_design == 1) ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
@@ -222,9 +232,9 @@ class PaymentController extends Controller
                     $globalStage = $anyNeedDesign ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
                     $order->update(['current_stage_id' => $globalStage]);
 
-                } else if (in_array($transactionStatus, ['deny', 'expire', 'cancel'])) {
-                    $order->update(['current_stage_id' => self::STAGE_BATAL]);
-                    OrderItem::where('order_id', $order->id)->update(['order_stage_id' => self::STAGE_BATAL]);
+                } else if (in_array($transactionStatus, ['deny', 'expire', 'cancel', 'failure'])) {
+                    $order->update(['current_stage_id' => self::STAGE_DIBATALKAN]);
+                    OrderItem::where('order_id', $order->id)->update(['order_stage_id' => self::STAGE_DIBATALKAN]);
                 }
             }
 

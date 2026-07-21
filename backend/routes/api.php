@@ -68,6 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/orders/{id}/cancel', [OrderController::class, 'cancelOrder']);
 
     Route::post('/checkout', [PaymentController::class, 'checkout']);
+    Route::post('/orders/{id}/repay', [PaymentController::class, 'repay']);
 
    Route::put('orders/{id}/assign-designer', [OrderController::class, 'assignDesigner']);
    Route::get('/orders/customer/{customer_id}', [App\Http\Controllers\Api\OrderController::class, 'getCustomerOrders']);

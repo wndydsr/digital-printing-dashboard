@@ -114,11 +114,32 @@ class OrderController extends Controller
                 $customerId = $request->customer_id;
             }
 
-            // 🔥 Default order baru selalu masuk ke Menunggu Pembayaran (Stage 7)
+            // 🔥 1. GLOBAL STATUS: Order baru selalu masuk "Menunggu Pembayaran" (Stage 7) secara global
             $defaultStageId = self::STAGE_MENUNGGU_PEMBAYARAN;
 
-            if ($request->has('current_stage_id')) {
-                $defaultStageId = (int) $request->input('current_stage_id');
+            // 🔥 2. LOGIKA PENGECEKAN DESAIN (Untuk menentukan status item di dalam order)
+            $needsDesign = false;
+            if ($request->has('items') && is_array($request->items)) {
+                foreach ($request->items as $item) {
+                    if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
+                        $needsDesign = true;
+                        break;
+                    }
+                }
+            }
+
+            $itemDefaultStageId = self::STAGE_SIAP_CETAK;
+            if ($needsDesign) {
+                $hasDesigner = false;
+                foreach ($request->items as $item) {
+                    if (!empty($item['designer_id'])) {
+                        $hasDesigner = true;
+                        break;
+                    }
+                }
+                $itemDefaultStageId = $hasDesigner ? self::STAGE_BUTUH_DESAIN : self::STAGE_ANTREAN_DESAIN;
+            } else if ($request->input('design_method') === 'ready-to-print') {
+                $itemDefaultStageId = self::STAGE_SIAP_CETAK;
             }
 
             $order = Order::create([
@@ -127,7 +148,7 @@ class OrderController extends Controller
                 'total_price'       => 0,
                 'notes'             => $request->notes,
                 'created_by'        => 1,
-                'current_stage_id'  => $defaultStageId,
+                'current_stage_id'  => $defaultStageId, // Stage 7 (Menunggu Pembayaran)
                 'shipping_method'   => $request->input('shipping_method', 'pickup'),
                 'shipping_cost'     => $request->input('shipping_cost', 0),
                 'shipping_latitude' => $request->input('shipping_latitude'),
@@ -158,11 +179,10 @@ class OrderController extends Controller
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
-                $itemStageId = self::STAGE_SIAP_CETAK; 
+                // Tentukan stage per item berdasarkan pengecekan desain
+                $itemStageId = $itemDefaultStageId;
                 if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
-                    $itemStageId = (!empty($item['designer_id']) || $defaultStageId === self::STAGE_BUTUH_DESAIN)
-                        ? self::STAGE_BUTUH_DESAIN
-                        : self::STAGE_ANTREAN_DESAIN;
+                    $itemStageId = (!empty($item['designer_id'])) ? self::STAGE_BUTUH_DESAIN : self::STAGE_ANTREAN_DESAIN;
                 } else if ($request->input('design_method') === 'ready-to-print') {
                     $itemStageId = self::STAGE_SIAP_CETAK;
                 } else {

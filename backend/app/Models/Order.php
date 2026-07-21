@@ -22,6 +22,7 @@ class Order extends Model
         'shipping_longitude',
         'notes',
         'current_stage_id',
+        'snap_token',
         'designer_id'
     ];
     public function customer()

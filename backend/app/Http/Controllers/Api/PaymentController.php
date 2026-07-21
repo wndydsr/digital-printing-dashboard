@@ -197,21 +197,60 @@ class PaymentController extends Controller
         }
     }
 
+    // 🌟 FUNGSI BARU: Mengambil Snap Token Ulang untuk Tombol "Bayar Sekarang"
+    public function repay($id)
+    {
+        $order = Order::findOrFail($id);
+
+        if ($order->current_stage_id != self::STAGE_MENUNGGU_PEMBAYARAN) {
+            return response()->json(['error' => 'Pesanan ini sudah dibayar atau dibatalkan.'], 400);
+        }
+
+        Config::$serverKey = config('services.midtrans.server_key');
+        Config::$isProduction = (bool) config('services.midtrans.is_production', false);
+        Config::$isSanitized = true;
+        Config::$is3ds = true;
+
+        $params = [
+            'transaction_details' => [
+                'order_id' => (string) $order->id,
+                'gross_amount' => (int) $order->total_price,
+            ],
+            'customer_details' => [
+                'first_name' => $order->customer->name ?? 'Pelanggan Prinora',
+            ]
+        ];
+
+        try {
+            $snapToken = Snap::getSnapToken($params);
+            return response()->json([
+                'success' => true,
+                'token' => $snapToken
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     public function notificationHandler(Request $request)
     {
         Config::$serverKey = config('services.midtrans.server_key');
         Config::$isProduction = (bool) config('services.midtrans.is_production', false);
 
         try {
-            $notif = new Notification();
-            $transactionStatus = $notif->transaction_status;
-            $orderId = $notif->order_id;
-            $fraudStatus = $notif->fraud_status ?? null;
+            $payload = $request->all();
+            $transactionStatus = $payload['transaction_status'] ?? null;
+            $orderId = $payload['order_id'] ?? null;
+            $fraudStatus = $payload['fraud_status'] ?? null;
+
+            if (!$orderId) {
+                return response()->json(['message' => 'Test notification success'], 200);
+            }
 
             $order = Order::with('items')->find($orderId);
 
             if ($order) {
-                // 🔥 Tangkap semua jenis indikator sukses pembayaran dari Midtrans
+                // Tangkap semua jenis indikator sukses pembayaran dari Midtrans
                 $isSuccess = ($transactionStatus == 'settlement') || 
                              ($transactionStatus == 'success') || 
                              ($transactionStatus == 'capture' && $fraudStatus == 'accept');
@@ -238,9 +277,9 @@ class PaymentController extends Controller
                 }
             }
 
-            return response()->json(['message' => 'Notification handled successfully']);
+            return response()->json(['message' => 'Notification handled successfully'], 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['error' => $e->getMessage()], 200);
         }
     }
 }

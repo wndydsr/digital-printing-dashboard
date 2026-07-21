@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Midtrans\Snap;
 use Midtrans\Config;
-use Midtrans\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -180,6 +179,10 @@ class PaymentController extends Controller
             }
 
             $snapToken = Snap::getSnapToken($params);
+
+            // 🌟 DISIMPEN DI DATABASE
+            $order->update(['snap_token' => $snapToken]);
+
             DB::commit();
 
             return response()->json([
@@ -197,7 +200,7 @@ class PaymentController extends Controller
         }
     }
 
-    // 🌟 FUNGSI BARU: Mengambil Snap Token Ulang untuk Tombol "Bayar Sekarang"
+    // 🌟 FUNGSI AMBIL KEMBALI TOKEN DARI DB UNTUK TOMBOL "BAYAR SEKARANG"
     public function repay($id)
     {
         $order = Order::findOrFail($id);
@@ -206,6 +209,15 @@ class PaymentController extends Controller
             return response()->json(['error' => 'Pesanan ini sudah dibayar atau dibatalkan.'], 400);
         }
 
+        // Jika token sudah tersimpan di database, langsung kembalikan
+        if (!empty($order->snap_token)) {
+            return response()->json([
+                'success' => true,
+                'token' => $order->snap_token
+            ]);
+        }
+
+        // Jaga-jaga jika token di database masih null, buatkan baru
         Config::$serverKey = config('services.midtrans.server_key');
         Config::$isProduction = (bool) config('services.midtrans.is_production', false);
         Config::$isSanitized = true;
@@ -223,6 +235,8 @@ class PaymentController extends Controller
 
         try {
             $snapToken = Snap::getSnapToken($params);
+            $order->update(['snap_token' => $snapToken]);
+
             return response()->json([
                 'success' => true,
                 'token' => $snapToken

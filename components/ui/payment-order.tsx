@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useReactToPrint } from "react-to-print"
+import { apiFetch } from "@/lib/api"
 import InvoiceOrder from "@/components/ui/invoice-order"
 import {
   Dialog,
@@ -70,13 +71,13 @@ export default function PaymentModal({
   })
 
   // ==========================================
-  // SUBMIT HANDLER INTEGRASI MIDTRANS
+  // SUBMIT HANDLER INTEGRASI MIDTRANS & CASH
   // ==========================================
   const handleSubmit = async () => {
     if (isSubmitting) return 
 
     if (!paymentMethod) {
-      return alert("Pilih payment dulu")
+      return alert("Pilih metode pembayaran terlebih dahulu")
     }
 
     try {
@@ -86,6 +87,7 @@ export default function PaymentModal({
       setSavedProducts(products)
       setSavedTotal(total)
 
+      // 1. Eksekusi pembuat order utama di backend (PaymentController@checkout)
       const responseData = await onConfirm();
 
       console.log("RAW RESPONSE DATA DARI ONCONFIRM:", responseData);
@@ -93,11 +95,8 @@ export default function PaymentModal({
       const idDariDatabase = responseData?.order_id || responseData?.data?.id || responseData?.id;
       const midtransSnapToken = responseData?.token || responseData?.data?.token;
 
-      console.log("Hasil Extract ID Database:", idDariDatabase);
-      console.log("Hasil Extract Token Midtrans:", midtransSnapToken);
-
       if (!idDariDatabase) {
-        alert("Pesanan berhasil dibuat, tapi nomor urut database gagal dimuat.");
+        alert("Pesanan gagal diproses: Nomor order tidak ditemukan.");
         setIsSubmitting(false);
         return;
       }
@@ -105,40 +104,77 @@ export default function PaymentModal({
       const formattedOrderNo = `ORD-${String(idDariDatabase).padStart(5, '0')}`;
       setRealOrderId(formattedOrderNo);
 
-      // Jalur Kondisi: Pembayaran Elektronik Online Gateway
+      // Jalur A: Gateway Online (QRIS / Midtrans Snap)
       if (paymentMethod === "qris") {
         if (!midtransSnapToken || !(window as any).snap) {
-          alert(`Sistem belum siap sepenuhnya.\nDetail -> Token: ${midtransSnapToken ? 'Ada' : 'Kosong'}, SDK Midtrans: ${(window as any).snap ? 'Siap' : 'Belum Dimuat Browser'}`);
+          alert(`Sistem pembayaran online belum siap.\nDetail -> Token: ${midtransSnapToken ? 'Ada' : 'Kosong'}, SDK Midtrans: ${(window as any).snap ? 'Siap' : 'Belum Dimuat Browser'}`);
           setIsSubmitting(false);
           return;
         }
         
         (window as any).snap.pay(midtransSnapToken, {
-          onSuccess: function (result: any) {
-            alert("Pembayaran Admin Kasir Berhasil!");
+          onSuccess: async function (result: any) {
+            alert("Pembayaran Online Berhasil!");
+
+            // Update stage melalui endpoint /admin/orders/{id}/stage
+            try {
+              const anyNeedDesign = products.some((p) => p.need_design === true || p.need_design === "1");
+              const targetStage = anyNeedDesign ? 6 : 2; // 6 = Antrean Desain, 2 = Siap Cetak
+
+              await apiFetch(`/admin/orders/${idDariDatabase}/stage`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ current_stage_id: targetStage }),
+              });
+            } catch (e) {
+              console.error("Gagal update stage setelah bayar online:", e);
+            }
+
             setConfirmationDone(true);
             setShowInvoice(true);
             onClose();
           },
           onPending: function (result: any) {
-            alert("Menunggu transaksi diselesaikan oleh pihak customer.");
+            alert("Menunggu pembayaran diselesaikan oleh customer.");
             setConfirmationDone(true);
             setShowInvoice(true);
             onClose();
           },
           onError: function (result: any) {
-            alert("Sistem mencatat transaksi Midtrans gagal/ditolak.");
+            alert("Transaksi pembayaran gagal.");
             setConfirmationDone(false);
-            onClose();
           },
           onClose: function () {
             setIsSubmitting(false);
           }
         });
+
       } else {
-        // Jalur Kondisi: Pembayaran Cash / Tunai Manual di Kasir Toko
-        setConfirmationDone(true)
-        setShowInvoice(true)
+        // Jalur B: Cash (Tunai) di Kasir
+        // Karena uang tunai diterima langsung di tempat, kita update stage pesanan langsung
+        try {
+          const anyNeedDesign = products.some((p) => p.need_design === true || p.need_design === "1" || p.need_design === 1);
+          
+          // Stage 6 = Antrean Desain (jika ada item butuh desain)
+          // Stage 2 = Siap Cetak (jika tidak ada item yang butuh desain)
+          const targetStage = anyNeedDesign ? 6 : 2;
+
+          // 🌟 PERBAIKAN ROUTE: Menambahkan prefix '/admin' agar sesuai routes/api.php
+          await apiFetch(`/admin/orders/${idDariDatabase}/stage`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ current_stage_id: targetStage }),
+          });
+
+        } catch (e) {
+          console.error("Gagal update stage transaksi tunai:", e);
+          alert("Pesanan tercatat, tetapi gagal memperbarui stage pesanan secara otomatis.");
+        }
+
+        alert("Pembayaran tunai berhasil diproses!");
+        setConfirmationDone(true);
+        setShowInvoice(true);
+        onClose(); // Menutup modal checkout & memicu reload tabel pesanan
       }
 
     } catch (error) {
@@ -213,15 +249,19 @@ export default function PaymentModal({
   )
 
   const CashSection = () => (
-    <div className="bg-gray-50 border rounded-2xl p-6 text-center">
-      <h3 className="font-semibold text-lg">Cash Payment</h3>
-      <p className="text-sm text-gray-400 mt-2">Customer will pay directly using cash at store desk</p>
+    <div className="bg-gray-50 border border-green-200 rounded-2xl p-6 text-center bg-green-50/50">
+      <h3 className="font-semibold text-lg text-green-900">Pembayaran Tunai (Cash)</h3>
+      <p className="text-sm text-green-700 mt-2">
+        Uang diterima langsung dari pelanggan di kasir. Setelah mengonfirmasi, pesanan akan langsung diproses ke tahap pengerjaan (Antrean Desain / Siap Cetak).
+      </p>
+      <div className="w-full bg-white border rounded-xl p-4 mt-4 text-center">
+        <p className="text-sm text-gray-400">Total Pembayaran Tunai</p>
+        <p className="text-2xl font-bold text-green-600 mt-1">Rp {total.toLocaleString("id-ID")}</p>
+      </div>
     </div>
   )
 
   const SummarySection = () => {
-    console.log("Cek isi data products:", products);
-
     return (
       <div className="bg-gray-50 border rounded-2xl p-5 space-y-4">
         <div>

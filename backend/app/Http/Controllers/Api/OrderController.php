@@ -247,8 +247,10 @@ class OrderController extends Controller
                     }
                 }
 
+                // 🌟 PROTEKSI PREFIX FOLDER: Menjamin teks nama dummy tetap memiliki jalur 'designs/'
                 if (!$designFile && $itemStageId === self::STAGE_SIAP_CETAK) {
-                    $designFile = $item['dummy_file_name'] ?? 'design_beli_langsung_customer.pdf';
+                    $rawName = $item['dummy_file_name'] ?? 'design_beli_langsung_customer.pdf';
+                    $designFile = str_starts_with($rawName, 'designs/') ? $rawName : 'designs/' . $rawName;
                 }
 
                 if ($designFile || count($referenceFiles) > 0) {
@@ -394,16 +396,27 @@ class OrderController extends Controller
         }
     }
 
+    // 🌟 PERBAIKAN PENCARIAN MULTI-FOLDER UNTUK MENCEGAH ERROR 404
     public function downloadDesign($filename)
     {
         $decodedFilename = urldecode($filename);
-        $path = storage_path('app/public/' . $decodedFilename);
 
-        if (!File::exists($path)) {
-            return response()->json(['message' => 'File tidak ditemukan di path: ' . $path], 404);
+        $pathRoot = storage_path('app/public/' . $decodedFilename);
+        $pathDesigns = storage_path('app/public/designs/' . $decodedFilename);
+        $pathChat = storage_path('app/public/chat-designs/' . $decodedFilename);
+
+        if (File::exists($pathRoot)) {
+            return response()->download($pathRoot);
+        } elseif (File::exists($pathDesigns)) {
+            return response()->download($pathDesigns);
+        } elseif (File::exists($pathChat)) {
+            return response()->download($pathChat);
         }
 
-        return response()->download($path);
+        return response()->json([
+            'message' => 'File tidak ditemukan di path storage mana pun.',
+            'filename' => $decodedFilename
+        ], 404);
     }
 
     public function assignDesigner(Request $request, $id)

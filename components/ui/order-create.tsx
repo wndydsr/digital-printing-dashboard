@@ -80,7 +80,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         lebar: 0,
         catatan: "",
         need_design: false,
-        designer_id: "", // 🔥 Ditambahkan untuk desainer
+        designer_id: "",
         design_files: [],
         support_files: [],
         fields: {},
@@ -121,7 +121,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
   const [customers, setCustomers] = useState<any[]>([])
   const [catalogProducts, setCatalogProducts] = useState<any[]>([])
-  const [designers, setDesigners] = useState<any[]>([]) // 🔥 State untuk Desainer
+  const [designers, setDesigners] = useState<any[]>([]) 
   const [customer, setCustomer] = useState<any>(null)
 
   const [products, setProducts] = useState<any[]>([
@@ -133,7 +133,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
       lebar: 0,
       catatan: "",
       need_design: false,
-      designer_id: "", // 🔥 Ditambahkan
+      designer_id: "", 
       design_files: [],
       support_files: [],
       fields: {},
@@ -310,7 +310,6 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           formData.append(`items[${index}][designer_id]`, p.designer_id)
         }
 
-        // 🌟 MENGUMPULKAN TEKS ATRIBUT PILIHAN KASIR
         const selectedAttributes: Record<string, string> = {};
 
         const targetProduct = catalogProducts.find((cp) => cp.id == p.product_id);
@@ -319,19 +318,16 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           if (selectedValueId) {
             const valueData = attr.values?.find((v: any) => String(v.id) === String(selectedValueId));
             if (valueData) {
-              // Hasilnya berbentuk text: {"Bahan": "Flexy China", "Laminasi": "Glossy"}
               selectedAttributes[attr.name || "Atribut"] = valueData.name;
             }
           }
         });
 
-        // Gabungkan dynamic fields kustom bawaan asli dengan text atribut pilihan
         const combinedDetails = {
           ...(p.fields || {}),
           ...selectedAttributes
         };
 
-        // Dikirim ke backend sebagai satu kesatuan objek details
         formData.append(`items[${index}][fields]`, JSON.stringify(combinedDetails));
         formData.append(`items[${index}][selectedOptions]`, JSON.stringify(combinedDetails));
 
@@ -345,7 +341,6 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         }
 
         if (p.design_files && p.design_files.length > 0) {
-          // Kirim file pertama langsung tanpa tanda kurung siku [] di ujungnya
           formData.append(`items[${index}][design_file]`, p.design_files[0])
         }
 
@@ -354,7 +349,6 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         })
       })
 
-      // 🔥 TANGKAP HASIL FETCH DARI BACKEND
       const res = await apiFetch("/checkout", {
         method: "POST",
         body: formData,
@@ -372,7 +366,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         resetForm()
       }, 300)
       
-      return res; // 🔥 WAJIB DI-RETURN agar ID database bisa dibaca oleh PaymentModal!
+      return res;
 
     } catch (err) {
       console.error(err)
@@ -381,7 +375,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         description: "Pesanan gagal dibuat",
         variant: "destructive",
       })
-      throw err; // Lempar error agar block catch di PaymentModal ikut mendeteksi kegagalan
+      throw err;
     } finally { 
       setLoading(false)
     }
@@ -400,7 +394,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
   useEffect(() => {
     fetchCustomers();
     fetchProducts();
-    fetchDesigners(); // 🔥 Ambil data desainer saat form diload
+    fetchDesigners();
   }, []);
 
   const fetchCustomers = async () => {
@@ -423,7 +417,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
   const fetchDesigners = async () => {
     try {
-      const res = await apiFetch("/users"); // Endpoint untuk list desainer
+      const res = await apiFetch("/users");
       setDesigners(Array.isArray(res) ? res : res.data || []);
     } catch (err) {
       console.error("ERROR FETCH DESIGNERS", err);
@@ -613,7 +607,6 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
                           return (
                             <div className="grid grid-cols-2 gap-2">
-                              {/* INPUT INI HANYA MUNCUL JIKA PRODUK KUSTOM */}
                               {isCustom && (
                                 <>
                                   <div>
@@ -677,7 +670,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                           <p className="text-[10px] text-gray-400 mb-1">
                             {p.need_design
                               ? "File Referensi/Pendukung (opsional, bisa lebih dari 1)"
-                              : "File Siap Cetak/Desain (bisa lebih dari 1)"}
+                              : "File Siap Cetak/Desain (Wajib diisi jika tidak butuh desain)"}
                           </p>
                           <Input
                             key={`file-${p.id}-${p.need_design}`}
@@ -859,7 +852,21 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                   })
                 }
 
-                // 🌟 BLOK VALIDASI ATRIBUT WAJIB BARU
+                // 🌟 VALIDASI FILE DESAIN SIAP CETAK
+                for (const item of validProducts) {
+                  const targetProduct = catalogProducts.find((cp) => cp.id == item.product_id);
+                  const productName = targetProduct?.name || "produk";
+
+                  if (!item.need_design && (!item.design_files || item.design_files.length === 0)) {
+                    return toast({
+                      title: "File Desain Belum Diunggah",
+                      description: `Silakan upload file cetak untuk "${productName}" atau centang "Butuh desain dari desainer kita".`,
+                      variant: "destructive",
+                    })
+                  }
+                }
+
+                // 🌟 VALIDASI ATRIBUT WAJIB
                 for (const item of validProducts) {
                   const targetProduct = catalogProducts.find((cp) => cp.id == item.product_id);
                   if (targetProduct && targetProduct.attributes && targetProduct.attributes.length > 0) {

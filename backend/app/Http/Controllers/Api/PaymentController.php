@@ -123,14 +123,17 @@ class PaymentController extends Controller
                     }
                 }
 
+                // 🌟 PERBAIKAN DI SINI:
+                // Menjamin teks nama dummy/asli tetap memiliki jalur 'designs/' agar gambar KELOAD 100%!
                 if (!$designFile && !empty($item['dummy_file_name'])) {
-                    $designFile = $item['dummy_file_name'];
+                    $rawName = $item['dummy_file_name'];
+                    $designFile = str_starts_with($rawName, 'designs/') ? $rawName : 'designs/' . $rawName;
                 }
 
                 if ($designFile || count($referenceFiles) > 0) {
                     \App\Models\OrderItemDesign::create([
                         'order_item_id'   => $orderItem->id,
-                        'design_file'     => $designFile,
+                        'design_file'     => $designFile, // 👈 Tersimpan rapi sebagai 'designs/erdPrinora.png'
                         'reference_files' => json_encode($referenceFiles),
                         'design_notes'    => $item['catatan'] ?? $request->notes ?? null,
                         'design_status'   => 'pending',

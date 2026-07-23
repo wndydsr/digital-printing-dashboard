@@ -63,6 +63,38 @@ interface Designer {
   name: string;
 }
 
+// ─── 🛠️ FUNGSI HELPER PAGINATION RANGE ───
+function getPaginationPages(current: number, total: number) {
+  const delta = 2; 
+  const range: number[] = [];
+  const rangeWithDots: (number | string)[] = [];
+  let l: number | undefined;
+
+  for (let i = 1; i <= total; i++) {
+    if (
+      i === 1 ||
+      i === total ||
+      (i >= current - delta && i <= current + delta)
+    ) {
+      range.push(i);
+    }
+  }
+
+  range.forEach((i) => {
+    if (l) {
+      if (i - l === 2) {
+        rangeWithDots.push(l + 1);
+      } else if (i - l !== 1) {
+        rangeWithDots.push("...");
+      }
+    }
+    rangeWithDots.push(i);
+    l = i;
+  });
+
+  return rangeWithDots;
+}
+
 function AnalyticsPageContent() {
   const [orders, setOrders] = useState<any[]>([])
   const [flatItems, setFlatItems] = useState<AdminFlatOrderItem[]>([]) 
@@ -434,13 +466,33 @@ function AnalyticsPageContent() {
                   <PaginationItem>
                     <PaginationPrevious href="#" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} />
                   </PaginationItem>
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <PaginationItem key={i}>
-                      <PaginationLink href="#" isActive={currentPage === i + 1} onClick={() => setCurrentPage(i + 1)}>
-                        {i + 1}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
+                  
+                  {getPaginationPages(currentPage, totalPages).map((page, i) => {
+                    if (page === "...") {
+                      return (
+                        <PaginationItem key={`dot-${i}`}>
+                          <span className="px-3 py-2 text-sm text-gray-400">...</span>
+                        </PaginationItem>
+                      );
+                    }
+
+                    const pageNumber = Number(page);
+                    return (
+                      <PaginationItem key={pageNumber}>
+                        <PaginationLink
+                          href="#"
+                          isActive={currentPage === pageNumber}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setCurrentPage(pageNumber);
+                          }}
+                        >
+                          {pageNumber}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+
                   <PaginationItem>
                     <PaginationNext href="#" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} />
                   </PaginationItem>

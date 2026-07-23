@@ -43,20 +43,23 @@ export default function PaymentModal({
   // INJEKSI OTOMATIS MIDTRANS SNAP SDK VIA DOM
   // ==========================================
   useEffect(() => {
-    const existingScript = document.getElementById("midtrans-snap-script");
-    if (existingScript) return;
+      const existingScript = document.getElementById("midtrans-snap-script");
+      if (existingScript) {
+        existingScript.remove(); // Hapus script lama jika ada
+      }
 
-    const script = document.createElement("script");
-    script.id = "midtrans-snap-script";
-    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
-    script.setAttribute("data-client-key", process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "");
-    script.async = true;
+      const script = document.createElement("script");
+      script.id = "midtrans-snap-script";
+      
+      // 🌟 Langsung arahkan ke URL Production tanpa kondisi env
+      script.src = "https://app.midtrans.com/snap/snap.js";
+
+      script.setAttribute("data-client-key", process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "");
+      script.async = true;
+      
+      document.body.appendChild(script);
+    }, []);
     
-    document.body.appendChild(script);
-
-    return () => {};
-  }, []);
-
   // ==========================================
   // STEP STATUS TRACKING
   // ==========================================

@@ -340,9 +340,11 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
           })
         }
 
-        if (p.design_files && p.design_files.length > 0) {
-          formData.append(`items[${index}][design_file]`, p.design_files[0])
-        }
+       if (p.design_files && p.design_files.length > 0) {
+        const fileObj = p.design_files[0];
+        formData.append(`items[${index}][design_file]`, fileObj);
+        formData.append(`items[${index}][dummy_file_name]`, fileObj.name); // 👈 Cadangan nama file asli
+      }
 
         p.support_files?.forEach((file: File) => {
           formData.append(`items[${index}][reference_files][]`, file)

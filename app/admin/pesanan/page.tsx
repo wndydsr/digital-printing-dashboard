@@ -38,7 +38,7 @@ import {
 
 // ─── 🛠️ INTERFACE FLAT ITEM PRODUK ───
 interface AdminFlatOrderItem {
-  id: number;           // ID order induk
+  id: number;          // ID order induk
   item_id: number;      // ID detail item (OrderItem)
   order_code: string;
   customer_name: string;
@@ -62,6 +62,26 @@ interface Designer {
   id: number;
   name: string;
 }
+
+// ─── 🛠️ HELPER BULAN & TAHUN ───
+const months = [
+  { value: "all", label: "Semua Bulan" },
+  { value: "01", label: "Januari" },
+  { value: "02", label: "Februari" },
+  { value: "03", label: "Maret" },
+  { value: "04", label: "April" },
+  { value: "05", label: "Mei" },
+  { value: "06", label: "Juni" },
+  { value: "07", label: "Juli" },
+  { value: "08", label: "Agustus" },
+  { value: "09", label: "September" },
+  { value: "10", label: "Oktober" },
+  { value: "11", label: "November" },
+  { value: "12", label: "Desember" },
+]
+
+const currentYearNum = new Date().getFullYear()
+const years = Array.from({ length: 5 }, (_, i) => (currentYearNum - i).toString())
 
 // ─── 🛠️ FUNGSI HELPER PAGINATION RANGE ───
 function getPaginationPages(current: number, total: number) {
@@ -102,7 +122,11 @@ function AnalyticsPageContent() {
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [openDetail, setOpenDetail] = useState(false)
-  const [timeRange, setTimeRange] = useState("30d")
+  
+  // 🔥 Diubah dari timeRange menjadi selectedMonth & selectedYear
+  const [selectedMonth, setSelectedMonth] = useState<string>("all")
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
+
   const [search, setSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [openCreate, setOpenCreate] = useState(false)
@@ -120,11 +144,20 @@ function AnalyticsPageContent() {
 
   const filteredItems = flatItems.filter((item) => {
     const keyword = search.toLowerCase()
-    return (
+    const matchesSearch =
       item.order_code?.toLowerCase().includes(keyword) ||
       item.customer_name?.toLowerCase().includes(keyword) ||
       item.product_name?.toLowerCase().includes(keyword)
-    )
+
+    // Filter Berdasarkan Bulan & Tahun
+    const itemDate = new Date(item.created_at)
+    const itemYear = itemDate.getFullYear().toString()
+    const itemMonth = String(itemDate.getMonth() + 1).padStart(2, "0")
+
+    const matchesYear = selectedYear === "all" || itemYear === selectedYear
+    const matchesMonth = selectedMonth === "all" || itemMonth === selectedMonth
+
+    return matchesSearch && matchesYear && matchesMonth
   })
 
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -268,7 +301,6 @@ function AnalyticsPageContent() {
   }, [])
 
   // 🔥 TAMBAHAN: deteksi redirect balik dari Midtrans (mis. DANA/GoPay/e-wallet yang redirect penuh)
-  // Midtrans menempelkan query params ke URL "finish": ?order_id=...&status_code=...&transaction_status=...
   useEffect(() => {
     const orderId = searchParams.get("order_id")
     const transactionStatus = searchParams.get("transaction_status")
@@ -281,7 +313,6 @@ function AnalyticsPageContent() {
         const orderData = order?.data || order
 
         if (transactionStatus === "settlement" || transactionStatus === "capture" || transactionStatus === "pending") {
-          // Susun data untuk komponen InvoiceOrder, mengikuti bentuk yang sama seperti di PaymentModal
           const mappedProducts = (orderData.items || []).map((item: any) => ({
             product_name: item.product?.name || "-",
             quantity: item.quantity || 1,
@@ -298,7 +329,6 @@ function AnalyticsPageContent() {
           })
           setShowRedirectInvoice(true)
 
-          // Refresh list order supaya status/stage ter-update
           fetchOrders()
         } else {
           alert("Transaksi dibatalkan/gagal. Cek kembali status pesanan.")
@@ -306,7 +336,6 @@ function AnalyticsPageContent() {
       } catch (err) {
         console.error("Gagal memuat data order setelah redirect Midtrans:", err)
       } finally {
-        // Bersihkan query string dari URL supaya modal tidak terbuka ulang saat refresh manual
         router.replace("/admin/pesanan")
       }
     }
@@ -324,15 +353,32 @@ function AnalyticsPageContent() {
             <h1 className="text-2xl font-semibold text-gray-900">Monitoring Antrian Kerja (Per Item)</h1>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
+            {/* Dropdown Pilih Bulan */}
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Pilih Bulan" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="1y">Last year</SelectItem>
+                {months.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Dropdown Pilih Tahun */}
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-28">
+                <SelectValue placeholder="Pilih Tahun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Tahun</SelectItem>
+                {years.map((y) => (
+                  <SelectItem key={y} value={y}>
+                    {y}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             

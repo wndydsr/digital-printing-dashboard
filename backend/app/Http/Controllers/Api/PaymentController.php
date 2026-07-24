@@ -249,35 +249,40 @@ class PaymentController extends Controller
         }
     }
 
-   public function notificationHandler(Request $request)
+public function notificationHandler(Request $request)
     {
         $payload = $request->all();
         $transactionStatus = $payload['transaction_status'] ?? null;
         $fraudStatus = $payload['fraud_status'] ?? null;
         $orderCode = $payload['order_id'] ?? null;
 
-        // Cari order berdasarkan kode atau id
-        $order = Order::where('order_code', $orderCode)->orWhere('id', $orderCode)->first();
+        // Bersihkan order_id jika ada prefix tambahan (misal jika ada format string khusus)
+        $orderId = str_replace('ORD-', '', $orderCode);
+
+        // Cari order berdasarkan ID atau Order Code
+        $order = Order::where('id', $orderId)->orWhere('order_code', $orderCode)->first();
 
         if (!$order) {
-            return response()->json(['message' => 'Order not found'], 404);
+            return response()->json(['message' => 'Order not found: ' . $orderCode], 404);
         }
 
-        // Logic jika pembayaran berhasil (Capture Accept atau Settlement)
+        // Cek apakah status pembayaran sukses (Settlement atau Capture dengan Accept)
         if (
             ($transactionStatus == 'capture' && $fraudStatus == 'accept') || 
             $transactionStatus == 'settlement'
         ) {
             $order->payment_status = 'paid';
             
-            // 🌟 CEK APAKAH ADA ITEM YANG BUTUH DESAIN
+            // Cek apakah ada item yang membutuhkan desain
             $hasDesignItem = $order->items()->where('need_design', true)->exists();
             
-            // Jika ada yang butuh desain, order utama masuk Antrean Desain (6), jika tidak Siap Cetak (2)
-            $order->current_stage_id = $hasDesignItem ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
+            // Tentukan stage: Jika butuh desain masuk Antrean Desain (6), jika tidak Siap Cetak (2)
+            $targetStage = $hasDesignItem ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
+            
+            $order->current_stage_id = $targetStage;
             $order->save();
 
-            // 🌟 UPDATE STAGE PER ITEM BERDASARKAN KONDISINYA
+            // Perbarui stage seluruh item di dalam order tersebut
             foreach ($order->items as $item) {
                 $item->order_stage_id = $item->need_design ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
                 $item->save();
@@ -285,13 +290,13 @@ class PaymentController extends Controller
         } 
         else if ($transactionStatus == 'pending') {
             $order->payment_status = 'pending';
-            $order->current_stage_id = self::STAGE_MENUNGGU_PEMBAYARAN; // 7
+            $order->current_stage_id = self::STAGE_MENUNGGU_PEMBAYARAN;
             $order->save();
             $order->items()->update(['order_stage_id' => self::STAGE_MENUNGGU_PEMBAYARAN]);
         } 
         else if (in_array($transactionStatus, ['deny', 'expire', 'cancel'])) {
             $order->payment_status = 'failed';
-            $order->current_stage_id = self::STAGE_DIBATALKAN; // 8
+            $order->current_stage_id = self::STAGE_DIBATALKAN;
             $order->save();
             $order->items()->update(['order_stage_id' => self::STAGE_DIBATALKAN]);
         }

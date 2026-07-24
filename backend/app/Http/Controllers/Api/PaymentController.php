@@ -249,58 +249,77 @@ class PaymentController extends Controller
         }
     }
 
-public function notificationHandler(Request $request)
+    public function notificationHandler(Request $request)
     {
-        $payload = $request->all();
-        $transactionStatus = $payload['transaction_status'] ?? null;
-        $fraudStatus = $payload['fraud_status'] ?? null;
-        $orderCode = $payload['order_id'] ?? null;
+        try {
+            $payload = $request->all();
+            $transactionStatus = $payload['transaction_status'] ?? null;
+            $fraudStatus = $payload['fraud_status'] ?? null;
+            $orderCode = $payload['order_id'] ?? null;
 
-        // Bersihkan order_id jika ada prefix tambahan (misal jika ada format string khusus)
-        $orderId = str_replace('ORD-', '', $orderCode);
-
-        // Cari order berdasarkan ID atau Order Code
-        $order = Order::where('id', $orderId)->orWhere('order_code', $orderCode)->first();
-
-        if (!$order) {
-            return response()->json(['message' => 'Order not found: ' . $orderCode], 404);
-        }
-
-        // Cek apakah status pembayaran sukses (Settlement atau Capture dengan Accept)
-        if (
-            ($transactionStatus == 'capture' && $fraudStatus == 'accept') || 
-            $transactionStatus == 'settlement'
-        ) {
-            $order->payment_status = 'paid';
-            
-            // Cek apakah ada item yang membutuhkan desain
-            $hasDesignItem = $order->items()->where('need_design', true)->exists();
-            
-            // Tentukan stage: Jika butuh desain masuk Antrean Desain (6), jika tidak Siap Cetak (2)
-            $targetStage = $hasDesignItem ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
-            
-            $order->current_stage_id = $targetStage;
-            $order->save();
-
-            // Perbarui stage seluruh item di dalam order tersebut
-            foreach ($order->items as $item) {
-                $item->order_stage_id = $item->need_design ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
-                $item->save();
+            if (!$orderCode) {
+                return response()->json(['message' => 'Order ID not provided in payload'], 400);
             }
-        } 
-        else if ($transactionStatus == 'pending') {
-            $order->payment_status = 'pending';
-            $order->current_stage_id = self::STAGE_MENUNGGU_PEMBAYARAN;
-            $order->save();
-            $order->items()->update(['order_stage_id' => self::STAGE_MENUNGGU_PEMBAYARAN]);
-        } 
-        else if (in_array($transactionStatus, ['deny', 'expire', 'cancel'])) {
-            $order->payment_status = 'failed';
-            $order->current_stage_id = self::STAGE_DIBATALKAN;
-            $order->save();
-            $order->items()->update(['order_stage_id' => self::STAGE_DIBATALKAN]);
-        }
 
-        return response()->json(['message' => 'Notification handled successfully']);
-    }
+            $numericId = preg_replace('/[^0-9]/', '', $orderCode);
+
+            $order = Order::where('id', $numericId)
+                        ->orWhere('order_code', $orderCode)
+                        ->orWhere('order_code', 'LIKE', '%' . $numericId)
+                        ->first();
+
+            if (!$order) {
+                return response()->json(['message' => 'Order not found for ID: ' . $orderCode], 404);
+            }
+
+            if (
+                ($transactionStatus == 'capture' && $fraudStatus == 'accept') ||
+                $transactionStatus == 'settlement'
+            ) {
+                if (Schema::hasColumn('orders', 'payment_status')) {
+                    $order->payment_status = 'paid';
+                }
+
+                $hasDesignItem = $order->items()->where('need_design', true)->exists();
+                $targetStage = $hasDesignItem ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
+
+                $order->current_stage_id = $targetStage;
+                $order->save();
+
+                foreach ($order->items as $item) {
+                    $item->order_stage_id = $item->need_design ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
+                    $item->save();
+                }
+            }
+            else if ($transactionStatus == 'pending') {
+                if (Schema::hasColumn('orders', 'payment_status')) {
+                    $order->payment_status = 'pending';
+                }
+                $order->current_stage_id = self::STAGE_MENUNGGU_PEMBAYARAN;
+                $order->save();
+                $order->items()->update(['order_stage_id' => self::STAGE_MENUNGGU_PEMBAYARAN]);
+            }
+            else if (in_array($transactionStatus, ['deny', 'expire', 'cancel'])) {
+                if (Schema::hasColumn('orders', 'payment_status')) {
+                    $order->payment_status = 'failed';
+                }
+                $order->current_stage_id = self::STAGE_DIBATALKAN;
+                $order->save();
+                $order->items()->update(['order_stage_id' => self::STAGE_DIBATALKAN]);
+            }
+
+            return response()->json(['message' => 'Notification handled successfully']);
+
+        } catch (\Throwable $e) {
+            Log::error('Midtrans notification error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'payload' => $request->all(),
+            ]);
+
+            return response()->json([
+                'message' => 'Error processing notification',
+                'error' => $e->getMessage(),
+            ], 500);
         }
+    }
+    }

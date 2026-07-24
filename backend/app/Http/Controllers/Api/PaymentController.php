@@ -10,6 +10,8 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
@@ -251,75 +253,62 @@ class PaymentController extends Controller
 
     public function notificationHandler(Request $request)
     {
+        Config::$serverKey = config('services.midtrans.server_key');
+        Config::$isProduction = (bool) config('services.midtrans.is_production', false);
+
         try {
             $payload = $request->all();
             $transactionStatus = $payload['transaction_status'] ?? null;
-            $fraudStatus = $payload['fraud_status'] ?? null;
             $orderCode = $payload['order_id'] ?? null;
+            $fraudStatus = $payload['fraud_status'] ?? null;
 
             if (!$orderCode) {
                 return response()->json(['message' => 'Order ID not provided in payload'], 400);
             }
 
+            // 🔥 Ambil angka murninya saja untuk mengantisipasi perbedaan format ID
             $numericId = preg_replace('/[^0-9]/', '', $orderCode);
 
-            $order = Order::where('id', $numericId)
-                        ->orWhere('order_code', $orderCode)
-                        ->orWhere('order_code', 'LIKE', '%' . $numericId)
+            // Cari order secara fleksibel (bisa ID murni atau order_code)
+            $order = Order::with('items')
+                        ->where('id', $numericId)
+                        ->orWhere('id', $orderCode)
                         ->first();
 
             if (!$order) {
-                return response()->json(['message' => 'Order not found for ID: ' . $orderCode], 404);
+                \Illuminate\Support\Facades\Log::error('Midtrans Webhook: Order tidak ditemukan untuk ID: ' . $orderCode);
+                return response()->json(['message' => 'Order not found: ' . $orderCode], 404);
             }
 
-            if (
-                ($transactionStatus == 'capture' && $fraudStatus == 'accept') ||
-                $transactionStatus == 'settlement'
-            ) {
-                if (Schema::hasColumn('orders', 'payment_status')) {
-                    $order->payment_status = 'paid';
-                }
+            // Tangkap semua jenis indikator sukses pembayaran dari Midtrans
+            $isSuccess = ($transactionStatus == 'settlement') || 
+                        ($transactionStatus == 'success') || 
+                        ($transactionStatus == 'capture' && $fraudStatus == 'accept');
 
-                $hasDesignItem = $order->items()->where('need_design', true)->exists();
-                $targetStage = $hasDesignItem ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
-
-                $order->current_stage_id = $targetStage;
-                $order->save();
-
+            if ($isSuccess) {
+                $anyNeedDesign = false;
                 foreach ($order->items as $item) {
-                    $item->order_stage_id = $item->need_design ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
-                    $item->save();
+                    $itemStage = ($item->need_design == 1) ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
+                    $item->update(['order_stage_id' => $itemStage]);
+                    
+                    if ($item->need_design == 1) {
+                        $anyNeedDesign = true;
+                    }
                 }
-            }
-            else if ($transactionStatus == 'pending') {
-                if (Schema::hasColumn('orders', 'payment_status')) {
-                    $order->payment_status = 'pending';
-                }
-                $order->current_stage_id = self::STAGE_MENUNGGU_PEMBAYARAN;
-                $order->save();
-                $order->items()->update(['order_stage_id' => self::STAGE_MENUNGGU_PEMBAYARAN]);
-            }
-            else if (in_array($transactionStatus, ['deny', 'expire', 'cancel'])) {
-                if (Schema::hasColumn('orders', 'payment_status')) {
-                    $order->payment_status = 'failed';
-                }
-                $order->current_stage_id = self::STAGE_DIBATALKAN;
-                $order->save();
-                $order->items()->update(['order_stage_id' => self::STAGE_DIBATALKAN]);
+
+                $globalStage = $anyNeedDesign ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
+                $order->update(['current_stage_id' => $globalStage]);
+
+            } else if (in_array($transactionStatus, ['deny', 'expire', 'cancel', 'failure'])) {
+                $order->update(['current_stage_id' => self::STAGE_DIBATALKAN]);
+                OrderItem::where('order_id', $order->id)->update(['order_stage_id' => self::STAGE_DIBATALKAN]);
             }
 
-            return response()->json(['message' => 'Notification handled successfully']);
+            return response()->json(['message' => 'Notification handled successfully'], 200);
 
-        } catch (\Throwable $e) {
-            Log::error('Midtrans notification error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-                'payload' => $request->all(),
-            ]);
-
-            return response()->json([
-                'message' => 'Error processing notification',
-                'error' => $e->getMessage(),
-            ], 500);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Midtrans Notification Exception: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
     }

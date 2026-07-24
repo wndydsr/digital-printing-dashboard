@@ -27,7 +27,7 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { apiFetch } from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import Link from "next/link" // Pastikan mengimport Link jika menggunakan Next.js router
+import Link from "next/link"
 
 interface Order {
   id: number;
@@ -66,7 +66,7 @@ interface Order {
   created_at: string;  
 }
 
-// Interface Flat Item yang disesuaikan dengan AnalyticsPage
+// Interface Flat Item
 interface FlatOrderItem {
   id: number;
   item_id: number;
@@ -86,10 +86,33 @@ type ChartData = {
   total: number
 }
 
+// ─── 🛠️ HELPER BULAN & TAHUN ───
+const monthsList = [
+  { value: "all", label: "Semua Bulan" },
+  { value: "01", label: "Januari" },
+  { value: "02", label: "Februari" },
+  { value: "03", label: "Maret" },
+  { value: "04", label: "April" },
+  { value: "05", label: "Mei" },
+  { value: "06", label: "Juni" },
+  { value: "07", label: "Juli" },
+  { value: "08", label: "Agustus" },
+  { value: "09", label: "September" },
+  { value: "10", label: "Oktober" },
+  { value: "11", label: "November" },
+  { value: "12", label: "Desember" },
+]
+
+const currentYearNum = new Date().getFullYear()
+const yearsList = Array.from({ length: 5 }, (_, i) => (currentYearNum - i).toString())
+
 export default function Dashboard() {
-  const [selectedPeriod, setSelectedPeriod] = useState("Last 30 days")
+  // 🔥 Diubah dari selectedPeriod string tunggal menjadi state Bulan & Tahun
+  const [selectedMonth, setSelectedMonth] = useState<string>("all")
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
+
   const [orders, setOrders] = useState<Order[]>([])
-  const [flatItems, setFlatItems] = useState<FlatOrderItem[]>([]) // State baru untuk data flat per item
+  const [flatItems, setFlatItems] = useState<FlatOrderItem[]>([]) 
   const [designers, setDesigners] = useState<any[]>([]) 
   const [chartData, setChartData] = useState<ChartData[]>([])
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
@@ -125,27 +148,25 @@ export default function Dashboard() {
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
-const loadData = async () => {
+  const loadData = async () => {
     try {
       const orderData = await apiFetch("/orders")
       const parsedOrders = Array.isArray(orderData) ? orderData : orderData.data || []
       
-      // ─── FILTER BERDASARKAN PERIODE DROPDOWN ───
-      const now = new Date()
+      // ─── FILTER BERDASARKAN BULAN & TAHUN ───
       const filteredOrders = parsedOrders.filter((o: Order) => {
-        // Penanganan parsing tanggal yang lebih aman & fleksibel
         const orderDateStr = o.order_date ? o.order_date.replace(" ", "T") : o.created_at
         const orderDate = new Date(orderDateStr)
         
-        // Cek jika tanggal tidak valid
         if (isNaN(orderDate.getTime())) return false
 
-        const diffTime = Math.abs(now.getTime() - orderDate.getTime())
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        const itemYear = orderDate.getFullYear().toString()
+        const itemMonth = String(orderDate.getMonth() + 1).padStart(2, "0")
 
-        if (selectedPeriod === "Last 7 days") return diffDays <= 7
-        if (selectedPeriod === "Last 90 days") return diffDays <= 90
-        return diffDays <= 30 // Default Last 30 days
+        const matchesYear = selectedYear === "all" || itemYear === selectedYear
+        const matchesMonth = selectedMonth === "all" || itemMonth === selectedMonth
+
+        return matchesYear && matchesMonth
       })
 
       setOrders(filteredOrders)
@@ -153,14 +174,12 @@ const loadData = async () => {
       // ─── LOGIKA SINKRONISASI FLAT ITEM ───
       const rows: FlatOrderItem[] = []
       filteredOrders.forEach((order: any) => {
-        // 🌟 Filter out order yang masih Menunggu Pembayaran (Stage 7) atau Dibatalkan (Stage 8)
         if (order.current_stage_id === 7 || order.current_stage_id === 8) {
-          return; // Skip/Abaikan transaksi yang belum lunas atau batal
+          return; 
         }
 
         if (order && Array.isArray(order.items)) {
           order.items.forEach((item: any) => {
-            // 🌟 Filter item jika level item juga masih di Stage 7 atau 8
             if (item.order_stage_id === 7 || item.order_stage_id === 8) {
               return;
             }
@@ -255,12 +274,12 @@ const loadData = async () => {
   ]
 
   useEffect(() => {
-      const role = localStorage.getItem("role");
-      if (role !== "admin") {
-        window.location.href = "/login";
-      }
-      loadData()
-    }, [selectedPeriod]) // 🔥 PERBAIKAN: Menambahkan selectedPeriod agar loadData dipanggil otomatis saat filter berubah
+    const role = localStorage.getItem("role");
+    if (role !== "admin") {
+      window.location.href = "/login";
+    }
+    loadData()
+  }, [selectedMonth, selectedYear]) // Memanggil ulang loadData saat bulan atau tahun diganti
 
   return (
     <DashboardLayout>
@@ -272,19 +291,35 @@ const loadData = async () => {
               <h1 className="text-2xl font-semibold text-gray-900">Dashboard Overview</h1>
               <p className="text-gray-600 mt-1">Monitor your workflows and system performance</p>
             </div>
+            
+            {/* Dropdown Filter Bulan & Tahun */}
             <div className="flex items-center gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2 bg-transparent">
-                    {selectedPeriod} <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => setSelectedPeriod("Last 7 days")}>Last 7 days</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSelectedPeriod("Last 30 days")}>Last 30 days</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSelectedPeriod("Last 90 days")}>Last 90 days</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Pilih Bulan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthsList.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="Pilih Tahun" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Tahun</SelectItem>
+                  {yearsList.map((y) => (
+                    <SelectItem key={y} value={y}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -327,8 +362,8 @@ const loadData = async () => {
                   </ResponsiveContainer>
                 </div>
               </CardContent>
-            </Card>              
-          </div>            
+            </Card>            
+          </div>           
           
           {/* Pie Chart Distribution */}
           <div className="space-y-6"> 
@@ -365,7 +400,6 @@ const loadData = async () => {
                   <CardDescription>Monitor your production items workflow performance</CardDescription>
                 </div>
                 <div>
-                  {/* Diarahkan langsung ke page pesanan / analytics */}
                   <Link href="/admin/pesanan">
                     <Button variant="outline" size="sm">
                       <Eye className="w-4 h-4 mr-2" />
@@ -407,7 +441,7 @@ const loadData = async () => {
                         })}
                       </TableCell>
 
-                      {/* Alokasi Tugas Desainer (Dropdown Berbasis Shacdn UI Select dari AnalyticsPage) */}
+                      {/* Alokasi Tugas Desainer */}
                       <TableCell className="min-w-[160px]">
                         {item.stage_name.toLowerCase() === "menunggu pembayaran" ? (
                           <Badge variant="outline" className="rounded-md px-2.5 py-1 font-normal text-amber-600 border-amber-200 bg-amber-50">

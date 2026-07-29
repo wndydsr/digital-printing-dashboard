@@ -12,6 +12,10 @@ use App\Models\OrderItemDesign;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Minishlink\WebPush\WebPush;
+use Minishlink\WebPush\Subscription;
+use App\Models\PushSubscription;
 
 class OrderController extends Controller
 {
@@ -273,6 +277,45 @@ class OrderController extends Controller
             }
 
             DB::commit();
+// 🔔 🔥 KIRIM PUSH NOTIFICATION OTOMATIS KE ADMIN SAAT ADA PESANAN BARU
+            try {
+                $auth = [
+                    'VAPID' => [
+                        'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                        'publicKey' => config('services.vapid.public_key', 'BDWzqj4GuM73lluGB7b5DTSuEp6OrVWiUS5G6YmEvVOpe0LKHW2Mq3gIyXVRAEfsKCelR2zVESulI8Oaq6VjvkA'),
+                        'privateKey' => config('services.vapid.private_key', 'xRcBRO7r1-0VZ4L2U3Ej7Xb_65xSlY1lRlFwvvusVDg'),
+                    ],
+                ];
+
+                $webPush = new WebPush($auth);
+                $subscriptions = PushSubscription::all();
+
+                foreach ($subscriptions as $sub) {
+                    $subscription = Subscription::create([
+                        'endpoint' => $sub->endpoint,
+                        'publicKey' => $sub->public_key,
+                        'authToken' => $sub->auth_token,
+                    ]);
+
+                    $webPush->queueNotification(
+                        $subscription,
+                        json_encode([
+                            'title' => '🔔 Pesanan Baru Masuk!',
+                            'body' => 'Ada pesanan baru dengan ID #' . $order->id . ' yang perlu segera diproses.',
+                        ])
+                    );
+                }
+
+                // Kirim dan bersihkan antrean
+                foreach ($webPush->flush() as $report) {
+                    $endpoint = $report->getRequest()->getUri()->__toString();
+                    if (!$report->isSuccess()) {
+                        PushSubscription::where('endpoint', $endpoint)->delete();
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Gagal mengirim push notification: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'message' => 'Order berhasil dibuat',

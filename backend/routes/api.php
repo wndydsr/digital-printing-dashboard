@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\ChatBotController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PushSubscriptionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -120,6 +121,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/cart/item/{id}', [CartController::class, 'update']);
     Route::delete('/cart/item/{id}', [CartController::class, 'destroy']); 
     Route::delete('/cart/clear/{customer_id}', [CartController::class, 'clear']); 
+
+    Route::post('/push-subscribe', [PushSubscriptionController::class, 'store']);
+    Route::post('/push-test', [PushSubscriptionController::class, 'sendTest']);
+    Route::get('/vapid-public-key', [PushSubscriptionController::class, 'publicKey']);
 
 });
 

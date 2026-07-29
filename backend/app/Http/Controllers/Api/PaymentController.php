@@ -299,6 +299,56 @@ class PaymentController extends Controller
                 $globalStage = $anyNeedDesign ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
                 $order->update(['current_stage_id' => $globalStage]);
 
+                // 🔔 KIRIM PUSH NOTIFICATION KE ADMIN — PEMBAYARAN SUKSES
+                try {
+                    $webPush = new \Minishlink\WebPush\WebPush([
+                        'VAPID' => [
+                            'subject' => config('services.vapid.subject'),
+                            'publicKey' => config('services.vapid.public_key'),
+                            'privateKey' => config('services.vapid.private_key'),
+                        ],
+                    ]);
+
+                    $subscriptions = \App\Models\PushSubscription::all();
+
+                    foreach ($subscriptions as $sub) {
+                        $subscription = \Minishlink\WebPush\Subscription::create([
+                            'endpoint' => $sub->endpoint,
+                            'publicKey' => $sub->public_key,
+                            'authToken' => $sub->auth_token,
+                        ]);
+
+                        $webPush->queueNotification(
+                            $subscription,
+                            json_encode([
+                                'title' => '✅ Pembayaran Berhasil!',
+                                'body' => 'Pesanan #' . $order->id . ' sudah dibayar, siap diproses.',
+                            ])
+                        );
+                    }
+
+                    foreach ($webPush->flush() as $report) {
+                        $endpoint = $report->getRequest()->getUri()->__toString();
+
+                        if ($report->isSuccess()) {
+                            Log::info('Push notification berhasil terkirim ke: ' . $endpoint);
+                        } else {
+                            Log::error('Push notification GAGAL', [
+                                'endpoint' => $endpoint,
+                                'reason'   => $report->getReason(),
+                                'statusCode' => $report->getResponse() ? $report->getResponse()->getStatusCode() : null,
+                            ]);
+
+                            $statusCode = $report->getResponse() ? $report->getResponse()->getStatusCode() : null;
+                            if (in_array($statusCode, [404, 410])) {
+                                \App\Models\PushSubscription::where('endpoint', $endpoint)->delete();
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Gagal mengirim push notification: ' . $e->getMessage());
+                }
+
             } else if (in_array($transactionStatus, ['deny', 'expire', 'cancel', 'failure'])) {
                 $order->update(['current_stage_id' => self::STAGE_DIBATALKAN]);
                 OrderItem::where('order_id', $order->id)->update(['order_stage_id' => self::STAGE_DIBATALKAN]);

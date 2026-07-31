@@ -19,16 +19,20 @@ class PushSubscriptionController extends Controller
             'keys.auth' => 'required|string',
         ]);
 
+        $userId = $request->user()->id;
+
         PushSubscription::updateOrCreate(
-            ['endpoint' => $request->endpoint],
             [
-                'user_id' => $request->user()->id,
+                'user_id' => $userId,
+                'endpoint' => $request->endpoint
+            ],
+            [
                 'public_key' => $request->input('keys.p256dh'),
                 'auth_token' => $request->input('keys.auth'),
             ]
         );
 
-        return response()->json(['message' => 'Subscribed'], 201);
+        return response()->json(['message' => 'Subscribed successfully'], 201);
     }
 
     // Kirim notif test / manual (nanti bisa dipanggil dari Smart Deadline Alert)

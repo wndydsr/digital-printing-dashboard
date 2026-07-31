@@ -57,7 +57,7 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
         applicationServerKey: convertedKey
       });
 
-      const response = await fetch('http://127.0.0.1:8000/api/push-subscribe', {
+      const response = await fetch('https://api.prinora.store/api/push-subscribe', {
         method: 'POST',
         body: JSON.stringify(subscription),
         headers: {

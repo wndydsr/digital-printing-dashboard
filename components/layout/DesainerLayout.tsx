@@ -37,6 +37,46 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
     email: "",
   })
 
+  // 🔔 SCRIPT SERVICE WORKER & PUSH NOTIFICATION DESAINER
+  useEffect(() => {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('Service Worker Desainer Terdaftar'))
+        .catch(err => console.error('Gagal daftar SW:', err));
+    }
+  }, []);
+
+  const handleSubscribe = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const publicVapidKey = 'BDWzqj4GuM73lluGB7b5DTSuEp6OrVWiUS5G6YmEvVOpe0LKHW2Mq3gIyXVRAEfsKCelR2zVESulI8Oaq6VjvkA'; 
+
+      const convertedKey = urlBase64ToUint8Array(publicVapidKey);
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
+
+      const response = await fetch('http://127.0.0.1:8000/api/push-subscribe', {
+        method: 'POST',
+        body: JSON.stringify(subscription),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert('Web Push Notifikasi Desainer Berhasil Diaktifkan!');
+      } else {
+        alert('Gagal menyimpan langganan ke server.');
+      }
+    } catch (error) {
+      console.error('Error saat subscribe:', error);
+      alert('Gagal mengaktifkan notifikasi. Pastikan izin browser diizinkan.');
+    }
+  };
+
   useEffect(() => {
     // 🛠️ Sinkronisasi Awal: Coba intip localStorage dulu biar instan langsung muncul namanya
     const storedName = localStorage.getItem("user_name")
@@ -108,7 +148,16 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-4">
-        
+          {/* 🔔 Tombol Aktifkan Notifikasi Desainer */}
+          <Button 
+            onClick={handleSubscribe} 
+            variant="outline" 
+            size="sm" 
+            className="text-xs font-medium text-purple-700 border-purple-200 bg-purple-50 hover:bg-purple-100"
+          >
+            🔔 Aktifkan Notifikasi
+          </Button>
+
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="w-4 h-4" />
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
@@ -137,7 +186,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {/* 🛠️ SAMBUNGKAN LINK PROFILE KE HALAMAN PROFILE KAMU */}
               <DropdownMenuItem asChild className="cursor-pointer">
                 <Link href="/desainer/profile">Profile</Link>
               </DropdownMenuItem>
@@ -184,4 +232,12 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
+}
+
+// Helper pengubah format VAPID Key
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }

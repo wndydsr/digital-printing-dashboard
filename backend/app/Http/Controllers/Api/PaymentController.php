@@ -309,7 +309,9 @@ class PaymentController extends Controller
                         ],
                     ]);
 
-                    $subscriptions = \App\Models\PushSubscription::all();
+                    $subscriptions = \App\Models\PushSubscription::whereHas('user', function($q) {
+                        $q->where('role', 'admin');
+                    })->get();
 
                     // Hitung total item atau ambil info ringkas pesanan
                     $totalItemCount = $order->items->sum('quantity');

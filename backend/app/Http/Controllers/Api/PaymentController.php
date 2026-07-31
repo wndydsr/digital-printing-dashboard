@@ -311,6 +311,12 @@ class PaymentController extends Controller
 
                     $subscriptions = \App\Models\PushSubscription::all();
 
+                    // Hitung total item atau ambil info ringkas pesanan
+                    $totalItemCount = $order->items->sum('quantity');
+                    $customerName = $order->customer->name ?? 'Pelanggan';
+
+                    $stageKeterangan = $anyNeedDesign ? '🎨 Masuk Antrean Desain' : '🖨️ Masuk Tahap Siap Cetak';
+
                     foreach ($subscriptions as $sub) {
                         $subscription = \Minishlink\WebPush\Subscription::create([
                             'endpoint' => $sub->endpoint,
@@ -321,8 +327,8 @@ class PaymentController extends Controller
                         $webPush->queueNotification(
                             $subscription,
                             json_encode([
-                                'title' => '✅ Pembayaran Berhasil!',
-                                'body' => 'Pesanan #' . $order->id . ' sudah dibayar, siap diproses.',
+                                'title' => '🎉 Pesanan Baru Masuk (#' . $order->id . ')',
+                                'body' => "Pemesan: {$customerName} | Total Item: {$totalItemCount} pcs | {$stageKeterangan}",
                             ])
                         );
                     }

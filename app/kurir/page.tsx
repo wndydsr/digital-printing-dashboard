@@ -2,12 +2,53 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Truck, MapPin, Eye } from "lucide-react"
+import { Truck, MapPin, Eye, Bell } from "lucide-react"
 import { apiFetch } from "@/lib/api"
+import { Button } from "@/components/ui/button" // Pastikan import button tersedia
 
 export default function KurirDashboard() {
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // 🔔 SCRIPT SERVICE WORKER & PUSH NOTIFICATION KURIR
+  useEffect(() => {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('Service Worker Kurir Terdaftar'))
+        .catch(err => console.error('Gagal daftar SW:', err));
+    }
+  }, []);
+
+  const handleSubscribe = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const publicVapidKey = 'BDWzqj4GuM73lluGB7b5DTSuEp6OrVWiUS5G6YmEvVOpe0LKHW2Mq3gIyXVRAEfsKCelR2zVESulI8Oaq6VjvkA'; 
+
+      const convertedKey = urlBase64ToUint8Array(publicVapidKey);
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
+
+      const response = await fetch('https://api.prinora.store/api/push-subscribe', {
+        method: 'POST',
+        body: JSON.stringify(subscription),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert('Web Push Notifikasi Kurir Berhasil Diaktifkan!');
+      } else {
+        alert('Gagal menyimpan langganan ke server.');
+      }
+    } catch (error) {
+      console.error('Error saat subscribe:', error);
+      alert('Gagal mengaktifkan notifikasi.');
+    }
+  };
 
   useEffect(() => {
     const fetchKurirOrders = async () => {
@@ -40,21 +81,33 @@ export default function KurirDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 pb-10 max-w-md mx-auto">
-      {/* 🔥 Mengubah susunan header menjadi flexbox agar tombol riwayat rapi di sisi kanan */}
-      <header className="mb-6 pt-4 flex justify-between items-start gap-4">
-        <div>
-          <h1 className="text-xl font-black text-gray-800 flex items-center gap-2">
-            <Truck className="text-blue-600 shrink-0" /> Antrean Kurir Prinora
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">Daftar barang siap kirim ke lokasi koordinat peta</p>
+      {/* Header dengan Tombol Aktifkan Notifikasi & Riwayat */}
+      <header className="mb-6 pt-4 flex flex-col gap-3">
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h1 className="text-xl font-black text-gray-800 flex items-center gap-2">
+              <Truck className="text-blue-600 shrink-0" /> Antrean Kurir Prinora
+            </h1>
+            <p className="text-xs text-gray-500 mt-1">Daftar barang siap kirim ke lokasi koordinat peta</p>
+          </div>
+          
+          <Link 
+            href="/kurir/riwayat" 
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-2 rounded-lg transition-colors shrink-0 shadow-xs"
+          >
+            Riwayat
+          </Link>
         </div>
-        
-        <Link 
-          href="/kurir/riwayat" 
-          className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-2 rounded-lg transition-colors shrink-0 shadow-xs"
+
+        {/* 🔔 Tombol Aktifkan Notifikasi Kurir */}
+        <Button 
+          onClick={handleSubscribe} 
+          variant="outline" 
+          size="sm" 
+          className="w-full text-xs font-medium text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100 flex items-center justify-center gap-2"
         >
-          Riwayat
-        </Link>
+          <Bell className="w-3.5 h-3.5" /> 🔔 Aktifkan Notifikasi Kurir
+        </Button>
       </header>
 
       <div className="space-y-4">
@@ -72,7 +125,6 @@ export default function KurirDashboard() {
                   <span className="text-xs font-mono font-bold text-gray-400">
                     ORD-{String(order.id).padStart(5, "0")}
                   </span>
-                  {/* 🔥 BADGE STATUS DINAMIS DI DASHBOARD KURIR (KUNING VS HIJAU) */}
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                     isFinished 
                       ? "bg-green-100 text-green-700" 
@@ -104,4 +156,12 @@ export default function KurirDashboard() {
       </div>
     </div>
   )
+}
+
+// Helper pengubah format VAPID Key
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }

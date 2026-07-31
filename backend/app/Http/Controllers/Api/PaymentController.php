@@ -121,7 +121,7 @@ class PaymentController extends Controller
                     }
                 }
 
-                if (!$designFile && !empty($item['dummy_file_name'])) {
+                if (!$itemNeedDesign && !$designFile && empty($referenceFiles) && !empty($item['dummy_file_name'])) {
                     $rawName = $item['dummy_file_name'];
                     $designFile = str_starts_with($rawName, 'designs/') ? $rawName : 'designs/' . $rawName;
                 }

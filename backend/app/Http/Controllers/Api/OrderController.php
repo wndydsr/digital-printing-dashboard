@@ -625,6 +625,43 @@ class OrderController extends Controller
                 }
             }
 
+            if (($item->order_stage_id == self::STAGE_CETAK || $item->order_stage_id == self::STAGE_SELESAI) && $order->shipping_method === 'delivery') {
+            try {
+                $webPush = new WebPush([
+                    'VAPID' => [
+                        'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                        'publicKey' => config('services.vapid.public_key'),
+                        'privateKey' => config('services.vapid.private_key'),
+                    ],
+                ]);
+
+                // Ambil token HANYA milik user yang rolenya 'kurir'
+                $kurirSubscriptions = PushSubscription::whereHas('user', function($q) {
+                    $q->where('role', 'kurir');
+                })->get();
+
+                foreach ($kurirSubscriptions as $sub) {
+                    $subscription = Subscription::create([
+                        'endpoint' => $sub->endpoint,
+                        'publicKey' => $sub->public_key,
+                        'authToken' => $sub->auth_token,
+                    ]);
+
+                    $webPush->queueNotification(
+                        $subscription,
+                        json_encode([
+                            'title' => '📦 Paket Siap Dikirim! (#' . $order->id . ')',
+                            'body' => 'Pesanan #' . $order->id . ' dengan metode pengiriman kurir sudah siap untuk diantar ke alamat customer.',
+                            'url' => 'https://admin.prinora.store/kurir/antrian' // Sesuaikan dengan link halaman kurir kamu
+                        ])
+                    );
+                }
+                $webPush->flush();
+            } catch (\Exception $e) {
+                Log::error('Gagal mengirim push notification ke kurir: ' . $e->getMessage());
+            }
+        }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Tahapan item produk berhasil diperbarui secara mandiri.',

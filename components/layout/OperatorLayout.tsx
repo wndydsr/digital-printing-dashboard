@@ -27,14 +27,52 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
-  // 🔥 State untuk menampung data user dari localStorage agar aman dari Hydration Mismatch
   const [userData, setUserData] = useState({
     name: "Operator",
     email: "operator@prinora.store",
   })
 
+  // 🔔 SCRIPT SERVICE WORKER & PUSH NOTIFICATION OPERATOR
   useEffect(() => {
-    // Jalankan pengambilan localStorage dengan aman di dalam client-side browser
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('Service Worker Operator Terdaftar'))
+        .catch(err => console.error('Gagal daftar SW:', err));
+    }
+  }, []);
+
+  const handleSubscribe = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const publicVapidKey = 'BDWzqj4GuM73lluGB7b5DTSuEp6OrVWiUS5G6YmEvVOpe0LKHW2Mq3gIyXVRAEfsKCelR2zVESulI8Oaq6VjvkA'; 
+
+      const convertedKey = urlBase64ToUint8Array(publicVapidKey);
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
+
+      const response = await fetch('https://api.prinora.store/api/push-subscribe', {
+        method: 'POST',
+        body: JSON.stringify(subscription),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert('Web Push Notifikasi Operator Berhasil Diaktifkan!');
+      } else {
+        alert('Gagal menyimpan langganan ke server.');
+      }
+    } catch (error) {
+      console.error('Error saat subscribe:', error);
+      alert('Gagal mengaktifkan notifikasi.');
+    }
+  };
+
+  useEffect(() => {
     const storedName = localStorage.getItem("user_name")
     const storedEmail = localStorage.getItem("user_email")
     
@@ -46,7 +84,6 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Fungsi penanganan log out sistem
   const handleLogout = () => {
     localStorage.clear()
     window.location.href = "/login"
@@ -68,6 +105,16 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* 🔔 Tombol Aktifkan Notifikasi Operator */}
+          <Button 
+            onClick={handleSubscribe} 
+            variant="outline" 
+            size="sm" 
+            className="text-xs font-medium text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100"
+          >
+            🔔 Aktifkan Notifikasi
+          </Button>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input placeholder="Search..." className="pl-10 w-72 bg-gray-50 border-gray-200" />
@@ -78,7 +125,6 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
           </Button>
 
-          {/* ─── DROPDOWN PROFIL & LOGOUT SINKRON ─── */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
@@ -126,7 +172,7 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive
-                        ? "bg-blue-50 text-blue-700" // 🔥 Diubah ke tema biru biar serasi dengan dashboard operator
+                        ? "bg-blue-50 text-blue-700"
                         : "text-gray-600 hover:bg-gray-50"
                     }`}
                   >
@@ -144,4 +190,12 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
+}
+
+// Helper pengubah format VAPID Key
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }

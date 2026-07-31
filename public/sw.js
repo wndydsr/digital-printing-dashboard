@@ -5,6 +5,9 @@ self.addEventListener('push', function (event) {
     body: data.body || 'Ada pembaruan pesanan!',
     icon: '/icon-192.png',
     badge: '/badge.png',
+    data: { 
+      url: data.url || 'https://admin.prinora.store/admin/pesanan' 
+    }
   };
 
   event.waitUntil(
@@ -14,5 +17,13 @@ self.addEventListener('push', function (event) {
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  event.waitUntil(clients.openWindow('/admin'));
+  
+  // 🌟 Ambil URL dinamis dari payload notifikasi, fallback ke halaman admin jika kosong
+  const targetUrl = event.notification.data && event.notification.data.url 
+    ? event.notification.data.url 
+    : 'https://admin.prinora.store/admin/pesanan';
+
+  event.waitUntil(
+    clients.openWindow(targetUrl)
+  );
 });

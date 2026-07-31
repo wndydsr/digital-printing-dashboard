@@ -483,8 +483,51 @@ class OrderController extends Controller
                 'order_stage_id' => self::STAGE_BUTUH_DESAIN
             ]);
 
+        // 🔔 🔥 KIRIM PUSH NOTIFICATION KHUSUS KE DESAINER YANG DIPILIH
+        try {
+            $webPush = new WebPush([
+                'VAPID' => [
+                    'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                    'publicKey' => config('services.vapid.public_key', 'BDWzqj4GuM73lluGB7b5DTSuEp6OrVWiUS5G6YmEvVOpe0LKHW2Mq3gIyXVRAEfsKCelR2zVESulI8Oaq6VjvkA'),
+                    'privateKey' => config('services.vapid.private_key', 'xRcBRO7r1-0VZ4L2U3Ej7Xb_65xSlY1lRlFwvvusVDg'),
+                ],
+            ]);
+
+            // Ambil token push HANYA milik desainer yang ditugaskan (designer_id)
+            $subscriptions = PushSubscription::where('user_id', $request->designer_id)->get();
+
+            foreach ($subscriptions as $sub) {
+                $subscription = Subscription::create([
+                    'endpoint' => $sub->endpoint,
+                    'publicKey' => $sub->public_key,
+                    'authToken' => $sub->auth_token,
+                ]);
+
+                $webPush->queueNotification(
+                    $subscription,
+                    json_encode([
+                        'title' => '🎨 Tugas Desain Baru Masuk! (#' . $order->id . ')',
+                        'body' => 'Anda telah ditugaskan pada pesanan #' . $order->id . '. Status: Butuh Desain. Segera kerjakan!',
+                    ])
+                );
+            }
+
+            // Kirim dan bersihkan antrean, hapus token jika sudah expired/invalid
+            foreach ($webPush->flush() as $report) {
+                $endpoint = $report->getRequest()->getUri()->__toString();
+                if (!$report->isSuccess()) {
+                    $statusCode = $report->getResponse() ? $report->getResponse()->getStatusCode() : null;
+                    if (in_array($statusCode, [404, 410])) {
+                        PushSubscription::where('endpoint', $endpoint)->delete();
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Gagal mengirim push notification ke desainer: ' . $e->getMessage());
+        }
+
         return response()->json([
-            'message' => 'Desainer berhasil ditugaskan',
+            'message' => 'Desainer berhasil ditugaskan dan notifikasi terkirim',
             'data' => $order->load('designer', 'stage')
         ]);
     }

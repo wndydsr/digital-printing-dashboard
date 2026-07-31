@@ -15,15 +15,14 @@ use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
-    // 🌟 KONSTANTA STAGE — DISAMAKAN DENGAN DATABASE & ORDER CONTROLLER
-    const STAGE_BUTUH_DESAIN        = 1;
-    const STAGE_SIAP_CETAK          = 2; // Siap Cetak (Jika tidak butuh desain)
-    const STAGE_DESAIN              = 3;
-    const STAGE_CETAK               = 4;
-    const STAGE_SELESAI             = 5;
-    const STAGE_ANTREAN_DESAIN      = 6; // Antrean Desain (Jika butuh desain)
-    const STAGE_MENUNGGU_PEMBAYARAN = 7; // Menunggu Pembayaran (Default awal)
-    const STAGE_DIBATALKAN          = 8; // Batal / Kedaluwarsa
+    const STAGE_BUTUH_DESAIN         = 1;
+    const STAGE_SIAP_CETAK           = 2; 
+    const STAGE_DESAIN               = 3;
+    const STAGE_CETAK                = 4;
+    const STAGE_SELESAI              = 5;
+    const STAGE_ANTREAN_DESAIN       = 6; 
+    const STAGE_MENUNGGU_PEMBAYARAN = 7; 
+    const STAGE_DIBATALKAN           = 8; 
 
     public function checkout(Request $request)
     {
@@ -40,14 +39,13 @@ class PaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            // 1. Buat Order Utama (Set Stage Awal ke 7 / Menunggu Pembayaran)
             $order = Order::create([
                 'customer_id'        => $request->input('customer_id') ?? $user->id,
                 'order_date'         => now(),
                 'total_price'        => $totalHarga,
                 'notes'              => $request->notes,
                 'created_by'         => 1,
-                'current_stage_id'   => self::STAGE_MENUNGGU_PEMBAYARAN, // 👈 Terkunci di Stage 7
+                'current_stage_id'   => self::STAGE_MENUNGGU_PEMBAYARAN,
                 'shipping_method'    => $request->input('shipping_method', 'pickup'),
                 'shipping_cost'      => $request->input('shipping_cost', 0),
                 'shipping_latitude'  => $request->input('shipping_method') === 'delivery' ? $request->input('shipping_latitude') : null,
@@ -55,7 +53,6 @@ class PaymentController extends Controller
                 'designer_id'        => null,
             ]);
 
-            // 2. Loop Items & Set Stage Awal Item Ke Stage 7
             foreach ($request->input('items') as $index => $item) {
                 $product = Product::findOrFail($item['product_id'] ?? $item['id']);
                 $qty = (int) $item['quantity'];
@@ -97,11 +94,10 @@ class PaymentController extends Controller
                     'subtotal'       => $subtotal,
                     'catatan'        => $textCatatan,
                     'need_design'    => $itemNeedDesign,
-                    'order_stage_id' => self::STAGE_MENUNGGU_PEMBAYARAN, // 👈 Item dikunci di Stage 7
+                    'order_stage_id' => self::STAGE_MENUNGGU_PEMBAYARAN,
                     'details'        => isset($item['selectedOptions']) ? json_encode($item['selectedOptions']) : '{}',
                 ]);
 
-                // Menangkap File Cetak E-Commerce
                 $designFile = null;
                 $referenceFiles = [];
 
@@ -125,8 +121,6 @@ class PaymentController extends Controller
                     }
                 }
 
-                // 🌟 PERBAIKAN DI SINI:
-                // Menjamin teks nama dummy/asli tetap memiliki jalur 'designs/' agar gambar KELOAD 100%!
                 if (!$designFile && !empty($item['dummy_file_name'])) {
                     $rawName = $item['dummy_file_name'];
                     $designFile = str_starts_with($rawName, 'designs/') ? $rawName : 'designs/' . $rawName;
@@ -135,7 +129,7 @@ class PaymentController extends Controller
                 if ($designFile || count($referenceFiles) > 0) {
                     \App\Models\OrderItemDesign::create([
                         'order_item_id'   => $orderItem->id,
-                        'design_file'     => $designFile, // 👈 Tersimpan rapi sebagai 'designs/erdPrinora.png'
+                        'design_file'     => $designFile,
                         'reference_files' => json_encode($referenceFiles),
                         'design_notes'    => $item['catatan'] ?? $request->notes ?? null,
                         'design_status'   => 'pending',
@@ -143,14 +137,12 @@ class PaymentController extends Controller
                 }
             }
 
-            // Bersihkan keranjang belanja
             if (!$request->input('is_direct', false)) {
                 \App\Models\CartItem::whereHas('cart', function ($q) use ($user) {
                     $q->where('customer_id', $user->id);
                 })->delete();
             }
 
-            // Integrasi Midtrans Snap
             Config::$serverKey = config('services.midtrans.server_key');
             Config::$isProduction = (bool) config('services.midtrans.is_production', false); 
             Config::$isSanitized = true;
@@ -184,8 +176,6 @@ class PaymentController extends Controller
             }
 
             $snapToken = Snap::getSnapToken($params);
-
-            // 🌟 DISIMPEN DI DATABASE
             $order->update(['snap_token' => $snapToken]);
 
             DB::commit();
@@ -205,7 +195,6 @@ class PaymentController extends Controller
         }
     }
 
-    // 🌟 FUNGSI AMBIL KEMBALI TOKEN DARI DB UNTUK TOMBOL "BAYAR SEKARANG"
     public function repay($id)
     {
         $order = Order::findOrFail($id);
@@ -214,7 +203,6 @@ class PaymentController extends Controller
             return response()->json(['error' => 'Pesanan ini sudah dibayar atau dibatalkan.'], 400);
         }
 
-        // Jika token sudah tersimpan di database, langsung kembalikan
         if (!empty($order->snap_token)) {
             return response()->json([
                 'success' => true,
@@ -222,7 +210,6 @@ class PaymentController extends Controller
             ]);
         }
 
-        // Jaga-jaga jika token di database masih null, buatkan baru
         Config::$serverKey = config('services.midtrans.server_key');
         Config::$isProduction = (bool) config('services.midtrans.is_production', false);
         Config::$isSanitized = true;
@@ -266,21 +253,18 @@ class PaymentController extends Controller
                 return response()->json(['message' => 'Order ID not provided in payload'], 400);
             }
 
-            // 🔥 Ambil angka murninya saja untuk mengantisipasi perbedaan format ID
             $numericId = preg_replace('/[^0-9]/', '', $orderCode);
 
-            // Cari order secara fleksibel (bisa ID murni atau order_code)
             $order = Order::with('items')
                         ->where('id', $numericId)
                         ->orWhere('id', $orderCode)
                         ->first();
 
             if (!$order) {
-                \Illuminate\Support\Facades\Log::error('Midtrans Webhook: Order tidak ditemukan untuk ID: ' . $orderCode);
+                Log::error('Midtrans Webhook: Order tidak ditemukan untuk ID: ' . $orderCode);
                 return response()->json(['message' => 'Order not found: ' . $orderCode], 404);
             }
 
-            // Tangkap semua jenis indikator sukses pembayaran dari Midtrans
             $isSuccess = ($transactionStatus == 'settlement') || 
                         ($transactionStatus == 'success') || 
                         ($transactionStatus == 'capture' && $fraudStatus == 'accept');
@@ -299,7 +283,7 @@ class PaymentController extends Controller
                 $globalStage = $anyNeedDesign ? self::STAGE_ANTREAN_DESAIN : self::STAGE_SIAP_CETAK;
                 $order->update(['current_stage_id' => $globalStage]);
 
-                // 🔔 KIRIM PUSH NOTIFICATION KE ADMIN — PEMBAYARAN SUKSES
+                // 🔔 KIRIM PUSH NOTIFICATION KE ADMIN DAN OPERATOR
                 try {
                     $webPush = new \Minishlink\WebPush\WebPush([
                         'VAPID' => [
@@ -309,17 +293,16 @@ class PaymentController extends Controller
                         ],
                     ]);
 
-                    $subscriptions = \App\Models\PushSubscription::whereHas('user', function($q) {
+                    $totalItemCount = $order->items->sum('quantity');
+                    $customerName = $order->customer->name ?? 'Pelanggan';
+                    $stageKeterangan = $anyNeedDesign ? '🎨 Masuk Antrean Desain' : '🖨️ Masuk Tahap Siap Cetak';
+
+                    // 1. Notifikasi ke Admin
+                    $adminSubscriptions = \App\Models\PushSubscription::whereHas('user', function($q) {
                         $q->where('role', 'admin');
                     })->get();
 
-                    // Hitung total item atau ambil info ringkas pesanan
-                    $totalItemCount = $order->items->sum('quantity');
-                    $customerName = $order->customer->name ?? 'Pelanggan';
-
-                    $stageKeterangan = $anyNeedDesign ? '🎨 Masuk Antrean Desain' : '🖨️ Masuk Tahap Siap Cetak';
-
-                    foreach ($subscriptions as $sub) {
+                    foreach ($adminSubscriptions as $sub) {
                         $subscription = \Minishlink\WebPush\Subscription::create([
                             'endpoint' => $sub->endpoint,
                             'publicKey' => $sub->public_key,
@@ -331,22 +314,38 @@ class PaymentController extends Controller
                             json_encode([
                                 'title' => '🎉 Pesanan Baru Masuk (#' . $order->id . ')',
                                 'body' => "Pemesan: {$customerName} | Total Item: {$totalItemCount} pcs | {$stageKeterangan}",
+                                'url' => 'https://admin.prinora.store/admin/pesanan'
                             ])
                         );
                     }
 
-                    foreach ($webPush->flush() as $report) {
-                        $endpoint = $report->getRequest()->getUri()->__toString();
+                    // 2. Notifikasi ke Operator (Jika Ready-to-Print / Siap Cetak langsung)
+                    if ($globalStage == self::STAGE_SIAP_CETAK) {
+                        $operatorSubscriptions = \App\Models\PushSubscription::whereHas('user', function($q) {
+                            $q->where('role', 'operator');
+                        })->get();
 
-                        if ($report->isSuccess()) {
-                            Log::info('Push notification berhasil terkirim ke: ' . $endpoint);
-                        } else {
-                            Log::error('Push notification GAGAL', [
-                                'endpoint' => $endpoint,
-                                'reason'   => $report->getReason(),
-                                'statusCode' => $report->getResponse() ? $report->getResponse()->getStatusCode() : null,
+                        foreach ($operatorSubscriptions as $sub) {
+                            $subscription = \Minishlink\WebPush\Subscription::create([
+                                'endpoint' => $sub->endpoint,
+                                'publicKey' => $sub->public_key,
+                                'authToken' => $sub->auth_token,
                             ]);
 
+                            $webPush->queueNotification(
+                                $subscription,
+                                json_encode([
+                                    'title' => '🖨️ Pesanan Baru Siap Cetak! (#' . $order->id . ')',
+                                    'body' => "Pesanan langsung lunas dari {$customerName}. Total: {$totalItemCount} pcs siap diproduksi.",
+                                    'url' => 'https://admin.prinora.store/operator/antrian'
+                                ])
+                            );
+                        }
+                    }
+
+                    foreach ($webPush->flush() as $report) {
+                        $endpoint = $report->getRequest()->getUri()->__toString();
+                        if (!$report->isSuccess()) {
                             $statusCode = $report->getResponse() ? $report->getResponse()->getStatusCode() : null;
                             if (in_array($statusCode, [404, 410])) {
                                 \App\Models\PushSubscription::where('endpoint', $endpoint)->delete();
@@ -365,8 +364,8 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Notification handled successfully'], 200);
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Midtrans Notification Exception: ' . $e->getMessage());
+            Log::error('Midtrans Notification Exception: ' . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-    }
+}

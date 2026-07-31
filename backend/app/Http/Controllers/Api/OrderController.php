@@ -19,15 +19,14 @@ use App\Models\PushSubscription;
 
 class OrderController extends Controller
 {
-    // 🔥 KONSTANTA STAGE — SESUAI ISI TABEL order_stages DI DATABASE
-    const STAGE_BUTUH_DESAIN     = 1; // Sudah di-assign desainer, menunggu dikerjakan (tombol "Kerjakan")
-    const STAGE_SIAP_CETAK       = 2; // Desain sudah di-approve customer, siap masuk produksi cetak
-    const STAGE_DESAIN           = 3; // Sedang dikerjakan oleh desainer (tombol jadi "Detail")
-    const STAGE_CETAK            = 4; // Operator sedang mencetak
-    const STAGE_SELESAI          = 5; // Selesai produksi
-    const STAGE_ANTREAN_DESAIN   = 6; // Order baru, belum ada desainer ditugaskan
-    const STAGE_MENUNGGU_PEMBAYARAN = 7; // Menunggu pembayaran
-    const STAGE_DIBATALKAN       = 8; // Dibatalkan / Kedaluwarsa
+    const STAGE_BUTUH_DESAIN     = 1; 
+    const STAGE_SIAP_CETAK       = 2; 
+    const STAGE_DESAIN           = 3; 
+    const STAGE_CETAK            = 4; 
+    const STAGE_SELESAI          = 5; 
+    const STAGE_ANTREAN_DESAIN   = 6; 
+    const STAGE_MENUNGGU_PEMBAYARAN = 7; 
+    const STAGE_DIBATALKAN       = 8; 
 
     public function index()
     {
@@ -48,7 +47,6 @@ class OrderController extends Controller
 
     public function getCustomerOrders($customer_id)
     {
-        // 🔥 Cek otomatis: Ubah status ke Dibatalkan jika melewati 30 menit dari created_at
         Order::where('customer_id', $customer_id)
         ->where('current_stage_id', self::STAGE_MENUNGGU_PEMBAYARAN)
         ->where('created_at', '<=', now()->subMinutes(30))
@@ -73,12 +71,8 @@ class OrderController extends Controller
     public function designerOrders(Request $request)
     {
         $user = $request->user();
-
-        // Cek apakah frontend sedang meminta data riwayat/history
         $isHistory = $request->query('status') === 'history';
 
-        // Antrian aktif desainer: Butuh Desain (1) + Desain (3)
-        // Riwayat desainer: Siap Cetak (2) + Cetak (4) + Selesai (5)
         $allowedStages = $isHistory
             ? [self::STAGE_SIAP_CETAK, self::STAGE_CETAK, self::STAGE_SELESAI]
             : [self::STAGE_BUTUH_DESAIN, self::STAGE_DESAIN];
@@ -118,10 +112,8 @@ class OrderController extends Controller
                 $customerId = $request->customer_id;
             }
 
-            // 🔥 1. GLOBAL STATUS: Order baru selalu masuk "Menunggu Pembayaran" (Stage 7) secara global
             $defaultStageId = self::STAGE_MENUNGGU_PEMBAYARAN;
 
-            // 🔥 2. LOGIKA PENGECEKAN DESAIN (Untuk menentukan status item di dalam order)
             $needsDesign = false;
             if ($request->has('items') && is_array($request->items)) {
                 foreach ($request->items as $item) {
@@ -152,7 +144,7 @@ class OrderController extends Controller
                 'total_price'       => 0,
                 'notes'             => $request->notes,
                 'created_by'        => 1,
-                'current_stage_id'  => $defaultStageId, // Stage 7 (Menunggu Pembayaran)
+                'current_stage_id'  => $defaultStageId,
                 'shipping_method'   => $request->input('shipping_method', 'pickup'),
                 'shipping_cost'     => $request->input('shipping_cost', 0),
                 'shipping_latitude' => $request->input('shipping_latitude'),
@@ -183,7 +175,6 @@ class OrderController extends Controller
                 $subtotal = $hargaPerItem * $qty;
                 $totalPrice += $subtotal;
 
-                // Tentukan stage per item berdasarkan pengecekan desain
                 $itemStageId = $itemDefaultStageId;
                 if (isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
                     $itemStageId = (!empty($item['designer_id'])) ? self::STAGE_BUTUH_DESAIN : self::STAGE_ANTREAN_DESAIN;
@@ -251,7 +242,6 @@ class OrderController extends Controller
                     }
                 }
 
-                // 🌟 PROTEKSI PREFIX FOLDER: Menjamin teks nama dummy tetap memiliki jalur 'designs/'
                 if (!$designFile && $itemStageId === self::STAGE_SIAP_CETAK) {
                     $rawName = $item['dummy_file_name'] ?? 'design_beli_langsung_customer.pdf';
                     $designFile = str_starts_with($rawName, 'designs/') ? $rawName : 'designs/' . $rawName;
@@ -277,18 +267,20 @@ class OrderController extends Controller
             }
 
             DB::commit();
-// 🔔 🔥 KIRIM PUSH NOTIFICATION OTOMATIS KE ADMIN SAAT ADA PESANAN BARU
+
             try {
                 $auth = [
                     'VAPID' => [
                         'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
-                        'publicKey' => config('services.vapid.public_key', 'BDWzqj4GuM73lluGB7b5DTSuEp6OrVWiUS5G6YmEvVOpe0LKHW2Mq3gIyXVRAEfsKCelR2zVESulI8Oaq6VjvkA'),
-                        'privateKey' => config('services.vapid.private_key', 'xRcBRO7r1-0VZ4L2U3Ej7Xb_65xSlY1lRlFwvvusVDg'),
+                        'publicKey' => config('services.vapid.public_key'),
+                        'privateKey' => config('services.vapid.private_key'),
                     ],
                 ];
 
                 $webPush = new WebPush($auth);
-                $subscriptions = PushSubscription::all();
+                $subscriptions = PushSubscription::whereHas('user', function($q) {
+                    $q->where('role', 'admin');
+                })->get();
 
                 foreach ($subscriptions as $sub) {
                     $subscription = Subscription::create([
@@ -302,11 +294,11 @@ class OrderController extends Controller
                         json_encode([
                             'title' => '🔔 Pesanan Baru Masuk!',
                             'body' => 'Ada pesanan baru dengan ID #' . $order->id . ' yang perlu segera diproses.',
+                            'url' => 'https://admin.prinora.store/admin/pesanan'
                         ])
                     );
                 }
 
-                // Kirim dan bersihkan antrean
                 foreach ($webPush->flush() as $report) {
                     $endpoint = $report->getRequest()->getUri()->__toString();
                     if (!$report->isSuccess()) {
@@ -439,7 +431,6 @@ class OrderController extends Controller
         }
     }
 
-    // 🌟 PERBAIKAN PENCARIAN MULTI-FOLDER UNTUK MENCEGAH ERROR 404
     public function downloadDesign($filename)
     {
         $decodedFilename = urldecode($filename);
@@ -483,17 +474,15 @@ class OrderController extends Controller
                 'order_stage_id' => self::STAGE_BUTUH_DESAIN
             ]);
 
-        // 🔔 🔥 KIRIM PUSH NOTIFICATION KHUSUS KE DESAINER YANG DIPILIH
         try {
             $webPush = new WebPush([
                 'VAPID' => [
                     'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
-                    'publicKey' => config('services.vapid.public_key', 'BDWzqj4GuM73lluGB7b5DTSuEp6OrVWiUS5G6YmEvVOpe0LKHW2Mq3gIyXVRAEfsKCelR2zVESulI8Oaq6VjvkA'),
-                    'privateKey' => config('services.vapid.private_key', 'xRcBRO7r1-0VZ4L2U3Ej7Xb_65xSlY1lRlFwvvusVDg'),
+                    'publicKey' => config('services.vapid.public_key'),
+                    'privateKey' => config('services.vapid.private_key'),
                 ],
             ]);
 
-            // Ambil token push HANYA milik desainer yang ditugaskan (designer_id)
             $subscriptions = PushSubscription::where('user_id', $request->designer_id)->get();
 
             foreach ($subscriptions as $sub) {
@@ -508,11 +497,11 @@ class OrderController extends Controller
                     json_encode([
                         'title' => '🎨 Tugas Desain Baru Masuk! (#' . $order->id . ')',
                         'body' => 'Anda telah ditugaskan pada pesanan #' . $order->id . '. Status: Butuh Desain. Segera kerjakan!',
+                        'url' => 'https://admin.prinora.store/desainer/antrian'
                     ])
                 );
             }
 
-            // Kirim dan bersihkan antrean, hapus token jika sudah expired/invalid
             foreach ($webPush->flush() as $report) {
                 $endpoint = $report->getRequest()->getUri()->__toString();
                 if (!$report->isSuccess()) {
@@ -578,6 +567,7 @@ class OrderController extends Controller
     {
         try {
             $item = \App\Models\OrderItem::findOrFail($id);
+            $oldStageId = $item->order_stage_id;
 
             if ($request->has('current_stage_id')) {
                 $item->order_stage_id = $request->current_stage_id;
@@ -585,6 +575,7 @@ class OrderController extends Controller
             }
 
             $orderId = $item->order_id;
+            $order = Order::findOrFail($orderId);
             $totalItems = \App\Models\OrderItem::where('order_id', $orderId)->count();
             
             $finishedItems = \App\Models\OrderItem::where('order_id', $orderId)
@@ -595,6 +586,43 @@ class OrderController extends Controller
                 Order::where('id', $orderId)->update(['current_stage_id' => self::STAGE_SELESAI]);
             } else {
                 Order::where('id', $orderId)->update(['current_stage_id' => $item->order_stage_id]);
+            }
+
+            // 🔔 🔥 KIRIM NOTIFIKASI KE OPERATOR KETIKA DESAIN SELESAI DAN MASUK KE SIAP CETAK (STAGE 2)
+            if ($oldStageId != self::STAGE_SIAP_CETAK && $item->order_stage_id == self::STAGE_SIAP_CETAK) {
+                try {
+                    $webPush = new WebPush([
+                        'VAPID' => [
+                            'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                            'publicKey' => config('services.vapid.public_key'),
+                            'privateKey' => config('services.vapid.private_key'),
+                        ],
+                    ]);
+
+                    $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
+                        $q->where('role', 'operator');
+                    })->get();
+
+                    foreach ($operatorSubscriptions as $sub) {
+                        $subscription = Subscription::create([
+                            'endpoint' => $sub->endpoint,
+                            'publicKey' => $sub->public_key,
+                            'authToken' => $sub->auth_token,
+                        ]);
+
+                        $webPush->queueNotification(
+                            $subscription,
+                            json_encode([
+                                'title' => '🖨️ Desain Selesai & Siap Cetak! (#' . $order->id . ')',
+                                'body' => 'Desain untuk pesanan #' . $order->id . ' telah diselesaikan oleh desainer dan siap dicetak.',
+                                'url' => 'https://admin.prinora.store/operator/antrian'
+                            ])
+                        );
+                    }
+                    $webPush->flush();
+                } catch (\Exception $e) {
+                    Log::error('Gagal mengirim push notification ke operator: ' . $e->getMessage());
+                }
             }
 
             return response()->json([

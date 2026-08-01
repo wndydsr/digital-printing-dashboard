@@ -178,7 +178,7 @@ class ChatBotController extends Controller
                     // 🔥 NAMA MODEL DISESUAIKAN PERSIS DENGAN MODEL DENGAN LIMIT 10 RPM DI DASHBOARDMU: gemini-2.5-flash-lite
                     $response = Http::withoutVerifying()
                         ->withHeaders(['Content-Type' => 'application/json'])
-                        ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={$apiKey}", [
+                       ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={$apiKey}", [
                             'system_instruction' => [
                                 'parts' => [['text' => $systemInstruction]]
                             ],

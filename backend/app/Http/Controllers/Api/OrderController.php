@@ -312,7 +312,7 @@ DB::commit();
 
                 if ($needsDirectPrint) {
                     $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
-                        $q->where('role', 'operator');
+                        $q->where('role', 'Operator');
                     })->get();
 
                     foreach ($operatorSubscriptions as $sub) {
@@ -633,7 +633,7 @@ public function updateItemStage(Request $request, $id)
                     ]);
 
                     $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
-                        $q->where('role', 'operator');
+                        $q->where('role', 'Operator');
                     })->get();
 
                     foreach ($operatorSubscriptions as $sub) {

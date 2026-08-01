@@ -301,10 +301,13 @@ class OrderController extends Controller
                     );
                 }
 
-                // 2. Notifikasi untuk Operator jika ada item yang langsung Siap Cetak
+                // 2. Notifikasi untuk Operator jika pesanan langsung siap cetak (baik dari customer maupun admin)
                 $needsDirectPrint = false;
                 foreach ($request->items as $item) {
-                    if (!isset($item['need_design']) || !filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
+                    $itemNeedDesign = isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN);
+                    $designMethod = $request->input('design_method');
+                    
+                    if (!$itemNeedDesign || $designMethod === 'ready-to-print' || !empty($item['dummy_file_name']) || $request->input('is_direct', false)) {
                         $needsDirectPrint = true;
                         break;
                     }
@@ -622,8 +625,8 @@ class OrderController extends Controller
                 Order::where('id', $orderId)->update(['current_stage_id' => $item->order_stage_id]);
             }
 
-            // 🔔 1. Notifikasi Operator (Jika masuk ke tahap Siap Cetak)
-            if ($item->order_stage_id == self::STAGE_SIAP_CETAK) {
+            // 🔔 1. Notifikasi Operator (Hanya ketika status BERUBAH masuk ke tahap Siap Cetak dari tahap lain)
+            if ($oldStageId != self::STAGE_SIAP_CETAK && $item->order_stage_id == self::STAGE_SIAP_CETAK) {
                 try {
                     $webPush = new WebPush([
                         'VAPID' => [

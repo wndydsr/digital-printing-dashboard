@@ -562,8 +562,7 @@ class OrderController extends Controller
             ], 500);
         }
     }
-
-    public function updateItemStage(Request $request, $id)
+public function updateItemStage(Request $request, $id)
     {
         try {
             $item = \App\Models\OrderItem::findOrFail($id);
@@ -588,7 +587,7 @@ class OrderController extends Controller
                 Order::where('id', $orderId)->update(['current_stage_id' => $item->order_stage_id]);
             }
 
-            // 🔔 🔥 KIRIM NOTIFIKASI KE OPERATOR KETIKA DESAIN SELESAI DAN MASUK KE SIAP CETAK (STAGE 2)
+            // 🔔 1. Notifikasi Operator (Jika masuk Siap Cetak)
             if ($oldStageId != self::STAGE_SIAP_CETAK && $item->order_stage_id == self::STAGE_SIAP_CETAK) {
                 try {
                     $webPush = new WebPush([
@@ -625,7 +624,7 @@ class OrderController extends Controller
                 }
             }
 
-            if (($item->order_stage_id == self::STAGE_CETAK || $item->order_stage_id == self::STAGE_SELESAI) && $order->shipping_method === 'delivery') {
+            if ($oldStageId != $item->order_stage_id && in_array($item->order_stage_id, [self::STAGE_CETAK, self::STAGE_SELESAI]) && $order->shipping_method === 'delivery') {
             try {
                 $webPush = new WebPush([
                     'VAPID' => [
@@ -635,7 +634,6 @@ class OrderController extends Controller
                     ],
                 ]);
 
-                // Ambil token HANYA milik user yang rolenya 'kurir'
                 $kurirSubscriptions = PushSubscription::whereHas('user', function($q) {
                     $q->where('role', 'kurir');
                 })->get();
@@ -651,8 +649,8 @@ class OrderController extends Controller
                         $subscription,
                         json_encode([
                             'title' => '📦 Paket Siap Dikirim! (#' . $order->id . ')',
-                            'body' => 'Pesanan #' . $order->id . ' dengan metode pengiriman kurir sudah siap untuk diantar ke alamat customer.',
-                            'url' => 'https://admin.prinora.store/kurir/antrian' // Sesuaikan dengan link halaman kurir kamu
+                            'body' => 'Pesanan #' . $order->id . ' dengan pengiriman kurir sudah masuk tahap cetak/selesai dan siap untuk dikirim.',
+                            'url' => 'https://admin.prinora.store/kurir'
                         ])
                     );
                 }

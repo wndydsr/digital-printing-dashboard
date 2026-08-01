@@ -235,8 +235,7 @@ class ChatBotController extends Controller
                     $response = null;
 
                     // Perulangan untuk mencoba key satu persatu jika key sebelumnya terkena limit 429
-                    foreach ($apiKeys as $apiKey) {
-                        // loop supaya AI bisa panggil function lalu lanjut jawab berdasarkan hasilnya
+foreach ($apiKeys as $apiKey) {
                         for ($i = 0; $i < 5; $i++) {
                             $response = Http::withoutVerifying()
                                 ->withHeaders([
@@ -247,12 +246,16 @@ class ChatBotController extends Controller
                                     'tools' => $tools,
                                 ]);
 
-                            // Jika key ini kena limit kuota habis (429), hentikan loop internal dan lanjut ke API key berikutnya
                             if ($response->status() === 429) {
                                 break; 
                             }
 
                             if (!$response->successful()) {
+                                // 🔍 TAMBAHKAN INI
+                                \Illuminate\Support\Facades\Log::error('Gemini API gagal', [
+                                    'status' => $response->status(),
+                                    'body' => $response->body(),
+                                ]);
                                 break;
                             }
 
@@ -260,15 +263,22 @@ class ChatBotController extends Controller
                             $candidateContent = $data['candidates'][0]['content'] ?? null;
                             $parts = $candidateContent['parts'] ?? [];
 
+                            // 🔍 TAMBAHKAN INI: log setiap iterasi biar ketahuan dia lagi ngapain
+                            \Illuminate\Support\Facades\Log::info("Gemini iterasi ke-{$i}", [
+                                'finishReason' => $data['candidates'][0]['finishReason'] ?? null,
+                                'hasFunctionCall' => (bool) collect($parts)->firstWhere('functionCall'),
+                                'functionCallName' => collect($parts)->firstWhere('functionCall')['functionCall']['name'] ?? null,
+                                'textPart' => collect($parts)->pluck('text')->filter()->implode(' | '),
+                            ]);
+
                             $functionCallPart = collect($parts)->firstWhere('functionCall');
 
                             if (!$functionCallPart) {
-                                // Tidak ada pemanggilan function -> ini jawaban teks final
                                 $finalText = collect($parts)->pluck('text')->filter()->implode("\n");
                                 if (!$finalText) {
                                     $finalText = 'Maaf, Nora saat ini sedang mengalami gangguan teknis. Bisa diulang kembali?';
                                 }
-                                break 2; // Berhasil! Keluar dari loop function & loop API key utama
+                                break 2;
                             }
 
                             $fnName = $functionCallPart['functionCall']['name'];
@@ -279,7 +289,6 @@ class ChatBotController extends Controller
                                 $orderSummary = $fnResult['data'];
                             }
 
-                            // Lanjutkan percakapan dengan menyertakan hasil function
                             $contents[] = $candidateContent;
                             $contents[] = [
                                 'role' => 'function',
@@ -292,7 +301,11 @@ class ChatBotController extends Controller
                             ];
                         }
 
-                        // Jika status bukan 429 (artinya sukses atau error tipe lain), hentikan perputaran key
+                        // 🔍 TAMBAHKAN INI: ketahuan kalau loop habis tanpa pernah dapat teks final
+                        if (is_null($finalText)) {
+                            \Illuminate\Support\Facades\Log::warning('Loop 5x habis TANPA finalText! Kemungkinan Gemini terus manggil function.');
+                        }
+
                         if ($response && $response->status() !== 429) {
                             break;
                         }

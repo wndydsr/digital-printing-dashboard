@@ -82,7 +82,7 @@ class ChatBotController extends Controller
         }
 
         // -------------------------------------------------------------------------
-        // 3. SYSTEM INSTRUCTION (Pisahkan dari user prompt agar AI tidak bingung)
+        // 3. SYSTEM INSTRUCTION
         // -------------------------------------------------------------------------
         $systemInstruction = "Kamu adalah Nora, AI Assistant Percetakan Digital yang ramah, sopan, dan terampil.\n\n"
             . "DATA PRODUK TERSEDIA:\n{$contextHarga}\n"
@@ -115,7 +115,7 @@ class ChatBotController extends Controller
                 ],
                 [
                     'name' => 'create_order_summary',
-                    'description' => 'Dipanggil HANYA jika data (produk, ukuran, bahan, qty, deadline, butuh desain) SUDAH LENGKAP & user setuju checkout.',
+                    'description' => 'Dipanggil HANYA jika data SUDAH LENGKAP & user setuju checkout.',
                     'parameters' => [
                         'type' => 'OBJECT',
                         'properties' => [
@@ -135,19 +135,23 @@ class ChatBotController extends Controller
         ]];
 
         // -------------------------------------------------------------------------
-        // 5. RIWAYAT PERCAKAPAN (CONTENTS)
+        // 5. RIWAYAT PERCAKAPAN (CONTENTS SANITIZATION)
         // -------------------------------------------------------------------------
         $contents = [];
         foreach ($history as $h) {
-            $contents[] = [
-                'role' => (($h['role'] ?? 'user') === 'ai') ? 'model' : 'user',
-                'parts' => [['text' => $h['text'] ?? '']],
-            ];
+            $role = (isset($h['role']) && in_array($h['role'], ['ai', 'model'])) ? 'model' : 'user';
+            $text = is_string($h['text'] ?? null) ? trim($h['text']) : '';
+            if (!empty($text)) {
+                $contents[] = [
+                    'role' => $role,
+                    'parts' => [['text' => $text]],
+                ];
+            }
         }
         $contents[] = ['role' => 'user', 'parts' => [['text' => $userMessage]]];
 
         // -------------------------------------------------------------------------
-        // 6. MULTI-KEY GEMINI EXECUTION LOOP (FIXED LOGIC)
+        // 6. MULTI-KEY EXECUTION DENGAN MODEL "gemini-2.5-flash-lite"
         // -------------------------------------------------------------------------
         $apiKeys = array_filter([
             env('GEMINI_API_KEY'),
@@ -164,13 +168,14 @@ class ChatBotController extends Controller
         $orderSummary = null;
         $finalText = null;
         $isSuccess = false;
+        $lastErrorMessage = "";
 
-        // Loop mencoba setiap API Key satu per satu jika terjadi limit / error
         foreach ($apiKeys as $apiKey) {
-            $currentContents = $contents; // Reset konteks percakapan untuk key baru jika me-retry
+            $currentContents = $contents;
 
             for ($i = 0; $i < 5; $i++) {
                 try {
+                    // 🔥 NAMA MODEL DISESUAIKAN PERSIS DENGAN MODEL DENGAN LIMIT 10 RPM DI DASHBOARDMU: gemini-2.5-flash-lite
                     $response = Http::withoutVerifying()
                         ->withHeaders(['Content-Type' => 'application/json'])
                         ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={$apiKey}", [
@@ -181,10 +186,18 @@ class ChatBotController extends Controller
                             'tools' => $tools,
                         ]);
 
-                    // Jika Key ini Kena Limit (429) atau Error API, hentikan loop internal dan coba API Key berikutnya!
-                    if ($response->status() === 429 || !$response->successful()) {
-                        Log::warning("Gemini API Key gagal/limit. Status: {$response->status()}", ['body' => $response->body()]);
-                        break 1; // Pindah ke API Key berikutnya di foreach
+                    // Hanya pindah key jika BENAR-BENAR KENA LIMIT 429
+                    if ($response->status() === 429) {
+                        Log::warning("Gemini Key 429 Limit, mencoba key cadangan berikutnya...");
+                        $lastErrorMessage = "Limit 429 tercapai pada Key.";
+                        break 1; // Coba key berikutnya di foreach
+                    }
+
+                    // Jika error HTTP selain 429 (seperti 400 bad request)
+                    if (!$response->successful()) {
+                        $lastErrorMessage = "Google API Error [HTTP {$response->status()}]: " . $response->body();
+                        Log::error($lastErrorMessage);
+                        break 2; // Hentikan perulangan dan keluarkan pesan debug asli!
                     }
 
                     $data = $response->json();
@@ -193,14 +206,14 @@ class ChatBotController extends Controller
 
                     $functionCallPart = collect($parts)->firstWhere('functionCall');
 
-                    // 1. Jika AI memberikan respon TEKS (tanpa minta panggil fungsi)
+                    // 1. Respon teks biasa
                     if (!$functionCallPart) {
                         $finalText = collect($parts)->pluck('text')->filter()->implode("\n");
                         $isSuccess = true;
-                        break 2; // BERHASIL TOTAL! Keluar dari loop for DAN foreach
+                        break 2; // Berhasil!
                     }
 
-                    // 2. Jika AI minta eksekusi Fungsi (Function Calling)
+                    // 2. Respon Function Calling
                     $fnName = $functionCallPart['functionCall']['name'];
                     $fnArgs = $functionCallPart['functionCall']['args'] ?? [];
                     $fnResult = $this->executeFunction($fnName, $fnArgs, $products);
@@ -209,7 +222,6 @@ class ChatBotController extends Controller
                         $orderSummary = $fnResult['data'];
                     }
 
-                    // Masukkan riwayat panggilan fungsi agar Gemini membaca hasilnya di siklus berikutnya
                     $currentContents[] = $candidateContent;
                     $currentContents[] = [
                         'role' => 'function',
@@ -222,20 +234,21 @@ class ChatBotController extends Controller
                     ];
 
                 } catch (\Exception $e) {
+                    $lastErrorMessage = $e->getMessage();
                     Log::error('Exception saat memanggil Gemini API: ' . $e->getMessage());
-                    break 1; // Jika koneksi crash, coba API Key berikutnya
+                    break 1;
                 }
             }
 
             if ($isSuccess) {
-                break; // Hentikan foreach jika pesan berhasil diproses
+                break;
             }
         }
 
-        // Jika semua API Key di .env habis/gagal
+        // Tampilkan pesan error debug jika tidak berhasil agar tidak salah mengira kuota habis
         if (!$isSuccess && is_null($finalText)) {
             return response()->json([
-                'reply' => '⚠️ Semua kuota API Key cadangan sedang sibuk/habis. Silakan coba beberapa saat lagi.'
+                'reply' => "⚠️ Kendala sistem AI: " . ($lastErrorMessage ?: "Gagal terhubung ke API Gemini.")
             ], 500);
         }
 
@@ -246,9 +259,6 @@ class ChatBotController extends Controller
         ]);
     }
 
-    /**
-     * Eksekusi Perhitungan Harga Resmi di Backend (PHP)
-     */
     private function executeFunction(string $name, array $args, $products): array
     {
         if (!in_array($name, ['get_price_quote', 'create_order_summary'])) {
@@ -283,7 +293,7 @@ class ChatBotController extends Controller
         $totalHargaPerMeter = $hargaDasarPerMeter + $tambahanPerMeter;
 
         if ($product->is_custom && $panjang > 0 && $lebar > 0) {
-            $luas = ($panjang * $lebar) / 10000; // cm2 ke m2
+            $luas = ($panjang * $lebar) / 10000;
             $hargaSatuan = $luas * $totalHargaPerMeter;
         } else {
             $hargaSatuan = $totalHargaPerMeter;

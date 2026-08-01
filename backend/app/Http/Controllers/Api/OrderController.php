@@ -266,7 +266,7 @@ class OrderController extends Controller
                 })->delete();
             }
 
-DB::commit();
+            DB::commit();
 
             try {
                 $auth = [
@@ -279,7 +279,7 @@ DB::commit();
 
                 $webPush = new WebPush($auth);
                 
-                // 1. Notifikasi untuk Admin (yang sudah ada)
+                // 1. Notifikasi untuk Admin
                 $adminSubscriptions = PushSubscription::whereHas('user', function($q) {
                     $q->where('role', 'admin');
                 })->get();
@@ -301,7 +301,7 @@ DB::commit();
                     );
                 }
 
-                // 🌟 2. TAMBAHAN: Notifikasi untuk Operator jika ada item yang langsung Siap Cetak
+                // 2. Notifikasi untuk Operator jika ada item yang langsung Siap Cetak
                 $needsDirectPrint = false;
                 foreach ($request->items as $item) {
                     if (!isset($item['need_design']) || !filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
@@ -312,7 +312,7 @@ DB::commit();
 
                 if ($needsDirectPrint) {
                     $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
-                        $q->where('role', 'Operator');
+                        $q->where('role', 'operator');
                     })->get();
 
                     foreach ($operatorSubscriptions as $sub) {
@@ -596,7 +596,8 @@ DB::commit();
             ], 500);
         }
     }
-public function updateItemStage(Request $request, $id)
+
+    public function updateItemStage(Request $request, $id)
     {
         try {
             $item = \App\Models\OrderItem::findOrFail($id);
@@ -621,7 +622,7 @@ public function updateItemStage(Request $request, $id)
                 Order::where('id', $orderId)->update(['current_stage_id' => $item->order_stage_id]);
             }
 
-            // 🔔 1. Notifikasi Operator (Jika masuk Siap Cetak)
+            // 🔔 1. Notifikasi Operator (Jika masuk ke tahap Siap Cetak)
             if ($item->order_stage_id == self::STAGE_SIAP_CETAK) {
                 try {
                     $webPush = new WebPush([
@@ -633,7 +634,7 @@ public function updateItemStage(Request $request, $id)
                     ]);
 
                     $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
-                        $q->whereIn('role', ['Operator', 'operator', 'OPERATOR']);
+                        $q->where('role', 'operator');
                     })->get();
 
                     foreach ($operatorSubscriptions as $sub) {
@@ -652,7 +653,13 @@ public function updateItemStage(Request $request, $id)
                             ])
                         );
                     }
-                    $webPush->flush();
+
+                    foreach ($webPush->flush() as $report) {
+                        $endpoint = $report->getRequest()->getUri()->__toString();
+                        if (!$report->isSuccess()) {
+                            PushSubscription::where('endpoint', $endpoint)->delete();
+                        }
+                    }
                 } catch (\Exception $e) {
                     Log::error('Gagal mengirim push notification ke operator: ' . $e->getMessage());
                 }
@@ -660,46 +667,46 @@ public function updateItemStage(Request $request, $id)
 
             // 🔔 2. Notifikasi Kurir (Hanya jika status berubah ke Cetak/Selesai DAN metodenya delivery)
             if ($oldStageId != $item->order_stage_id && in_array($item->order_stage_id, [self::STAGE_CETAK, self::STAGE_SELESAI]) && $order->shipping_method === 'delivery') {
-            try {
-                $webPush = new WebPush([
-                    'VAPID' => [
-                        'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
-                        'publicKey' => config('services.vapid.public_key'),
-                        'privateKey' => config('services.vapid.private_key'),
-                    ],
-                ]);
-
-                $kurirSubscriptions = PushSubscription::whereHas('user', function($q) {
-                    $q->where('role', 'kurir');
-                })->get();
-
-                foreach ($kurirSubscriptions as $sub) {
-                    $subscription = Subscription::create([
-                        'endpoint' => $sub->endpoint,
-                        'publicKey' => $sub->public_key,
-                        'authToken' => $sub->auth_token,
+                try {
+                    $webPush = new WebPush([
+                        'VAPID' => [
+                            'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                            'publicKey' => config('services.vapid.public_key'),
+                            'privateKey' => config('services.vapid.private_key'),
+                        ],
                     ]);
 
-                    $webPush->queueNotification(
-                        $subscription,
-                        json_encode([
-                            'title' => '📦 Paket Siap Dikirim! (#' . $order->id . ')',
-                            'body' => 'Pesanan #' . $order->id . ' dengan pengiriman kurir sudah masuk tahap cetak/selesai dan siap untuk dikirim.',
-                            'url' => 'https://admin.prinora.store/kurir'
-                        ])
-                    );
-                }
-                    
+                    $kurirSubscriptions = PushSubscription::whereHas('user', function($q) {
+                        $q->where('role', 'kurir');
+                    })->get();
+
+                    foreach ($kurirSubscriptions as $sub) {
+                        $subscription = Subscription::create([
+                            'endpoint' => $sub->endpoint,
+                            'publicKey' => $sub->public_key,
+                            'authToken' => $sub->auth_token,
+                        ]);
+
+                        $webPush->queueNotification(
+                            $subscription,
+                            json_encode([
+                                'title' => '📦 Paket Siap Dikirim! (#' . $order->id . ')',
+                                'body' => 'Pesanan #' . $order->id . ' dengan pengiriman kurir sudah masuk tahap cetak/selesai dan siap untuk dikirim.',
+                                'url' => 'https://admin.prinora.store/kurir'
+                            ])
+                        );
+                    }
+                        
                     foreach ($webPush->flush() as $report) {
                         $endpoint = $report->getRequest()->getUri()->__toString();
                         if (!$report->isSuccess()) {
                             PushSubscription::where('endpoint', $endpoint)->delete();
                         }
                     }
-            } catch (\Exception $e) {
-                Log::error('Gagal mengirim push notification ke kurir: ' . $e->getMessage());
+                } catch (\Exception $e) {
+                    Log::error('Gagal mengirim push notification ke kurir: ' . $e->getMessage());
+                }
             }
-        }
 
             return response()->json([
                 'success' => true,

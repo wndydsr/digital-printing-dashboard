@@ -622,7 +622,7 @@ public function updateItemStage(Request $request, $id)
             }
 
             // 🔔 1. Notifikasi Operator (Jika masuk Siap Cetak)
-            if ($oldStageId != self::STAGE_SIAP_CETAK && $item->order_stage_id == self::STAGE_SIAP_CETAK) {
+            if ($item->order_stage_id == self::STAGE_SIAP_CETAK) {
                 try {
                     $webPush = new WebPush([
                         'VAPID' => [
@@ -633,7 +633,7 @@ public function updateItemStage(Request $request, $id)
                     ]);
 
                     $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
-                        $q->where('role', 'Operator');
+                        $q->whereIn('role', ['Operator', 'operator', 'OPERATOR']);
                     })->get();
 
                     foreach ($operatorSubscriptions as $sub) {

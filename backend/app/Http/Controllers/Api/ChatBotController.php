@@ -135,27 +135,26 @@ class ChatBotController extends Controller
         // 4. ENHANCED PROMPT (Nora dibuat makin expert & kontekstual)
         // =========================================================================
         $fullPrompt = "Konteks Utama:\n"
-            . "Kamu adalah Nora, asisten AI profesional, sangat ramah, dan ahli di bidang Digital Printing & Percetakan.\n"
+           . "Kamu adalah Nora, asisten AI profesional, sangat ramah, dan ahli di bidang Digital Printing & Percetakan.\n"
             . "Gunakan data internal riil dari database percetakan di bawah ini untuk menjawab pertanyaan pelanggan. JANGAN mengarang data!\n\n"
             
             . "{$contextHarga}\n"
             . "{$contextOrder}\n"
             
             ."Aturan Kerja Nora:\n"
-            ."1. Gunakan hanya data produk pada bagian DATA PRODUK.\n"
-            ."2. JANGAN PERNAH menghitung harga sendiri di teks. Untuk harga, SELALU panggil function get_price_quote dengan product_id yang valid (lihat DAFTAR PRODUK JSON).\n"
-            ."3. Jika pelanggan bertanya harga banner berdasarkan ukuran, kirim panjang_cm dan lebar_cm ke get_price_quote (rumus luas (panjang x lebar)/10000 sudah dihitung otomatis oleh sistem).\n"
-            ."4. Jika pelanggan memilih bahan tertentu, sertakan attribute_value_ids sesuai id pada DAFTAR PRODUK JSON.\n"
-            ."5. Jika pelanggan ingin memesan tetapi datanya belum lengkap, tanyakan informasi yang kurang SATU PER SATU (jangan borongan).\n"
-            ."6. Informasi yang harus dikumpulkan meliputi:\n"
-            ."- Produk\n"
-            ."- Ukuran (jika produk custom)\n"
-            ."- Jumlah\n"
-            ."- Bahan\n"
-            ."- Deadline\n"
-            ."- Sudah memiliki desain atau belum\n"
-            ."7. Setelah semua informasi lengkap DAN pelanggan sudah setuju dengan estimasi harga, panggil function create_order_summary untuk finalisasi. JANGAN tampilkan ringkasan pesanan sebagai teks biasa, WAJIB lewat function ini.\n"
-            ."8. Jika pelanggan mengecek status order gunakan DATA ORDER.\n\n"
+            ."1. JANGAN PERNAH menghitung atau menebak harga sendiri di dalam teks balasan!\n"
+            ."2. SETIAP KALI pelanggan menyebutkan ukuran (panjang/lebar) atau memilih bahan/atribut, ANDA WAJIB memanggil function `get_price_quote` terlebih dahulu untuk mendapatkan harga resmi dari sistem.\n"
+            ."3. Jika pelanggan bertanya harga banner berdasarkan ukuran, kirim product_id, quantity, panjang_cm dan lebar_cm ke get_price_quote.\n"
+            ."4. Jika pelanggan memilih bahan tertentu, sertakan attribute_value_ids sesuai id pada DAFTAR PRODUK JSON ke function `get_price_quote`.\n"
+            ."5. Tunggu hasil balasan function, lalu gunakan harga dari sistem tersebut untuk menjawab pelanggan secara ramah.\n"
+            ."6. Jika pelanggan ingin memesan (mengatakan 'ya' atau setuju), JANGAN langsung panggil function create_order_summary jika data belum lengkap. Cek dulu apakah **deadline** dan **kebutuhan desain** sudah diketahui.\n"
+            ."7. Informasi yang harus dikumpulkan lengkap meliputi:\n"
+            ."- Produk, Ukuran, Jumlah, Bahan\n"
+            ."- Kapan deadline / tanggal jadinya?\n"
+            ."- Apakah sudah memiliki desain sendiri atau butuh dibuatkan?\n"
+            ."8. Jika user bilang 'ya' tapi deadline atau status desain belum ada, tanyakan informasi tersebut terlebih dahulu secara ramah (jangan borongan).\n"
+            ."9. Setelah semua informasi lengkap (termasuk deadline & desain) DAN pelanggan setuju, WAJIB panggil function create_order_summary untuk memunculkan ringkasan.\n"
+            ."10. Jika pelanggan mengecek status order gunakan DATA ORDER.\n\n"
 
             . "DAFTAR PRODUK JSON (untuk referensi id produk & id bahan saat memanggil function):\n"
             . "{$daftarProdukJson}\n\n"
@@ -185,7 +184,7 @@ class ChatBotController extends Controller
                 ],
                 [
                     'name' => 'create_order_summary',
-                    'description' => 'Panggil HANYA jika semua data pesanan sudah lengkap dan harga sudah dikonfirmasi pelanggan.',
+                    'description' => 'Panggil jika pelanggan ingin memesan dan data sudah terkumpul.',
                     'parameters' => [
                         'type' => 'OBJECT',
                         'properties' => [
@@ -194,11 +193,11 @@ class ChatBotController extends Controller
                             'panjang_cm' => ['type' => 'NUMBER'],
                             'lebar_cm' => ['type' => 'NUMBER'],
                             'attribute_value_ids' => ['type' => 'ARRAY', 'items' => ['type' => 'INTEGER']],
-                            'deadline' => ['type' => 'STRING'],
-                            'need_design' => ['type' => 'BOOLEAN'],
+                            'deadline' => ['type' => 'STRING', 'description' => 'Isi perkiraan jika user belum sebutkan (misal: Segera / Normal)'],
+                            'need_design' => ['type' => 'BOOLEAN', 'description' => 'false jika tidak disebut'],
                             'catatan' => ['type' => 'STRING'],
                         ],
-                        'required' => ['product_id', 'quantity', 'deadline', 'need_design'],
+                        'required' => ['product_id', 'quantity', 'need_design'],
                     ],
                 ],
             ],
@@ -217,74 +216,107 @@ class ChatBotController extends Controller
         $contents[] = ['role' => 'user', 'parts' => [['text' => $fullPrompt]]];
 
         try {
-            $orderSummary = null;
-            $finalText = null;
+                    $orderSummary = null;
+                    $finalText = null;
 
-            // loop supaya AI bisa panggil function lalu lanjut jawab berdasarkan hasilnya
-            for ($i = 0; $i < 5; $i++) {
-                $response = Http::withoutVerifying()
-                    ->withHeaders([
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={$apiKey}", [
-                        'contents' => $contents,
-                        'tools' => $tools,
+                    // Mengambil semua kunci cadangan dari file .env secara otomatis
+                    $apiKeys = array_filter([
+                        env('GEMINI_API_KEY'),
+                        env('GEMINI_API_KEY_2'),
+                        env('GEMINI_API_KEY_3'),
                     ]);
 
-                if (!$response->successful()) {
+                    if (empty($apiKeys)) {
+                        return response()->json([
+                            'reply' => 'Error: Tidak ada GEMINI_API_KEY yang ditemukan di file .env Laravel!'
+                        ], 500);
+                    }
+
+                    $response = null;
+
+                    // Perulangan untuk mencoba key satu persatu jika key sebelumnya terkena limit 429
+                    foreach ($apiKeys as $apiKey) {
+                        // loop supaya AI bisa panggil function lalu lanjut jawab berdasarkan hasilnya
+                        for ($i = 0; $i < 5; $i++) {
+                            $response = Http::withoutVerifying()
+                                ->withHeaders([
+                                    'Content-Type' => 'application/json',
+                                ])
+                                ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={$apiKey}", [
+                                    'contents' => $contents,
+                                    'tools' => $tools,
+                                ]);
+
+                            // Jika key ini kena limit kuota habis (429), hentikan loop internal dan lanjut ke API key berikutnya
+                            if ($response->status() === 429) {
+                                break; 
+                            }
+
+                            if (!$response->successful()) {
+                                break;
+                            }
+
+                            $data = $response->json();
+                            $candidateContent = $data['candidates'][0]['content'] ?? null;
+                            $parts = $candidateContent['parts'] ?? [];
+
+                            $functionCallPart = collect($parts)->firstWhere('functionCall');
+
+                            if (!$functionCallPart) {
+                                // Tidak ada pemanggilan function -> ini jawaban teks final
+                                $finalText = collect($parts)->pluck('text')->filter()->implode("\n");
+                                if (!$finalText) {
+                                    $finalText = 'Maaf, Nora saat ini sedang mengalami gangguan teknis. Bisa diulang kembali?';
+                                }
+                                break 2; // Berhasil! Keluar dari loop function & loop API key utama
+                            }
+
+                            $fnName = $functionCallPart['functionCall']['name'];
+                            $fnArgs = $functionCallPart['functionCall']['args'] ?? [];
+                            $fnResult = $this->executeFunction($fnName, $fnArgs, $products);
+
+                            if ($fnName === 'create_order_summary' && ($fnResult['success'] ?? false)) {
+                                $orderSummary = $fnResult['data'];
+                            }
+
+                            // Lanjutkan percakapan dengan menyertakan hasil function
+                            $contents[] = $candidateContent;
+                            $contents[] = [
+                                'role' => 'function',
+                                'parts' => [[
+                                    'functionResponse' => [
+                                        'name' => $fnName,
+                                        'response' => $fnResult,
+                                    ],
+                                ]],
+                            ];
+                        }
+
+                        // Jika status bukan 429 (artinya sukses atau error tipe lain), hentikan perputaran key
+                        if ($response && $response->status() !== 429) {
+                            break;
+                        }
+                    }
+
+                    // Jika semua API Key di .env ternyata sudah habis kuotanya
+                    if ($response && $response->status() === 429) {
+                        return response()->json([
+                            'reply' => '⚠️ Semua kuota API Key cadangan (1, 2, dan 3) telah habis untuk hari ini. Silakan coba lagi besok atau gunakan akun baru.'
+                        ], 500);
+                    }
+
                     return response()->json([
-                        'reply' => 'Google API Menolak (Status: ' . $response->status() . '). Pesan Asli: ' . $response->body()
+                        'reply' => $finalText ?: 'Berikut ringkasan pesanan kamu, silakan cek dan checkout jika sudah sesuai.',
+                        'ready_checkout' => !is_null($orderSummary),
+                        'order_summary' => $orderSummary,
+                    ]);
+
+                } catch (\Exception $e) {
+                    return response()->json([
+                        'reply' => 'Laravel Exception Crash! Pesan: ' . $e->getMessage()
                     ], 500);
                 }
-
-                $data = $response->json();
-                $candidateContent = $data['candidates'][0]['content'] ?? null;
-                $parts = $candidateContent['parts'] ?? [];
-
-                $functionCallPart = collect($parts)->firstWhere('functionCall');
-
-                if (!$functionCallPart) {
-                    // Tidak ada pemanggilan function -> ini jawaban teks final
-                    $finalText = collect($parts)->pluck('text')->filter()->implode("\n");
-                    if (!$finalText) {
-                        $finalText = 'Maaf, Nora saat ini sedang mengalami gangguan teknis. Bisa diulang kembali?';
-                    }
-                    break;
-                }
-
-                $fnName = $functionCallPart['functionCall']['name'];
-                $fnArgs = $functionCallPart['functionCall']['args'] ?? [];
-                $fnResult = $this->executeFunction($fnName, $fnArgs, $products);
-
-                if ($fnName === 'create_order_summary' && ($fnResult['success'] ?? false)) {
-                    $orderSummary = $fnResult['data'];
-                }
-
-                // Lanjutkan percakapan dengan menyertakan hasil function, biar Gemini merespons berdasarkan itu
-                $contents[] = $candidateContent;
-                $contents[] = [
-                    'role' => 'function',
-                    'parts' => [[
-                        'functionResponse' => [
-                            'name' => $fnName,
-                            'response' => $fnResult,
-                        ],
-                    ]],
-                ];
             }
-
-            return response()->json([
-                'reply' => $finalText ?: 'Berikut ringkasan pesanan kamu, silakan cek dan checkout jika sudah sesuai.',
-                'ready_checkout' => !is_null($orderSummary),
-                'order_summary' => $orderSummary,
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'reply' => 'Laravel Exception Crash! Pesan: ' . $e->getMessage()
-            ], 500);
-        }
-    }
 
     /**
      * Eksekusi function yang diminta Gemini.
@@ -306,24 +338,29 @@ class ChatBotController extends Controller
         $lebar = (float) ($args['lebar_cm'] ?? 0);
         $attributeValueIds = $args['attribute_value_ids'] ?? [];
 
-        if ($product->is_custom && $panjang > 0 && $lebar > 0) {
-            $luas = ($panjang * $lebar) / 10000; // rumus asli kamu, tetap dipakai
-            $hargaSatuan = $luas * (float) $product->price;
-        } else {
-            $hargaSatuan = (float) $product->price;
-        }
+        // 🌟 PERBAIKAN LOGIKA HARGA: Hitung total harga dasar + tambahan per meter dulu, baru dikalikan luas
+        $hargaDasarPerMeter = (float) $product->price;
 
-        $tambahan = 0;
+        $tambahanPerMeter = 0;
         $namaAtribut = [];
         foreach ($product->attributes as $attr) {
             foreach ($attr->values as $val) {
                 if (in_array($val->id, $attributeValueIds)) {
-                    $tambahan += (float) $val->additional_price;
+                    $tambahanPerMeter += (float) $val->additional_price;
                     $namaAtribut[] = $val->name;
                 }
             }
         }
-        $hargaSatuan += $tambahan;
+
+        $totalHargaPerMeter = $hargaDasarPerMeter + $tambahanPerMeter;
+
+        if ($product->is_custom && $panjang > 0 && $lebar > 0) {
+            $luas = ($panjang * $lebar) / 10000; // Rumus luas meter persegi (cm ke m2)
+            $hargaSatuan = $luas * $totalHargaPerMeter;
+        } else {
+            $hargaSatuan = $totalHargaPerMeter;
+        }
+
         $subtotal = $hargaSatuan * $quantity;
 
         $priceData = [

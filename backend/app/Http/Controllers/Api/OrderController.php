@@ -266,7 +266,7 @@ class OrderController extends Controller
                 })->delete();
             }
 
-            DB::commit();
+DB::commit();
 
             try {
                 $auth = [
@@ -278,11 +278,13 @@ class OrderController extends Controller
                 ];
 
                 $webPush = new WebPush($auth);
-                $subscriptions = PushSubscription::whereHas('user', function($q) {
+                
+                // 1. Notifikasi untuk Admin (yang sudah ada)
+                $adminSubscriptions = PushSubscription::whereHas('user', function($q) {
                     $q->where('role', 'admin');
                 })->get();
 
-                foreach ($subscriptions as $sub) {
+                foreach ($adminSubscriptions as $sub) {
                     $subscription = Subscription::create([
                         'endpoint' => $sub->endpoint,
                         'publicKey' => $sub->public_key,
@@ -299,6 +301,38 @@ class OrderController extends Controller
                     );
                 }
 
+                // 🌟 2. TAMBAHAN: Notifikasi untuk Operator jika ada item yang langsung Siap Cetak
+                $needsDirectPrint = false;
+                foreach ($request->items as $item) {
+                    if (!isset($item['need_design']) || !filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN)) {
+                        $needsDirectPrint = true;
+                        break;
+                    }
+                }
+
+                if ($needsDirectPrint) {
+                    $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
+                        $q->where('role', 'operator');
+                    })->get();
+
+                    foreach ($operatorSubscriptions as $sub) {
+                        $subscription = Subscription::create([
+                            'endpoint' => $sub->endpoint,
+                            'publicKey' => $sub->public_key,
+                            'authToken' => $sub->auth_token,
+                        ]);
+
+                        $webPush->queueNotification(
+                            $subscription,
+                            json_encode([
+                                'title' => '🖨️ Pesanan Siap Cetak Baru! (#' . $order->id . ')',
+                                'body' => 'Ada pesanan baru langsung siap cetak dengan ID #' . $order->id . '.',
+                                'url' => 'https://admin.prinora.store/operator/antrian'
+                            ])
+                        );
+                    }
+                }
+
                 foreach ($webPush->flush() as $report) {
                     $endpoint = $report->getRequest()->getUri()->__toString();
                     if (!$report->isSuccess()) {
@@ -306,7 +340,7 @@ class OrderController extends Controller
                     }
                 }
             } catch (\Exception $e) {
-                Log::error('Gagal mengirim push notification: ' . $e->getMessage());
+                Log::error('Gagal mengirim push notification pesanan baru: ' . $e->getMessage());
             }
 
             return response()->json([
@@ -624,6 +658,7 @@ public function updateItemStage(Request $request, $id)
                 }
             }
 
+            // 🔔 2. Notifikasi Kurir (Hanya jika status berubah ke Cetak/Selesai DAN metodenya delivery)
             if ($oldStageId != $item->order_stage_id && in_array($item->order_stage_id, [self::STAGE_CETAK, self::STAGE_SELESAI]) && $order->shipping_method === 'delivery') {
             try {
                 $webPush = new WebPush([
@@ -654,7 +689,13 @@ public function updateItemStage(Request $request, $id)
                         ])
                     );
                 }
-                $webPush->flush();
+                    
+                    foreach ($webPush->flush() as $report) {
+                        $endpoint = $report->getRequest()->getUri()->__toString();
+                        if (!$report->isSuccess()) {
+                            PushSubscription::where('endpoint', $endpoint)->delete();
+                        }
+                    }
             } catch (\Exception $e) {
                 Log::error('Gagal mengirim push notification ke kurir: ' . $e->getMessage());
             }

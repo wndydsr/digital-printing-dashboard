@@ -82,7 +82,7 @@ class ChatBotController extends Controller
         }
 
         // -------------------------------------------------------------------------
-        // 3. SYSTEM INSTRUCTION
+        // 3. SYSTEM INSTRUCTION (Mewajibkan Catatan)
         // -------------------------------------------------------------------------
         $systemInstruction = "Kamu adalah Nora, AI Assistant Percetakan Digital yang ramah, sopan, dan terampil.\n\n"
             . "DATA PRODUK TERSEDIA:\n{$contextHarga}\n"
@@ -90,11 +90,11 @@ class ChatBotController extends Controller
             . "ATURAN UTAMA PENJUALAN:\n"
             . "1. DILARANG menghitung harga manual di teks! Jika user beri ukuran (panjang x lebar) atau memilih bahan, PANGGIL fungsi `get_price_quote`.\n"
             . "2. KONVERSI UKURAN: Jika user sebut ukuran dalam METER (misal 2x1m), konversikan ke CM saat panggil fungsi (panjang_cm: 200, lebar_cm: 100).\n"
-            . "3. JANGAN PERNAH panggil `create_order_summary` jika Ukuran, Bahan, Qty, Deadline, dan Status Desain BELUM DIJAWAB LENGKAP oleh user.\n"
+            . "3. JANGAN PERNAH panggil `create_order_summary` jika Ukuran, Bahan, Qty, Status Desain, dan CATATAN/FINISHING BELUM DIJAWAB LENGKAP oleh user. Tanyakan catatan instruksi cetak terlebih dahulu!\n"
             . "4. Jawablah selalu menggunakan Bahasa Indonesia yang ramah dan membantu.";
 
         // -------------------------------------------------------------------------
-        // 4. DEFINISI TOOLS GEMINI
+        // 4. DEFINISI TOOLS GEMINI (Required: catatan)
         // -------------------------------------------------------------------------
         $tools = [[
             'function_declarations' => [
@@ -115,7 +115,7 @@ class ChatBotController extends Controller
                 ],
                 [
                     'name' => 'create_order_summary',
-                    'description' => 'Dipanggil HANYA jika data SUDAH LENGKAP & user setuju checkout.',
+                    'description' => 'Dipanggil HANYA jika data (produk, ukuran, bahan, qty, status desain, dan catatan) SUDAH LENGKAP & user setuju checkout.',
                     'parameters' => [
                         'type' => 'OBJECT',
                         'properties' => [
@@ -126,16 +126,16 @@ class ChatBotController extends Controller
                             'attribute_value_ids' => ['type' => 'ARRAY', 'items' => ['type' => 'INTEGER']],
                             'deadline' => ['type' => 'STRING'],
                             'need_design' => ['type' => 'BOOLEAN'],
-                            'catatan' => ['type' => 'STRING'],
+                            'catatan' => ['type' => 'STRING', 'description' => 'Detail finishing / instruksi khusus dari user'],
                         ],
-                        'required' => ['product_id', 'quantity', 'deadline', 'need_design'],
+                        'required' => ['product_id', 'quantity', 'need_design', 'catatan'],
                     ],
                 ],
             ],
         ]];
 
         // -------------------------------------------------------------------------
-        // 5. RIWAYAT PERCAKAPAN (CONTENTS SANITIZATION)
+        // 5. RIWAYAT PERCAKAPAN
         // -------------------------------------------------------------------------
         $contents = [];
         foreach ($history as $h) {
@@ -151,7 +151,7 @@ class ChatBotController extends Controller
         $contents[] = ['role' => 'user', 'parts' => [['text' => $userMessage]]];
 
         // -------------------------------------------------------------------------
-        // 6. MULTI-KEY EXECUTION DENGAN MODEL "gemini-2.5-flash-lite"
+        // 6. MULTI-KEY EXECUTION DENGAN MODEL "gemini-3.1-flash-lite"
         // -------------------------------------------------------------------------
         $apiKeys = array_filter([
             env('GEMINI_API_KEY'),
@@ -175,10 +175,9 @@ class ChatBotController extends Controller
 
             for ($i = 0; $i < 5; $i++) {
                 try {
-                    // 🔥 NAMA MODEL DISESUAIKAN PERSIS DENGAN MODEL DENGAN LIMIT 10 RPM DI DASHBOARDMU: gemini-2.5-flash-lite
                     $response = Http::withoutVerifying()
                         ->withHeaders(['Content-Type' => 'application/json'])
-                       ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={$apiKey}", [
+                        ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={$apiKey}", [
                             'system_instruction' => [
                                 'parts' => [['text' => $systemInstruction]]
                             ],
@@ -186,18 +185,16 @@ class ChatBotController extends Controller
                             'tools' => $tools,
                         ]);
 
-                    // Hanya pindah key jika BENAR-BENAR KENA LIMIT 429
                     if ($response->status() === 429) {
                         Log::warning("Gemini Key 429 Limit, mencoba key cadangan berikutnya...");
                         $lastErrorMessage = "Limit 429 tercapai pada Key.";
-                        break 1; // Coba key berikutnya di foreach
+                        break 1;
                     }
 
-                    // Jika error HTTP selain 429 (seperti 400 bad request)
                     if (!$response->successful()) {
                         $lastErrorMessage = "Google API Error [HTTP {$response->status()}]: " . $response->body();
                         Log::error($lastErrorMessage);
-                        break 2; // Hentikan perulangan dan keluarkan pesan debug asli!
+                        break 2;
                     }
 
                     $data = $response->json();
@@ -206,14 +203,12 @@ class ChatBotController extends Controller
 
                     $functionCallPart = collect($parts)->firstWhere('functionCall');
 
-                    // 1. Respon teks biasa
                     if (!$functionCallPart) {
                         $finalText = collect($parts)->pluck('text')->filter()->implode("\n");
                         $isSuccess = true;
-                        break 2; // Berhasil!
+                        break 2;
                     }
 
-                    // 2. Respon Function Calling
                     $fnName = $functionCallPart['functionCall']['name'];
                     $fnArgs = $functionCallPart['functionCall']['args'] ?? [];
                     $fnResult = $this->executeFunction($fnName, $fnArgs, $products);
@@ -245,7 +240,6 @@ class ChatBotController extends Controller
             }
         }
 
-        // Tampilkan pesan error debug jika tidak berhasil agar tidak salah mengira kuota habis
         if (!$isSuccess && is_null($finalText)) {
             return response()->json([
                 'reply' => "⚠️ Kendala sistem AI: " . ($lastErrorMessage ?: "Gagal terhubung ke API Gemini.")
@@ -321,7 +315,7 @@ class ChatBotController extends Controller
         return ['success' => true, 'data' => array_merge($priceData, [
             'deadline' => $args['deadline'] ?? 'Standard',
             'need_design' => (bool) ($args['need_design'] ?? false),
-            'catatan' => $args['catatan'] ?? '',
+            'catatan' => $args['catatan'] ?? '-',
         ])];
     }
 }

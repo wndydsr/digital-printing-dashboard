@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -16,7 +16,6 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
   const [isEdit, setIsEdit] = useState(false)
   const [form, setForm] = useState<any>(karyawan)
   const [errors, setErrors] = useState<any>({})
-  const { toast } = useToast()
 
   useEffect(() => {
     setForm(karyawan)
@@ -30,7 +29,6 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
     try {
       const token = localStorage.getItem("token")
 
-      // Mengarah ke endpoint PUT karyawan
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/karyawan/${karyawan.id}`, {
         method: "PUT",
         headers: {
@@ -58,7 +56,6 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
           const errorsArr = Object.values(data.errors) as string[][]
           firstError = errorsArr[0][0]
 
-          // Custom pesan error jika email duplikat
           if (data.errors.email) {
             firstError = "Email ini sudah digunakan oleh karyawan lain"
           }
@@ -66,18 +63,11 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
           firstError = data.message
         }
 
-        toast({
-          title: "Gagal",
-          description: firstError,
-          variant: "destructive",
-        })
+        toast.error(firstError)
         return
       }
 
-      toast({
-        title: "Berhasil",
-        description: "Data karyawan berhasil diupdate",
-      })
+      toast.success("Data karyawan berhasil diupdate") 
 
       setErrors({})
       onSuccess()
@@ -86,12 +76,7 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
 
     } catch (err) {
       console.error(err)
-
-      toast({
-        title: "Error",
-        description: "Terjadi kesalahan koneksi",
-        variant: "destructive",
-      })
+      toast.error("Terjadi kesalahan koneksi") // 👈 4. Ganti toast error jadi toast.error Sonner
     }
   }
 
@@ -135,7 +120,6 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
             ]}
           />
 
-          {/* Menampilkan Tanggal Bergabung (Hanya bisa dilihat, tidak bisa diedit) */}
           <div>
             <label className="text-sm text-gray-500">Tanggal Bergabung</label>
             <div className="border rounded-md p-2 bg-gray-50 text-gray-600">
@@ -172,7 +156,6 @@ export default function KaryawanDetailModal({ open, onClose, karyawan, onSuccess
   )
 }
 
-// Sub-komponen Field yang dimodifikasi untuk mendukung Select / Dropdown
 function Field({ 
   label, 
   value, 

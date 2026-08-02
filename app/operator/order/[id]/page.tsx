@@ -8,6 +8,7 @@ import { OperatorLayout } from "@/components/layout/OperatorLayout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 
 interface Order {
   id: number
@@ -36,12 +37,11 @@ export default function OperatorOrderDetailPage() {
   const searchParams = useSearchParams()
   
   const id = params.id as string
-  const focusedItemId = searchParams.get("item") // 🔥 Deteksi fokus item dari URL
+  const focusedItemId = searchParams.get("item") 
 
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Ambil URL dasar host tanpa suffix /api untuk render asset storage hosting
   const getBaseUrl = () => {
     const rawUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.prinora.store/api"
     return rawUrl.endsWith("/api") ? rawUrl.slice(0, -4) : rawUrl
@@ -61,6 +61,7 @@ export default function OperatorOrderDetailPage() {
       setOrder(result)
     } catch (error) {
       console.error("Gagal memuat detail pesanan:", error)
+      toast.error("Gagal memuat detail pesanan dari server.")
     } finally {
       setLoading(false)
     }
@@ -73,14 +74,15 @@ export default function OperatorOrderDetailPage() {
   const updateItemStage = async (stageId: number) => {
     if (!focusedItemId) return
     try {
-      // 🔥 Menembak endpoint update per item produk cetak
       await apiFetch(`/orders/items/${focusedItemId}/stage`, {
         method: "PUT",
         body: JSON.stringify({ current_stage_id: stageId }),
       })
+      toast.success("Tahapan produksi item berhasil diperbarui!")
       await fetchOrder()
     } catch (error) {
       console.error("Gagal mematangkan tahapan produksi cetak item:", error)
+      toast.error("Gagal memperbarui tahapan produksi.")
     }
   }
 
@@ -93,7 +95,6 @@ export default function OperatorOrderDetailPage() {
       const token = localStorage.getItem("token")
       const baseUrl = getBaseUrl()
       
-      // Dinamis mengikuti domain hosting server production
       const downloadUrl = `${baseUrl}/api/download/design/${filepath}`
 
       const response = await fetch(downloadUrl, {
@@ -115,15 +116,17 @@ export default function OperatorOrderDetailPage() {
       a.click()
       a.remove()
       window.URL.revokeObjectURL(url)
+      
+      toast.success("Berkas desain berhasil diunduh!")
     } catch (err) {
-      alert("Gagal mengunduh berkas desain. Pastikan file fisik ada di server storage.");
+      console.error(err)
+      toast.error("Gagal mengunduh berkas desain.")
     }
   }
     
   if (loading) return <OperatorLayout><div className="p-6">Loading...</div></OperatorLayout>
   if (!order) return <OperatorLayout><div className="p-6">Data tidak ditemukan</div></OperatorLayout>
 
-  // Cari item produk yang sedang difokuskan oleh operator di halaman ini
   const activeItem = order.items?.find((item) => String(item.id) === String(focusedItemId)) || order.items?.[0]
   const currentItemStageName = activeItem?.stage?.name?.toLowerCase() || order.stage?.name?.toLowerCase() || ""
 
@@ -131,12 +134,10 @@ export default function OperatorOrderDetailPage() {
     if (!activeItem?.details) return {}
     
     try {
-      // Pembongkaran tahap pertama
       let parsed = typeof activeItem.details === "string" 
         ? JSON.parse(activeItem.details) 
         : activeItem.details
 
-      // 🔥 KUNCI UTAMA: Jika setelah di-parse masih string JSON, bongkar sekali lagi!
       if (typeof parsed === "string") {
         parsed = JSON.parse(parsed)
       }
@@ -174,7 +175,6 @@ export default function OperatorOrderDetailPage() {
                     <p>
                       <strong>Ukuran Dimensi:</strong>{" "}
                       <span className="font-semibold text-slate-800">
-                        {/* Menggunakan Math.round agar desainer/operator melihat angka bulat murni */}
                         {Math.round(Number(activeItem.panjang))} cm x {Math.round(Number(activeItem.lebar))} cm
                       </span>
                     </p>

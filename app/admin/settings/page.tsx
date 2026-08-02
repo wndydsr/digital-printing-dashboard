@@ -1,11 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { 
   ArrowLeft, 
@@ -15,10 +14,10 @@ import {
   ToggleRight, 
   CreditCard 
 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
 
   // State parameter yang beneran penting & simpel ajah
@@ -66,10 +65,7 @@ export default function SettingsPage() {
       localStorage.setItem("set_store_fee", settings.gatewayFee)
 
       setLoading(false)
-      toast({
-        title: "Pengaturan Disimpan",
-        description: "Konfigurasi informasi toko Prinora berhasil diperbarui.",
-      })
+      toast.success("Konfigurasi informasi toko Prinora berhasil diperbarui.")
     }, 500)
   }
 

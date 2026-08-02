@@ -3,8 +3,9 @@
 import { useState } from "react"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, FileText, Hash, User, MapPin, Navigation, RefreshCw, Truck, UserPlus } from "lucide-react"
+import { Calendar, FileText, Hash, User, MapPin, Navigation, RefreshCw, Truck } from "lucide-react"
 import { apiFetch } from "@/lib/api"
+import { toast } from "sonner"
 
 interface OrderDetailModalProps {
   open: boolean
@@ -29,12 +30,12 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
         body: JSON.stringify({ current_stage_id: newStageId }),
       })
 
-      alert("Status tahapan pesanan berhasil diperbarui!")
+      toast.success("Status tahapan pesanan berhasil diperbarui!")
       if (onOrderUpdated) onOrderUpdated() 
       onClose() 
     } catch (error: any) {
       console.error(error)
-      alert("Gagal memperbarui status pesanan.")
+      toast.error("Gagal memperbarui status pesanan.")
     } finally {
       setLoading(false)
     }
@@ -44,18 +45,17 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
   const handleAssignSingleKurir = async () => {
     setLoading(true)
     try {
-      // Mengubah stage menjadi 5 agar kurir tahu pesanan ini siap diantar
       await apiFetch(`/admin/orders/${order.id}/stage`, {
         method: "PUT",
         body: JSON.stringify({ current_stage_id: 5 }), 
       })
 
-      alert("Pesanan berhasil diserahkan ke antrean Kurir Utama!")
+      toast.success("Pesanan berhasil diserahkan ke antrean Kurir Utama!")
       if (onOrderUpdated) onOrderUpdated()
       onClose()
     } catch (error: any) {
       console.error(error)
-      alert("Gagal menugaskan kurir ke database.")
+      toast.error("Gagal menugaskan kurir ke database.")
     } finally {
       setLoading(false)
     }
@@ -192,7 +192,7 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                     )}
 
                     {order.current_stage_id === 5 && (
-                      <p className="text Abram-[11px] text-emerald-600 text-center font-medium bg-emerald-50 py-1.5 rounded-lg border border-emerald-100">
+                      <p className="text-[11px] text-emerald-600 text-center font-medium bg-emerald-50 py-1.5 rounded-lg border border-emerald-100">
                         Pesanan Selesai Terproses
                       </p>
                     )}
@@ -216,7 +216,6 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                         Rp {Number(order.total_price || 0).toLocaleString("id-ID")}
                       </span>
                     </div>
-                    {/* FUNGSI DARI KODE LAMA: Menampilkan Informasi Tanggal */}
                     {order.created_at && (
                       <>
                         <div className="border-t border-dashed border-gray-100" />
@@ -264,19 +263,18 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                         </div>
                       </div>
 
-                      {/* AREA UKURAN PRODUK CUSTOM (KODE LAMA NYA) */}
+                      {/* AREA UKURAN PRODUK CUSTOM */}
                       {(Number(item.panjang) > 0 || Number(item.lebar) > 0) && (
                         <div className="bg-white p-4 border border-slate-100 rounded-xl shadow-xs">
                           <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dimensi Ukuran</label>
                           <div className="flex gap-4 text-xs font-semibold text-gray-700">
-                            {/* 🔥 Menggunakan Math.round agar desimal .00 hilang total dari modal admin */}
                             <p>Panjang: <span className="text-gray-900 font-bold">{Math.round(Number(item.panjang))} cm</span></p>
                             <p>Lebar: <span className="text-gray-900 font-bold">{Math.round(Number(item.lebar))} cm</span></p>
                           </div>
                         </div>
                       )}
 
-                      {/* 🌟 AREA PEMETAAN DATA SPESIFIKASI DAN ATRIBUT PILIHAN LANGSUNG DARI DETAILS */}
+                      {/* AREA PEMETAAN DATA SPESIFIKASI DAN ATRIBUT PILIHAN */}
                       {item.details && Object.keys(parseJSON(item.details)).length > 0 && (
                         <div className="bg-white p-4 border border-slate-100 rounded-xl shadow-xs">
                           <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Spesifikasi & Atribut Pilihan</label>
@@ -307,7 +305,7 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
                         );
                       })()}
 
-                      {/* FUNGSI DARI KODE LAMA: FILE AREA REFERENCE FILES */}
+                      {/* FILE AREA REFERENCE FILES */}
                       {(() => {
                         const rawFiles = item.design?.reference_files;
                         const files = typeof rawFiles === 'string' 
@@ -346,6 +344,7 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
               </div>
 
             </div>
+
           </div>
         </div>
       </DialogContent>
@@ -357,12 +356,10 @@ export default function OrderDetailModal({ open, onClose, order, onOrderUpdated 
 function getFileUrl(file: string | null | undefined) {
   if (!file) return null
 
-  // Jika sudah berupa URL lengkap dari backend
   if (file.startsWith("http://") || file.startsWith("https://")) {
     return file
   }
 
-  // Menggunakan domain produksi Prinora yang valid dari kode lama Anda
   const baseUrl = "https://api.prinora.store";
   const cleanPath = file.replace(/^public\//, '');
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react" // 🛠️ TAMBAH useRef
-import { BarChart3, Activity, Clock, CheckCircle, Download, FileText, Printer } from "lucide-react" // 🛠️ TAMBAH Printer Icon
+import { useEffect, useState, useRef } from "react"
+import { BarChart3, Activity, Clock, CheckCircle, Download, FileText, Printer } from "lucide-react"
 import {
   AreaChart,
   Area,
@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import InvoiceOrder from "@/components/ui/invoice-order"
-import { useReactToPrint } from "react-to-print" // 🛠️ TAMBAH useReactToPrint
+import { useReactToPrint } from "react-to-print"
 import {
   Table,
   TableBody,
@@ -28,20 +28,80 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import { apiFetch } from "@/lib/api"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
+const monthsList = [
+  { value: "all", label: "Semua Bulan" },
+  { value: "01", label: "Januari" },
+  { value: "02", label: "Februari" },
+  { value: "03", label: "Maret" },
+  { value: "04", label: "April" },
+  { value: "05", label: "Mei" },
+  { value: "06", label: "Juni" },
+  { value: "07", label: "Juli" },
+  { value: "08", label: "Agustus" },
+  { value: "09", label: "September" },
+  { value: "10", label: "Oktober" },
+  { value: "11", label: "November" },
+  { value: "12", label: "Desember" },
+]
+
+const currentYearNum = new Date().getFullYear()
+const yearsList = Array.from({ length: 5 }, (_, i) => (currentYearNum - i).toString())
+
+function getPaginationPages(current: number, total: number) {
+  const delta = 2; 
+  const range: number[] = [];
+  const rangeWithDots: (number | string)[] = [];
+  let l: number | undefined;
+
+  for (let i = 1; i <= total; i++) {
+    if (
+      i === 1 ||
+      i === total ||
+      (i >= current - delta && i <= current + delta)
+    ) {
+      range.push(i);
+    }
+  }
+
+  range.forEach((i) => {
+    if (l) {
+      if (i - l === 2) {
+        rangeWithDots.push(l + 1);
+      } else if (i - l !== 1) {
+        rangeWithDots.push("...");
+      }
+    }
+    rangeWithDots.push(i);
+    l = i;
+  });
+
+  return rangeWithDots;
+}
+
 export default function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState("30d")
+  const [selectedMonth, setSelectedMonth] = useState<string>("all")
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
+
   const [revenueData, setRevenueData] = useState<any[]>([])
   const [orderData, setOrderData] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
   const [showInvoice, setShowInvoice] = useState(false)
 
-  const latestOrders = (transactions || [])
-    .sort((a: any, b: any) => b.id - a.id)
-    .slice(0, 5)
+  // Pagination untuk Riwayat Transaksi
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const [kpi, setKpi] = useState<any>({
     total_pendapatan: 0,
@@ -50,100 +110,116 @@ export default function AnalyticsPage() {
     pesanan_pending: 0,
   })
 
-  // ─── 🛠️ SETUP PRINT UNTUK HALAMAN ANALYTICS ───
   const analyticsInvoiceRef = useRef<HTMLDivElement>(null)
-  
   const handlePrintAnalytics = useReactToPrint({
     contentRef: analyticsInvoiceRef,
   })
 
- useEffect(() => {
+  useEffect(() => {
     const load = async () => {
       try {
-        const data = await apiFetch("/laporan")
-        const rawTransactions = data.transactions || []
+        const orderDataRes = await apiFetch("/orders")
+        const rawOrders = Array.isArray(orderDataRes) ? orderDataRes : orderDataRes.data || []
 
-        // ─── 1. FILTER BERDASARKAN PERIODE DROPDOWN ───
-        const now = new Date()
-        const filteredTransactions = rawTransactions.filter((order: any) => {
-          if (timeRange === "all") return true
-          
-          const orderDateStr = order.date ? order.date.replace(" ", "T") : order.created_at
+        // 1. Filter berdasarkan Bulan & Tahun
+        const filteredOrders = rawOrders.filter((order: any) => {
+          const orderDateStr = order.order_date ? order.order_date.replace(" ", "T") : order.created_at
           if (!orderDateStr) return true
-
+          
           const orderDate = new Date(orderDateStr)
           if (isNaN(orderDate.getTime())) return true
 
-          const diffTime = Math.abs(now.getTime() - orderDate.getTime())
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          const itemYear = orderDate.getFullYear().toString()
+          const itemMonth = String(orderDate.getMonth() + 1).padStart(2, "0")
 
-          if (timeRange === "7d") return diffDays <= 7
-          if (timeRange === "90d") return diffDays <= 90
-          if (timeRange === "1y") return diffDays <= 365
-          return diffDays <= 30 // Default 30d
+          const matchesYear = selectedYear === "all" || itemYear === selectedYear
+          const matchesMonth = selectedMonth === "all" || itemMonth === selectedMonth
+
+          return matchesYear && matchesMonth
         })
 
-        const bulan = [
-          "Jan","Feb","Mar","Apr","Mei","Jun",
-          "Jul","Agu","Sep","Okt","Nov","Des"
-        ]
+        // 2. Kalkulasi Total Pendapatan (Kecuali Stage 7 = Menunggu Pembayaran dan Stage 8 = Dibatalkan)
+        const validPaidOrders = filteredOrders.filter((o: any) => {
+          const stageId = Number(o.current_stage_id || 0)
+          return stageId !== 7 && stageId !== 8
+        })
 
-        // ─── 2. SEKARANG GRAFIK DIHITUNG DINAMIS DARI DATA YANG SUDAH TERFILTER ───
+        const totalPendapatan = validPaidOrders.reduce((acc: number, curr: any) => acc + Number(curr.total_price || curr.total || 0), 0)
+
+        const pesananSelesai = filteredOrders.filter((o: any) => {
+          const statusName = (o.stage?.status?.name || "").toLowerCase()
+          const stageName = (o.stage?.name || "").toLowerCase()
+          return statusName === 'selesai' || stageName === 'selesai'
+        }).length
+
+        const pesananPending = filteredOrders.filter((o: any) => {
+          const statusName = (o.stage?.status?.name || "").toLowerCase()
+          const stageName = (o.stage?.name || "").toLowerCase()
+          return statusName === 'pending' || statusName === 'diproses' || stageName.includes('desain') || stageName.includes('cetak') || Number(o.current_stage_id) === 7
+        }).length
+
+        setKpi({
+          total_pendapatan: totalPendapatan,
+          total_pesanan: filteredOrders.length,
+          pesanan_selesai: pesananSelesai,
+          pesanan_pending: pesananPending,
+        })
+
+        // Format data untuk tabel riwayat transaksi (Semua pesanan yang terfilter)
+        const formattedTransactions = filteredOrders.map((o: any) => ({
+          id: o.id,
+          invoice: o.order_code || `ORD-${String(o.id).padStart(5, "0")}`,
+          customer: o.customer,
+          products: (o.items || []).map((i: any) => ({ product_name: i.product?.name || "-" })),
+          total: o.total_price || o.total || 0,
+          date: o.order_date ? new Date(o.order_date).toLocaleDateString("id-ID") : "-",
+          status: o.stage?.name || "Diproses"
+        }))
+
+        setTransactions(formattedTransactions)
+        setCurrentPage(1) // Reset ke halaman 1 saat filter berubah
+
+        // 3. Kalkulasi Grafik 12 Bulan (Berdasarkan Tahun yang Dipilih, mengabaikan stage 7 & 8 untuk pendapatan)
+        const chartOrders = rawOrders.filter((order: any) => {
+          const orderDateStr = order.order_date ? order.order_date.replace(" ", "T") : order.created_at
+          const orderDate = new Date(orderDateStr)
+          if (isNaN(orderDate.getTime())) return false
+          return selectedYear === "all" || orderDate.getFullYear().toString() === selectedYear
+        })
+
+        const bulan = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"]
         const monthlyRevenueMap = Array(12).fill(0)
         const monthlyOrderMap = Array(12).fill(0)
 
-        filteredTransactions.forEach((order: any) => {
-          const orderDateStr = order.date ? order.date.replace(" ", "T") : order.created_at
+        chartOrders.forEach((order: any) => {
+          const orderDateStr = order.order_date ? order.order_date.replace(" ", "T") : order.created_at
           const date = new Date(orderDateStr)
           if (!isNaN(date.getTime())) {
-            const monthIndex = date.getMonth() // 0 = Jan, 11 = Des
-            monthlyRevenueMap[monthIndex] += Number(order.total || 0)
+            const monthIndex = date.getMonth()
+            const stageId = Number(order.current_stage_id || 0)
+            
+            // Pendapatan hanya masuk jika bukan menunggu pembayaran (7) atau dibatalkan (8)
+            if (stageId !== 7 && stageId !== 8) {
+              monthlyRevenueMap[monthIndex] += Number(order.total_price || order.total || 0)
+            }
             monthlyOrderMap[monthIndex] += 1
           }
         })
 
-        // Format ulang data agar dibaca Recharts dengan benar
-        const dynamicRevenueChart = bulan.map((m, i) => ({
-          name: m,
-          total: monthlyRevenueMap[i]
-        }))
+        setRevenueData(bulan.map((m, i) => ({ name: m, total: monthlyRevenueMap[i] })))
+        setOrderData(bulan.map((m, i) => ({ name: m, total: monthlyOrderMap[i] })))
 
-        const dynamicOrderChart = bulan.map((m, i) => ({
-          name: m,
-          total: monthlyOrderMap[i]
-        }))
-
-        setRevenueData(dynamicRevenueChart)
-        setOrderData(dynamicOrderChart)
-        setTransactions(filteredTransactions)
-
-    // ─── REKALKULASI KPI BOX SECARA REAL-TIME ───
-    const totalPendapatan = filteredTransactions.reduce((acc: number, curr: any) => acc + Number(curr.total || 0), 0)
-
-    // Pengecekan dibuat mencakup kata kunci "selesai", "success", "completed", atau "cetak"
-    const pesananSelesai = filteredTransactions.filter((t: any) => {
-      const statusLower = (t.status || "").toLowerCase()
-      return statusLower === "selesai" || statusLower === "success" || statusLower === "completed"
-    }).length
-
-    // Pengecekan pending / dikerjakan mencakup kata kunci "pending", "diproses", atau "proses"
-    const pesananPending = filteredTransactions.filter((t: any) => {
-      const statusLower = (t.status || "").toLowerCase()
-      return statusLower === "pending" || statusLower === "diproses" || statusLower === "proses" || statusLower === "cetak"
-    }).length
-
-    setKpi({
-      total_pendapatan: totalPendapatan,
-      total_pesanan: filteredTransactions.length,
-      pesanan_selesai: pesananSelesai,
-      pesanan_pending: pesananPending,
-    })
       } catch (err) {
         console.error("Laporan error:", err)
       }
     }
     load()
-  }, [timeRange])
+  }, [selectedMonth, selectedYear])
+
+  // Logika Pagination untuk Riwayat Transaksi
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const currentTableData = transactions.slice(startIndex, startIndex + itemsPerPage)
+  const totalPages = Math.ceil(transactions.length / itemsPerPage || 1)
 
   return (
     <DashboardLayout>
@@ -151,21 +227,37 @@ export default function AnalyticsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Laporan</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Laporan & Analitik</h1>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-36 bg-white">
+                <SelectValue placeholder="Pilih Bulan" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="1y">Last year</SelectItem>
+                {monthsList.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" className="gap-2 bg-transparent">
+
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-28 bg-white">
+                <SelectValue placeholder="Pilih Tahun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Tahun</SelectItem>
+                {yearsList.map((y) => (
+                  <SelectItem key={y} value={y}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" className="gap-2 bg-white">
               <Download className="w-4 h-4" />
               Export
             </Button>
@@ -184,7 +276,7 @@ export default function AnalyticsPage() {
               <div className="text-2xl font-semibold">
                 Rp {Number(kpi.total_pendapatan).toLocaleString("id-ID")}
               </div>
-              <div className="text-sm text-gray-600">Total Pendapatan</div>
+              <div className="text-sm text-gray-600">Total Pendapatan (Lunas)</div>
             </CardContent>
           </Card>
 
@@ -194,7 +286,7 @@ export default function AnalyticsPage() {
                 <BarChart3 className="w-5 h-5 text-blue-600" />
               </div>
               <div className="text-2xl font-semibold">{kpi.total_pesanan}</div>
-              <div className="text-sm text-gray-600">Total Pesanan</div>
+              <div className="text-sm text-gray-600">Total Pesanan Masuk</div>
             </CardContent>
           </Card>
 
@@ -214,7 +306,7 @@ export default function AnalyticsPage() {
                 <Clock className="w-5 h-5 text-yellow-600" />
               </div>
               <div className="text-2xl font-semibold">{kpi.pesanan_pending}</div>
-              <div className="text-sm text-gray-600">Pesanan Pending</div>
+              <div className="text-sm text-gray-600">Pesanan Pending / Proses</div>
             </CardContent>
           </Card>
         </div>
@@ -261,7 +353,7 @@ export default function AnalyticsPage() {
 
             <Card className="w-full border-gray-200">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold">Riwayat Transaksi</CardTitle>
+                <CardTitle className="text-lg font-semibold">Riwayat Transaksi (Berdasarkan Filter)</CardTitle>
               </CardHeader>
 
               <CardContent className="p-0">
@@ -279,19 +371,19 @@ export default function AnalyticsPage() {
                   </TableHeader>
 
                   <TableBody>
-                    {latestOrders.length === 0 ? (
+                    {currentTableData.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-10 text-gray-500">
                           Tidak ada riwayat transaksi pada periode ini
                         </TableCell>
                       </TableRow>
                     ) : (
-                      latestOrders.map((order) => (
+                      currentTableData.map((order) => (
                         <TableRow key={order.id}>
                           <TableCell className="text-blue-500 font-medium">
                             {order.invoice}
                           </TableCell>
-                          <TableCell>{order.customer?.name}</TableCell>
+                          <TableCell>{order.customer?.name || "-"}</TableCell>
                           <TableCell>
                             <div className="space-y-1">
                               {order.products?.map((item: any, index: number) => (
@@ -306,7 +398,7 @@ export default function AnalyticsPage() {
                           </TableCell>
                           <TableCell>{order.date || "-"}</TableCell>
                           <TableCell>
-                            <Badge className="bg-green-100 text-green-600">
+                            <Badge className="bg-blue-100 text-blue-600">
                               {order.status}
                             </Badge>
                           </TableCell>
@@ -326,6 +418,63 @@ export default function AnalyticsPage() {
                     )}
                   </TableBody>
                 </Table>
+
+                {/* PAGINATION */}
+                <div className="flex items-center justify-between w-full px-4 py-3 border-t bg-gray-50">
+                  <span className="text-sm text-gray-500">
+                    {transactions.length > 0 ? startIndex + 1 : 0} - {Math.min(startIndex + itemsPerPage, transactions.length)} of {transactions.length} items
+                  </span>
+
+                  <Pagination className="mx-0 w-auto justify-end"> 
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          href="#" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setCurrentPage((prev) => Math.max(prev - 1, 1));
+                          }} 
+                        />
+                      </PaginationItem>
+                      
+                      {getPaginationPages(currentPage, totalPages).map((page, i) => {
+                        if (page === "...") {
+                          return (
+                            <PaginationItem key={`dot-${i}`}>
+                              <span className="px-3 py-2 text-sm text-gray-400">...</span>
+                            </PaginationItem>
+                          );
+                        }
+
+                        const pageNumber = Number(page);
+                        return (
+                          <PaginationItem key={pageNumber}>
+                            <PaginationLink
+                              href="#"
+                              isActive={currentPage === pageNumber}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setCurrentPage(pageNumber);
+                              }}
+                            >
+                              {pageNumber}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      })}
+
+                      <PaginationItem>
+                        <PaginationNext 
+                          href="#" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+                          }} 
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

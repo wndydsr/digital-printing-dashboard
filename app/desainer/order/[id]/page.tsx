@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { DesainerLayout } from "@/components/layout/DesainerLayout"
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { apiFetch } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function DetailPesananPage() {
   const [order, setOrder] = useState<any>(null)
@@ -49,12 +50,9 @@ export default function DetailPesananPage() {
     return uniqueFiles
   })()
 
-  // =========================
-  // HANDLE DOWNLOAD
-  // =========================
   const handleDownload = async (filepath: string) => {
     const cleanPath = filepath.replace(/^\/?storage\//, "")
-    const token = localStorage.getItem("token") // sesuaikan dengan key token kamu4
+    const token = localStorage.getItem("token")
 
     const safePath = cleanPath.replace(/ /g, "%20")
 
@@ -65,7 +63,7 @@ export default function DetailPesananPage() {
     })
 
     if (!response.ok) {
-      alert("File tidak ditemukan")
+      toast.error("File tidak ditemukan")
       return
     }
 
@@ -78,18 +76,15 @@ export default function DetailPesananPage() {
     link.click()
     document.body.removeChild(link)
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+    toast.success("File berhasil diunduh!")
   }
 
-  // =========================
-  // LOAD DATA PESANAN
-  // =========================
   useEffect(() => {
     const fetchOrder = async () => {
       try {
         const data = await apiFetch(`/orders/${params.id}`)
         setOrder(data)
 
-        // ─── 🛠️ ISOLASI DATA HANYA UNTUK ITEM YANG DI-KLIK DESAINER ───
         if (data?.items && itemId) {
           const matchedItem = data.items.find((item: any) => String(item.id) === itemId)
           setActiveItem(matchedItem || data.items[0])
@@ -120,12 +115,10 @@ export default function DetailPesananPage() {
       .replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
-  // Ambil rincian json kustom detail dari satu produk terpilih
   const itemDetails = (() => {
       if (!activeItem?.details) return {}
       
       try {
-        // Jika data berupa string JSON ganda atau tunggal, bongkar secara rekursif
         let parsed = typeof activeItem.details === "string" 
           ? JSON.parse(activeItem.details) 
           : activeItem.details
@@ -145,13 +138,12 @@ export default function DetailPesananPage() {
     <DesainerLayout>
       <div className="max-w-5xl mx-auto space-y-4 p-2">
         
-        {/* HEADER MINI */}
         <div className="flex items-center gap-3 border-b pb-3">
           <Button
             variant="outline"
             size="icon"
             className="h-8 w-8 rounded-lg"
-            onClick={() => router.push("/desainer/antrian")}
+            onClick={() => router.push(`/desainer/antrian`)}
           >
             <ArrowLeft size={16} />
           </Button>
@@ -163,10 +155,8 @@ export default function DetailPesananPage() {
           </div>
         </div>
 
-        {/* GRID UTAMA */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-          {/* CARD INFO PESANAN */}
           <Card className="shadow-sm border-slate-200/80 rounded-xl">
             <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
               <CardTitle className="text-sm font-bold text-slate-700">Informasi Transaksi</CardTitle>
@@ -197,7 +187,6 @@ export default function DetailPesananPage() {
             </CardContent>
           </Card>
 
-          {/* CARD BRIEF CLIENT */}
           <Card className="shadow-sm border-slate-200/80 rounded-xl flex flex-col">
             <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
               <CardTitle className="text-sm font-bold text-slate-700">Brief Permintaan Pelanggan</CardTitle>
@@ -210,7 +199,6 @@ export default function DetailPesananPage() {
           </Card>
         </div>
 
-        {/* CARD SPESIFIKASI CETAK */}
         <Card className="shadow-sm border-slate-200/80 rounded-xl">
           <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
             <CardTitle className="text-sm font-bold text-slate-700">Rincian Spesifikasi Cetak: {activeItem.product?.name}</CardTitle>
@@ -243,7 +231,6 @@ export default function DetailPesananPage() {
           </CardContent>
         </Card>
 
-        {/* CARD RIWAYAT FILE */}
         <Card className="shadow-sm border-slate-200/80 rounded-xl">
           <CardHeader className="py-3 px-4 border-b bg-slate-50/50 rounded-t-xl">
             <CardTitle className="text-sm font-bold text-slate-700">Berkas Referensi & Pendukung</CardTitle>

@@ -25,9 +25,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { apiFetch } from "@/lib/api"
-import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
+import { toast } from "sonner"
 
 interface Order {
   id: number;
@@ -66,7 +66,6 @@ interface Order {
   created_at: string;  
 }
 
-// Interface Flat Item
 interface FlatOrderItem {
   id: number;
   item_id: number;
@@ -86,7 +85,6 @@ type ChartData = {
   total: number
 }
 
-// ─── 🛠️ HELPER BULAN & TAHUN ───
 const monthsList = [
   { value: "all", label: "Semua Bulan" },
   { value: "01", label: "Januari" },
@@ -107,7 +105,6 @@ const currentYearNum = new Date().getFullYear()
 const yearsList = Array.from({ length: 5 }, (_, i) => (currentYearNum - i).toString())
 
 export default function Dashboard() {
-  // 🔥 Diubah dari selectedPeriod string tunggal menjadi state Bulan & Tahun
   const [selectedMonth, setSelectedMonth] = useState<string>("all")
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
 
@@ -117,9 +114,7 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState<ChartData[]>([])
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [openDetail, setOpenDetail] = useState(false)
-  const { toast } = useToast()
 
-  // Ambil hanya 5 item flat terbaru untuk ditampilkan di tabel dashboard
   const latestFlatItems = [...flatItems]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5)
@@ -153,7 +148,6 @@ export default function Dashboard() {
       const orderData = await apiFetch("/orders")
       const parsedOrders = Array.isArray(orderData) ? orderData : orderData.data || []
       
-      // ─── FILTER BERDASARKAN BULAN & TAHUN ───
       const filteredOrders = parsedOrders.filter((o: Order) => {
         const orderDateStr = o.order_date ? o.order_date.replace(" ", "T") : o.created_at
         const orderDate = new Date(orderDateStr)
@@ -171,7 +165,6 @@ export default function Dashboard() {
 
       setOrders(filteredOrders)
 
-      // ─── LOGIKA SINKRONISASI FLAT ITEM ───
       const rows: FlatOrderItem[] = []
       filteredOrders.forEach((order: any) => {
         if (order.current_stage_id === 7 || order.current_stage_id === 8) {
@@ -202,11 +195,9 @@ export default function Dashboard() {
       })
       setFlatItems(rows)
 
-      // Fetch list desainer
       const designerData = await apiFetch("/users")
       setDesigners(Array.isArray(designerData) ? designerData : designerData.data || [])
 
-      // ─── PERBAIKAN GRAFIK BULANAN ───
       const months = [
         "Jan","Feb","Mar","Apr","May","Jun",
         "Jul","Aug","Sep","Oct","Nov","Dec"
@@ -222,6 +213,7 @@ export default function Dashboard() {
       setChartData(monthlyData)
     } catch (err) {
       console.error(err)
+      toast.error("Gagal memuat data dashboard.")
     }
   }
 
@@ -232,8 +224,10 @@ export default function Dashboard() {
       loadData()
       setOpenDelete(false)
       setSelectedId(null)
+      toast.success("Pesanan berhasil dihapus!")
     } catch (err) {
       console.error(err)
+      toast.error("Gagal menghapus pesanan.")
     }
   }
 
@@ -245,18 +239,11 @@ export default function Dashboard() {
         body: JSON.stringify({ designer_id: Number(designerId) })
       })
 
-      toast({
-        title: "Berhasil",
-        description: "Desainer berhasil diperbarui.",
-      })
+      toast.success("Desainer berhasil diperbarui.") // 👈 4. Toast sukses assign desainer
       loadData()
     } catch (err) {
       console.error(err)
-      toast({
-        title: "Gagal",
-        description: "Terjadi kesalahan saat menugaskan desainer.",
-        variant: "destructive"
-      })
+      toast.error("Terjadi kesalahan saat menugaskan desainer.")
     }
   }
 
@@ -279,12 +266,11 @@ export default function Dashboard() {
       window.location.href = "/login";
     }
     loadData()
-  }, [selectedMonth, selectedYear]) // Memanggil ulang loadData saat bulan atau tahun diganti
+  }, [selectedMonth, selectedYear])
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -292,7 +278,6 @@ export default function Dashboard() {
               <p className="text-gray-600 mt-1">Monitor your workflows and system performance</p>
             </div>
             
-            {/* Dropdown Filter Bulan & Tahun */}
             <div className="flex items-center gap-3">
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="w-36">
@@ -324,7 +309,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Metrics Grid */}
         <div className="grid grid-cols-4 gap-6 mb-8">
           {metricsData.map((metric, index) => (
             <Card key={index} className="hover:shadow-md transition-shadow cursor-pointer border-gray-200">
@@ -342,7 +326,6 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-3 gap-8">
-          {/* Charts Section */}
           <div className="col-span-2 space-y-8">
             <Card className="border-gray-200">
               <CardHeader className="pb-4">
@@ -365,7 +348,6 @@ export default function Dashboard() {
             </Card>            
           </div>           
           
-          {/* Pie Chart Distribution */}
           <div className="space-y-6"> 
             <Card className="border-gray-200">
               <CardHeader className="pb-4">
@@ -390,7 +372,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent Workflow Runs (Flat Items & 5 Terbaru) */}
         <div className="mt-8">
           <Card className="w-full border-gray-200">
             <CardHeader className="pb-4">
@@ -441,7 +422,6 @@ export default function Dashboard() {
                         })}
                       </TableCell>
 
-                      {/* Alokasi Tugas Desainer */}
                       <TableCell className="min-w-[160px]">
                         {item.stage_name.toLowerCase() === "menunggu pembayaran" ? (
                           <Badge variant="outline" className="rounded-md px-2.5 py-1 font-normal text-amber-600 border-amber-200 bg-amber-50">
@@ -469,14 +449,12 @@ export default function Dashboard() {
                         )}
                       </TableCell>
 
-                      {/* Badge Tahap Item Mandiri */}
                       <TableCell>
                         <Badge variant="outline" className={`rounded-md px-3 py-1 font-normal border ${stageColorByName[item.stage_name.toLowerCase()] || 'text-gray-500 border-gray-200 bg-gray-50'}`}>
                           {item.stage_name}
                         </Badge>
                       </TableCell>
 
-                      {/* Aksi */}
                       <TableCell>
                         <div className="flex items-center justify-center gap-3">
                           <button
@@ -508,7 +486,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Modals */}
       <OrderDetailModal open={openDetail} onClose={() => setOpenDetail(false)} order={selectedOrder} />
       <DeleteModal open={openDelete} onClose={() => setOpenDelete(false)} onDelete={handleDelete} />
     </DashboardLayout>

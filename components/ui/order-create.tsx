@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
 import { 
   Plus, Search, Trash2, Check, Package, 
   UserSearch, CreditCard, Receipt, X 
@@ -18,6 +17,7 @@ import PaymentModal from "@/components/ui/payment-order"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { apiFetch } from "@/lib/api"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -26,7 +26,6 @@ interface Props {
 }
 
 export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
-  const { toast } = useToast()
   
   // --- STATE ---
   const [phoneSearch, setPhoneSearch] = useState("")
@@ -252,11 +251,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
   // --- SUBMIT ---
   const handleSubmit = async () => {
     if (!customer) {
-      return toast({
-        title: "Error",
-        description: "Pilih customer dulu",
-        variant: "destructive",
-      })
+      toast.error("Pilih customer dulu")
+      return
     }
 
     const validProducts = products.filter(
@@ -264,11 +260,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
     )
 
     if (validProducts.length === 0) {
-      return toast({
-        title: "Error",
-        description: "Minimal 1 produk harus dipilih",
-        variant: "destructive",
-      })
+      toast.error("Minimal 1 produk harus dipilih")
+      return
     }
 
     setLoading(true)
@@ -280,7 +273,6 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
       formData.append("total_price", total.toString())
       formData.append("totalHarga", total.toString())
       
-
       let initialStageId = 2; 
       
       const needsDesign = validProducts.some(p => p.need_design);
@@ -343,7 +335,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
        if (p.design_files && p.design_files.length > 0) {
         const fileObj = p.design_files[0];
         formData.append(`items[${index}][design_file]`, fileObj);
-        formData.append(`items[${index}][dummy_file_name]`, fileObj.name); // 👈 Cadangan nama file asli
+        formData.append(`items[${index}][dummy_file_name]`, fileObj.name); 
       }
 
         p.support_files?.forEach((file: File) => {
@@ -356,11 +348,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
         body: formData,
       })
 
-      toast({
-        title: "Berhasil",
-        description: "Pesanan berhasil dibuat",
-      })
-      
+      toast.success("Pesanan berhasil dibuat")
+
       onSuccess()
       onClose()
 
@@ -372,11 +361,7 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
 
     } catch (err) {
       console.error(err)
-      toast({
-        title: "Gagal",
-        description: "Pesanan gagal dibuat",
-        variant: "destructive",
-      })
+      toast.error("Pesanan gagal dibuat")
       throw err;
     } finally { 
       setLoading(false)
@@ -546,17 +531,10 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                         setCustomer(createdCustomer)
                         setCustomers([...customers, createdCustomer])
                         setShowNewCustomerForm(false)
-                        toast({
-                          title: "Berhasil",
-                          description: "Customer berhasil ditambahkan",
-                        })
+                        toast.success("Customer berhasil ditambahkan")
                       } catch (err) {
                         console.error(err)
-                        toast({
-                          title: "Gagal",
-                          description: "Customer gagal ditambahkan",
-                          variant: "destructive",
-                        })
+                        toast.error("Customer gagal ditambahkan")
                       }
                     }}
                   >
@@ -838,20 +816,14 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
               className="w-full bg-blue-600 hover:bg-blue-700"
               onClick={() => {
                 if (!customer) {
-                  return toast({
-                    title: "Error",
-                    description: "Pilih customer dulu",
-                    variant: "destructive",
-                  })
+                  toast.error("Pilih customer dulu")
+                  return
                 }
 
                 const validProducts = products.filter((p) => p.product_id && p.quantity > 0)
                 if (validProducts.length === 0) {
-                  return toast({
-                    title: "Error",
-                    description: "Minimal pilih 1 produk",
-                    variant: "destructive",
-                  })
+                  toast.error("Minimal pilih 1 produk")
+                  return
                 }
 
                 // 🌟 VALIDASI FILE DESAIN SIAP CETAK
@@ -860,11 +832,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                   const productName = targetProduct?.name || "produk";
 
                   if (!item.need_design && (!item.design_files || item.design_files.length === 0)) {
-                    return toast({
-                      title: "File Desain Belum Diunggah",
-                      description: `Silakan upload file cetak untuk "${productName}" atau centang "Butuh desain dari desainer kita".`,
-                      variant: "destructive",
-                    })
+                    toast.error(`Silakan upload file cetak untuk "${productName}" atau centang "Butuh desain dari desainer kita".`)
+                    return
                   }
                 }
 
@@ -874,11 +843,8 @@ export default function OrderCreateModal({ open, onClose, onSuccess }: Props) {
                   if (targetProduct && targetProduct.attributes && targetProduct.attributes.length > 0) {
                     for (const attr of targetProduct.attributes) {
                       if (!item.attributes || !item.attributes[attr.id]) {
-                        return toast({
-                          title: "Atribut Belum Lengkap",
-                          description: `Silakan pilih opsi '${attr.name}' terlebih dahulu untuk produk ${targetProduct.name}.`,
-                          variant: "destructive",
-                        })
+                        toast.error(`Silakan pilih opsi '${attr.name}' terlebih dahulu untuk produk ${targetProduct.name}.`)
+                        return
                       }
                     }
                   }

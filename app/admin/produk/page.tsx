@@ -7,7 +7,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Download } from "lucide-react"
@@ -16,7 +16,6 @@ import ProductCreateModal from "@/components/ui/product-create"
 import DeleteModal from "@/components/ui/DeleteModal"
 import ProductDetailModal from "@/components/ui/product-detail"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Pagination,
   PaginationContent,
@@ -26,7 +25,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import { apiFetch } from "@/lib/api"
-
+import { toast } from "sonner"
 
 interface Product {
   id: number
@@ -37,10 +36,9 @@ interface Product {
   status: number
 }
 
-
 export default function ProductPage() {
       const [products, setProducts] = useState<Product[]>([])
-  
+ 
       const [timeRange, setTimeRange] = useState("30d")
       const [search, setSearch] = useState("")
 
@@ -68,7 +66,6 @@ export default function ProductPage() {
       const [openCreate, setOpenCreate] = useState(false)
       const [fields, setFields] = useState<any[]>([])
     
-    
     const addField = () => {
       setFields([
         ...fields,
@@ -92,6 +89,7 @@ export default function ProductPage() {
         setProducts(Array.isArray(data) ? data : data.data || [])
       } catch (err) {
         console.error(err)
+        toast.error("Gagal memuat data produk.")
       }
     }
 
@@ -109,15 +107,17 @@ export default function ProductPage() {
       fetchProducts()
       setOpenDelete(false)
       setSelectedId(null)
+      toast.success("Produk berhasil dihapus!")
     } catch (err) {
       console.error(err)
+      toast.error("Gagal menghapus produk.")
     }
   }
 
   // 🛠️ FUNGSI EXCEL DATA EXPORTER UNTUK PRODUK
   const handleExportProducts = () => {
     if (products.length === 0) {
-      alert("Tidak ada data produk untuk di-export.")
+      toast.error("Tidak ada data produk untuk di-export.")
       return
     }
 
@@ -149,6 +149,8 @@ export default function ProductPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+
+    toast.success("Data produk berhasil di-export ke CSV!")
   }
 
 useEffect(() => {

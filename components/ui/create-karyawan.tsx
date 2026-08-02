@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -26,7 +26,7 @@ export default function KaryawanCreateModal({
     name: "",
     email: "",
     password: "",
-    role: "operator", // Default role
+    role: "operator",
   })
 
   const [errors, setErrors] = useState<any>({})
@@ -38,13 +38,10 @@ export default function KaryawanCreateModal({
     })
   }
 
-  const { toast } = useToast()
-
   const handleSubmit = async () => {
     try {
       const token = localStorage.getItem("token")
 
-      // Pastikan endpoint mengarah ke /api/karyawan
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/karyawan`, {
         method: "POST",
         headers: {
@@ -62,7 +59,7 @@ export default function KaryawanCreateModal({
       try {
         data = JSON.parse(text)
       } catch {
-        // kalau bukan JSON, biarin kosong
+
       }
 
       if (!res.ok) {
@@ -74,7 +71,6 @@ export default function KaryawanCreateModal({
           const errorsArr = Object.values(data.errors) as string[][]
           firstError = errorsArr[0][0]
 
-          // Custom pesan error yang lebih ramah
           if (data.errors.email) {
             firstError = "Email ini sudah terdaftar"
           }
@@ -82,22 +78,13 @@ export default function KaryawanCreateModal({
           firstError = data.message
         }
 
-        toast({
-          title: "Gagal",
-          description: firstError,
-          variant: "destructive",
-        })
-
+        toast.error(firstError)
         return
       }
 
-      toast({
-        title: "Berhasil",
-        description: "Data karyawan berhasil ditambahkan",
-      })
+      toast.success("Data karyawan berhasil ditambahkan")
 
       setErrors({})
-
       onSuccess()
       onClose()
   
@@ -111,6 +98,7 @@ export default function KaryawanCreateModal({
 
     } catch (err) {
       console.error("ERROR:", err)
+      toast.error("Terjadi kesalahan pada sistem.")
     }
   }
 

@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { apiFetch } from "@/lib/api"
+import { toast } from "sonner" // 👈 Toast Sonner
 
 const navigation = [
   { name: "Dashboard", href: "/desainer", icon: Home },
@@ -37,7 +38,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
     email: "",
   })
 
-  // 🔔 SCRIPT SERVICE WORKER & PUSH NOTIFICATION DESAINER
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       navigator.serviceWorker.register('/sw.js')
@@ -67,30 +67,27 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
       });
 
       if (response.ok) {
-        alert('Web Push Notifikasi Desainer Berhasil Diaktifkan!');
+        toast.success('Web Push Notifikasi Desainer Berhasil Diaktifkan!');
       } else {
-        alert('Gagal menyimpan langganan ke server.');
+        toast.error('Gagal menyimpan langganan ke server.');
       }
     } catch (error) {
       console.error('Error saat subscribe:', error);
-      alert('Gagal mengaktifkan notifikasi. Pastikan izin browser diizinkan.');
+      toast.error('Gagal mengaktifkan notifikasi. Pastikan izin browser diizinkan.');
     }
   };
 
   useEffect(() => {
-    // 🛠️ Sinkronisasi Awal: Coba intip localStorage dulu biar instan langsung muncul namanya
     const storedName = localStorage.getItem("user_name")
     const storedEmail = localStorage.getItem("user_email")
     if (storedName) {
       setUserProfile({ name: storedName, email: storedEmail || "" })
     }
 
-    // Ambil data terbaru dari backend API
     apiFetch("/me")
       .then((data: any) => {
         if (data && data.name) {
           setUserProfile({ name: data.name, email: data.email })
-          // Sinkronkan ke local storage
           localStorage.setItem("user_name", data.name)
           localStorage.setItem("user_email", data.email)
         }
@@ -102,7 +99,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
         }
       })
 
-    // 🛠️ Fungsi sakti: Jika di halaman profile datanya di-save, komponen header ini langsung mendeteksi perubahannya secara real-time
     const handleStorageChange = () => {
       setUserProfile({
         name: localStorage.getItem("user_name") || "Desainer Panel",
@@ -112,7 +108,7 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
 
     window.addEventListener("storage_profile_updated", handleStorageChange)
     return () => window.removeEventListener("storage_profile_updated", handleStorageChange)
-  }, [pathname]) // Dipicu ulang setiap pindah halaman agar datanya selalu segar
+  }, [pathname])
 
   const getInitials = (name: string) => {
     return name && name !== "Loading..." ? name.substring(0, 2).toUpperCase() : "DS"
@@ -132,7 +128,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
         <div className="flex items-start gap-4">
           <div className="font-semibold text-gray-900">
@@ -148,7 +143,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* 🔔 Tombol Aktifkan Notifikasi Desainer */}
           <Button 
             onClick={handleSubscribe} 
             variant="outline" 
@@ -163,7 +157,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
           </Button>
 
-          {/* Dropdown Menu Profile */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-gray-50 h-10 rounded-md">
@@ -199,7 +192,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       <div className="flex">
-        {/* Sidebar */}
         <aside className="w-60 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="p-4">
             <nav className="space-y-1">
@@ -225,7 +217,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        {/* Content */}
         <main className="flex-1 p-8 bg-gray-50 min-h-[calc(100vh-4rem)]">
           {children}
         </main>
@@ -234,7 +225,6 @@ export function DesainerLayout({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Helper pengubah format VAPID Key
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

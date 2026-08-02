@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Trash2, Layers, X } from "lucide-react"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -21,7 +22,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
     estimated_duration: "",
     status: "1",
     category_id: "", 
-    is_custom: false, // 👈 1. TAMBAHKAN STATE BARU
+    is_custom: false, 
   })
 
   const [photo, setPhoto] = useState<File | null>(null)
@@ -29,9 +30,6 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
   const [fields, setFields] = useState<CustomField[]>([])
   const [attributes, setAttributes] = useState<ProductAttribute[]>([])
 
-  // ==========================================
-  // 🔥 STATE UNTUK LOGIKA SEARCH & CREATE KATEGORI
-  // ==========================================
   const [categories, setCategories] = useState<any[]>([])
   const [categorySearch, setCategorySearch] = useState("")
   const [filteredCategories, setFilteredCategories] = useState<any[]>([])
@@ -52,7 +50,6 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
     }[]
   }
 
-  // Ambil data kategori saat modal dibuka
   useEffect(() => {
     if (open) {
       const fetchCategories = async () => {
@@ -131,12 +128,12 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
     setAttributes(newAttributes)
   }
 
-  // Mendapatkan objek kategori yang sedang dipilih secara aktif
   const selectedCategoryObj = categories.find((c) => String(c.id) === String(form.category_id))
 
   const handleSubmit = async () => {
     if (!form.category_id) {
-      return alert("Pilih kategori produk terlebih dahulu")
+      toast.error("Pilih kategori produk terlebih dahulu")
+      return
     }
 
     setLoading(true)
@@ -156,7 +153,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
         name: f.name || "",
         label: f.label || "",
         type: f.type || "text",
-        options: Array.isArray(f.options) ? f.options : [] // Pastikan selalu array mutlak
+        options: Array.isArray(f.options) ? f.options : []
       }))
       formData.append("fields", JSON.stringify(sanitizedFields))
 
@@ -174,7 +171,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
 
       const token = localStorage.getItem("token")
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/products`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/products`, {
         method: "POST",
         headers: {
           "Accept": "application/json",
@@ -183,11 +180,15 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
         body: formData,
       })
       
+      if (!res.ok) {
+        throw new Error("Gagal menyimpan produk ke server.")
+      }
+
+      toast.success("Produk baru berhasil ditambahkan!")
 
       onSuccess()
       onClose()
 
-      // 3. RESET STATE SETELAH BERHASIL
       setForm({ name: "", price: "", estimated_duration: "", status: "1", category_id: "", is_custom: false })
       setPhoto(null)
       setFields([])
@@ -197,6 +198,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
       setShowNewCategoryForm(false)
     } catch (err) {
       console.error(err)
+      toast.error("Terjadi kesalahan saat menyimpan produk.")
     } finally {
       setLoading(false)
     }
@@ -223,7 +225,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
             />
           </div>
 
-          {/* LOGIKA DROPDOWN SEARCH & QUICK CREATE KATEGORI BARU */}
+          {/* Kategori Produk */}
           <div className="space-y-3">
             <Label className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-gray-400" /> Kategori Produk
@@ -258,7 +260,6 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
                 className="bg-gray-50"
               />
 
-              {/* Box Dropdown Hasil Pencarian */}
               {filteredCategories.length > 0 && (
                 <div className="absolute z-50 mt-2 w-full bg-white border rounded-lg shadow-lg max-h-52 overflow-y-auto">
                   {filteredCategories.map((item) => (
@@ -279,7 +280,6 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
               )}
             </div>
 
-            {/* Tampilan Badge Kategori Terpilih */}
             {form.category_id && selectedCategoryObj && (
               <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
                 <div>
@@ -296,7 +296,6 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
               </div>
             )}
 
-            {/* Form Cepat Tambah Kategori Baru */}
             {showNewCategoryForm && !form.category_id && (
               <div className="border rounded-xl p-4 space-y-3 bg-orange-50 border-orange-200">
                 <p className="text-sm font-semibold text-orange-700">
@@ -311,6 +310,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
                       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/categories`, {
                         method: "POST",
                         headers: {
+                          "Content-Type": "application/json",
                           Authorization: `Bearer ${token}`,
                         },
                         body: JSON.stringify({
@@ -325,9 +325,13 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
                         setForm({ ...form, category_id: String(createdCategory.id) })
                         setShowNewCategoryForm(false)
                         setCategorySearch("")
+                        toast.success("Kategori baru berhasil didaftarkan!")
+                      } else {
+                        toast.error("Gagal mendaftarkan kategori.")
                       }
                     } catch (err) {
                       console.error("Gagal menyimpan kategori baru:", err)
+                      toast.error("Terjadi kesalahan pada server kategori.")
                     }
                   }}
                 >
@@ -337,7 +341,7 @@ export default function ProductCreateModal({ open, onClose, onSuccess }: Props) 
             )}
           </div>
 
-          {/* 👇 4. INPUT BARU: PILIHAN TIPE PERHITUNGAN HARGA PRODUK */}
+          {/* Tipe Perhitungan Harga */}
           <div>
             <Label>Tipe Perhitungan Harga</Label>
             <Select

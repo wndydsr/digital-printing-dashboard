@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, Suspense } from "react"
+import { useEffect, useState, useRef, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import {
   Plus,
@@ -27,7 +27,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-// 🔥 TAMBAHAN: modal invoice + dialog, dipakai untuk munculkan invoice setelah redirect balik dari Midtrans
 import InvoiceOrder from "@/components/ui/invoice-order"
 import {
   Dialog,
@@ -35,11 +34,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { toast } from "sonner"
 
 // ─── 🛠️ INTERFACE FLAT ITEM PRODUK ───
 interface AdminFlatOrderItem {
-  id: number;          // ID order induk
-  item_id: number;      // ID detail item (OrderItem)
+  id: number;      // ID order induk
+  item_id: number;     // ID detail item (OrderItem)
   order_code: string;
   customer_name: string;
   customer_phone: string;
@@ -123,7 +123,6 @@ function AnalyticsPageContent() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [openDetail, setOpenDetail] = useState(false)
   
-  // 🔥 Diubah dari timeRange menjadi selectedMonth & selectedYear
   const [selectedMonth, setSelectedMonth] = useState<string>("all")
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
 
@@ -133,7 +132,6 @@ function AnalyticsPageContent() {
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
-  // 🔥 TAMBAHAN: state untuk modal invoice hasil redirect balik dari Midtrans (mis. DANA/e-wallet)
   const searchParams = useSearchParams()
   const router = useRouter()
   const [showRedirectInvoice, setShowRedirectInvoice] = useState(false)
@@ -149,7 +147,6 @@ function AnalyticsPageContent() {
       item.customer_name?.toLowerCase().includes(keyword) ||
       item.product_name?.toLowerCase().includes(keyword)
 
-    // Filter Berdasarkan Bulan & Tahun
     const itemDate = new Date(item.created_at)
     const itemYear = itemDate.getFullYear().toString()
     const itemMonth = String(itemDate.getMonth() + 1).padStart(2, "0")
@@ -164,7 +161,6 @@ function AnalyticsPageContent() {
   const currentData = filteredItems.slice(startIndex, startIndex + itemsPerPage)
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage || 1) 
 
-  // ─── 🎨 PEMETAAN WARNA BADGE STAGE KERJA ───
   const stageColorByName: Record<string, string> = {
     "butuh desain": "text-red-500 border-red-200 bg-red-50/30",
     "antrean desain": "text-orange-500 border-orange-200 bg-orange-50/30",
@@ -183,14 +179,12 @@ function AnalyticsPageContent() {
         const rows: AdminFlatOrderItem[] = [] 
         
         result.forEach((order: any) => {
-          // 🌟 1. Abaikan order induk jika berada di Stage 7 (Menunggu Pembayaran) atau Stage 8 (Dibatalkan)
           if (order.current_stage_id === 7 || order.current_stage_id === 8) {
             return;
           }
 
           if (order && Array.isArray(order.items)) {
             order.items.forEach((item: any) => {
-              // 🌟 2. Abaikan detail item jika berada di Stage 7 atau Stage 8
               if (item.order_stage_id === 7 || item.order_stage_id === 8) {
                 return;
               }
@@ -223,8 +217,10 @@ function AnalyticsPageContent() {
       .catch((err) => {
         console.error("🔴 Error fetching orders:", err)
         setFlatItems([])
+        toast.error("Gagal memuat data pesanan.")
       })
   }
+
   const fetchDesigners = () => {
     apiFetch(`/users?role=desainer`)
       .then((data: any) => {
@@ -240,9 +236,11 @@ function AnalyticsPageContent() {
         method: "PUT",
         body: JSON.stringify({ designer_id: Number(designerId) }),
       })
+      toast.success("Desainer berhasil ditugaskan!")
       fetchOrders() 
     } catch (err) {
       console.error(err)
+      toast.error("Gagal menugaskan desainer.")
     }
   }
 
@@ -253,14 +251,16 @@ function AnalyticsPageContent() {
       fetchOrders()
       setOpenDelete(false)
       setSelectedId(null)
+      toast.success("Pesanan berhasil dihapus!")
     } catch (err) {
       console.error(err)
+      toast.error("Gagal menghapus pesanan.")
     }
   }
 
   const handleExportExcel = () => {
     if (flatItems.length === 0) {
-      alert("Tidak ada data pesanan untuk di-export.")
+      toast.error("Tidak ada data pesanan untuk di-export.")
       return
     }
 
@@ -293,6 +293,8 @@ function AnalyticsPageContent() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+
+    toast.success("Laporan pesanan berhasil di-export ke CSV!")
   }
 
   useEffect(() => {
@@ -300,7 +302,6 @@ function AnalyticsPageContent() {
     fetchDesigners()
   }, [])
 
-  // 🔥 TAMBAHAN: deteksi redirect balik dari Midtrans (mis. DANA/GoPay/e-wallet yang redirect penuh)
   useEffect(() => {
     const orderId = searchParams.get("order_id")
     const transactionStatus = searchParams.get("transaction_status")
@@ -331,7 +332,7 @@ function AnalyticsPageContent() {
 
           fetchOrders()
         } else {
-          alert("Transaksi dibatalkan/gagal. Cek kembali status pesanan.")
+          toast.error("Transaksi dibatalkan/gagal. Cek kembali status pesanan.")
         }
       } catch (err) {
         console.error("Gagal memuat data order setelah redirect Midtrans:", err)
@@ -553,7 +554,7 @@ function AnalyticsPageContent() {
         <OrderCreateModal open={openCreate} onClose={() => setOpenCreate(false)} onSuccess={() => { fetchOrders(); setCurrentPage(1); }} />
         <DeleteModal open={openDelete} onClose={() => setOpenDelete(false)} onDelete={handleDelete} />
 
-        {/* 🔥 TAMBAHAN: Modal invoice khusus hasil redirect balik dari Midtrans (DANA/e-wallet dsb) */}
+        {/* Modal invoice khusus hasil redirect balik dari Midtrans (DANA/e-wallet dsb) */}
         <Dialog open={showRedirectInvoice} onOpenChange={setShowRedirectInvoice}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
             <DialogHeader>
@@ -579,7 +580,6 @@ function AnalyticsPageContent() {
   )
 }
 
-// 🔥 TAMBAHAN: bungkus dengan Suspense karena useSearchParams wajib berada di dalam Suspense boundary
 export default function AnalyticsPage() {
   return (
     <Suspense fallback={<div className="p-8 text-sm text-gray-500">Memuat halaman pesanan...</div>}>

@@ -82,19 +82,19 @@ class ChatBotController extends Controller
         }
 
         // -------------------------------------------------------------------------
-        // 3. SYSTEM INSTRUCTION (Mewajibkan Catatan)
+        // 3. SYSTEM INSTRUCTION (Mewajibkan Catatan & Dimensi Ukuran)
         // -------------------------------------------------------------------------
         $systemInstruction = "Kamu adalah Nora, AI Assistant Percetakan Digital yang ramah, sopan, dan terampil.\n\n"
             . "DATA PRODUK TERSEDIA:\n{$contextHarga}\n"
             . "{$contextOrder}\n\n"
             . "ATURAN UTAMA PENJUALAN:\n"
             . "1. DILARANG menghitung harga manual di teks! Jika user beri ukuran (panjang x lebar) atau memilih bahan, PANGGIL fungsi `get_price_quote`.\n"
-            . "2. KONVERSI UKURAN: Jika user sebut ukuran dalam METER (misal 2x1m), konversikan ke CM saat panggil fungsi (panjang_cm: 200, lebar_cm: 100).\n"
+            . "2. KONVERSI UKURAN: Jika user sebut ukuran dalam METER (misal 3x1m / 300x100cm), WAJIB konversikan ke CM saat panggil fungsi (panjang_cm: 300, lebar_cm: 100).\n"
             . "3. JANGAN PERNAH panggil `create_order_summary` jika Ukuran, Bahan, Qty, Status Desain, dan CATATAN/FINISHING BELUM DIJAWAB LENGKAP oleh user. Tanyakan catatan instruksi cetak terlebih dahulu!\n"
             . "4. Jawablah selalu menggunakan Bahasa Indonesia yang ramah dan membantu.";
 
         // -------------------------------------------------------------------------
-        // 4. DEFINISI TOOLS GEMINI (Required: catatan)
+        // 4. DEFINISI TOOLS GEMINI (Required: panjang_cm & lebar_cm)
         // -------------------------------------------------------------------------
         $tools = [[
             'function_declarations' => [
@@ -121,14 +121,15 @@ class ChatBotController extends Controller
                         'properties' => [
                             'product_id' => ['type' => 'INTEGER'],
                             'quantity' => ['type' => 'INTEGER'],
-                            'panjang_cm' => ['type' => 'NUMBER'],
-                            'lebar_cm' => ['type' => 'NUMBER'],
+                            'panjang_cm' => ['type' => 'NUMBER', 'description' => 'Panjang ukuran dalam CM (misal 300 untuk 3m)'],
+                            'lebar_cm' => ['type' => 'NUMBER', 'description' => 'Lebar ukuran dalam CM (misal 100 untuk 1m)'],
                             'attribute_value_ids' => ['type' => 'ARRAY', 'items' => ['type' => 'INTEGER']],
                             'deadline' => ['type' => 'STRING'],
                             'need_design' => ['type' => 'BOOLEAN'],
                             'catatan' => ['type' => 'STRING', 'description' => 'Detail finishing / instruksi khusus dari user'],
                         ],
-                        'required' => ['product_id', 'quantity', 'need_design', 'catatan'],
+                        // 🔥 DIUBAH: AI WAJIB Mengirimkan panjang_cm dan lebar_cm
+                        'required' => ['product_id', 'quantity', 'panjang_cm', 'lebar_cm', 'need_design', 'catatan'],
                     ],
                 ],
             ],
@@ -286,8 +287,13 @@ class ChatBotController extends Controller
 
         $totalHargaPerMeter = $hargaDasarPerMeter + $tambahanPerMeter;
 
-        if ($product->is_custom && $panjang > 0 && $lebar > 0) {
-            $luas = ($panjang * $lebar) / 10000;
+        // 🔥 PERBAIKAN MATEMATIS HARGA
+        if ($product->is_custom) {
+            if ($panjang > 0 && $lebar > 0) {
+                $luas = ($panjang * $lebar) / 10000;
+            } else {
+                $luas = 1; // Fallback minimal 1 m2
+            }
             $hargaSatuan = $luas * $totalHargaPerMeter;
         } else {
             $hargaSatuan = $totalHargaPerMeter;

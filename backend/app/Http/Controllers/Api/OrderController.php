@@ -268,6 +268,7 @@ class OrderController extends Controller
 
             DB::commit();
 
+            // Notifikasi Admin tetap dipertahankan di sini jika pesanan dibuat via store umum
             try {
                 $auth = [
                     'VAPID' => [
@@ -279,7 +280,6 @@ class OrderController extends Controller
 
                 $webPush = new WebPush($auth);
                 
-                // 1. Notifikasi untuk Admin
                 $adminSubscriptions = PushSubscription::whereHas('user', function($q) {
                     $q->where('role', 'admin');
                 })->get();
@@ -301,41 +301,6 @@ class OrderController extends Controller
                     );
                 }
 
-                // 2. Notifikasi untuk Operator jika pesanan langsung siap cetak (baik dari customer maupun admin)
-                $needsDirectPrint = false;
-                foreach ($request->items as $item) {
-                    $itemNeedDesign = isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN);
-                    $designMethod = $request->input('design_method');
-                    
-                    if (!$itemNeedDesign || $designMethod === 'ready-to-print' || !empty($item['dummy_file_name']) || $request->input('is_direct', false)) {
-                        $needsDirectPrint = true;
-                        break;
-                    }
-                }
-
-                if ($needsDirectPrint) {
-                    $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
-                        $q->where('role', 'operator');
-                    })->get();
-
-                    foreach ($operatorSubscriptions as $sub) {
-                        $subscription = Subscription::create([
-                            'endpoint' => $sub->endpoint,
-                            'publicKey' => $sub->public_key,
-                            'authToken' => $sub->auth_token,
-                        ]);
-
-                        $webPush->queueNotification(
-                            $subscription,
-                            json_encode([
-                                'title' => '🖨️ Pesanan Siap Cetak Baru! (#' . $order->id . ')',
-                                'body' => 'Ada pesanan baru langsung siap cetak dengan ID #' . $order->id . '.',
-                                'url' => 'https://admin.prinora.store/operator/antrian'
-                            ])
-                        );
-                    }
-                }
-
                 foreach ($webPush->flush() as $report) {
                     $endpoint = $report->getRequest()->getUri()->__toString();
                     if (!$report->isSuccess()) {
@@ -343,7 +308,7 @@ class OrderController extends Controller
                     }
                 }
             } catch (\Exception $e) {
-                Log::error('Gagal mengirim push notification pesanan baru: ' . $e->getMessage());
+                Log::error('Gagal mengirim push notification pesanan baru ke admin: ' . $e->getMessage());
             }
 
             return response()->json([
@@ -625,51 +590,7 @@ class OrderController extends Controller
                 Order::where('id', $orderId)->update(['current_stage_id' => $item->order_stage_id]);
             }
 
-            // 🔔 1. Notifikasi Operator (Hanya ketika status BERUBAH masuk ke tahap Siap Cetak dari tahap lain)
-            if ($oldStageId != self::STAGE_SIAP_CETAK && $item->order_stage_id == self::STAGE_SIAP_CETAK) {
-                try {
-                    $webPush = new WebPush([
-                        'VAPID' => [
-                            'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
-                            'publicKey' => config('services.vapid.public_key'),
-                            'privateKey' => config('services.vapid.private_key'),
-                        ],
-                    ]);
-
-                    $operatorSubscriptions = PushSubscription::whereHas('user', function($q) {
-                        $q->where('role', 'operator');
-                    })->get();
-
-                    foreach ($operatorSubscriptions as $sub) {
-                        $subscription = Subscription::create([
-                            'endpoint' => $sub->endpoint,
-                            'publicKey' => $sub->public_key,
-                            'authToken' => $sub->auth_token,
-                        ]);
-
-                        $webPush->queueNotification(
-                            $subscription,
-                            json_encode([
-                                'title' => '🖨️ Desain Selesai & Siap Cetak! (#' . $order->id . ')',
-                                'body' => 'Desain untuk pesanan #' . $order->id . ' telah diselesaikan oleh desainer dan siap dicetak.',
-                                'url' => 'https://admin.prinora.store/operator/antrian'
-                            ])
-                        );
-                    }
-
-                    foreach ($webPush->flush() as $report) {
-                        $endpoint = $report->getRequest()->getUri()->__toString();
-                        if (!$report->isSuccess()) {
-                            PushSubscription::where('endpoint', $endpoint)->delete();
-                        }
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Gagal mengirim push notification ke operator: ' . $e->getMessage());
-                }
-            }
-
-            // 🔔 2. Notifikasi Kurir (Hanya jika status berubah ke Cetak/Selesai DAN metodenya delivery)
-            if ($oldStageId != $item->order_stage_id && in_array($item->order_stage_id, [self::STAGE_CETAK, self::STAGE_SELESAI]) && $order->shipping_method === 'delivery') {
+                if ($oldStageId != $item->order_stage_id && in_array($item->order_stage_id, [self::STAGE_CETAK, self::STAGE_SELESAI]) && $order->shipping_method === 'delivery') {
                 try {
                     $webPush = new WebPush([
                         'VAPID' => [

@@ -221,8 +221,8 @@ class PaymentController extends Controller
                 ];
             } else {
                 $params['callbacks'] = [
-                    'finish'   => 'https://prinora.store/invoice/' . $order->id,
-                    'unfinish' => 'https://prinora.store/invoice/' . $order->id,
+                    'finish'   => 'https://prinora.store/invoice/' . $order->id,             
+                    'unfinish' => 'https://prinora.store/my-account?tab=orders',            
                     'error'    => 'https://prinora.store/my-account?tab=orders'
                 ];
             }

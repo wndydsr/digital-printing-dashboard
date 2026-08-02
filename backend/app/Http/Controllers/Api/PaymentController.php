@@ -143,6 +143,58 @@ class PaymentController extends Controller
                 })->delete();
             }
 
+            // 🔔 TAMBAHAN: Kirim push notification ke operator jika ada item yang langsung Siap Cetak saat checkout admin
+            try {
+                $needsDirectPrint = false;
+                foreach ($request->input('items') as $item) {
+                    $itemNeedDesign = isset($item['need_design']) && filter_var($item['need_design'], FILTER_VALIDATE_BOOLEAN);
+                    if (!$itemNeedDesign || $request->input('is_direct', false) || !empty($item['dummy_file_name'])) {
+                        $needsDirectPrint = true;
+                        break;
+                    }
+                }
+
+                if ($needsDirectPrint) {
+                    $webPush = new \Minishlink\WebPush\WebPush([
+                        'VAPID' => [
+                            'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                            'publicKey' => config('services.vapid.public_key'),
+                            'privateKey' => config('services.vapid.private_key'),
+                        ],
+                    ]);
+
+                    $operatorSubscriptions = \App\Models\PushSubscription::whereHas('user', function($q) {
+                        $q->where('role', 'operator');
+                    })->get();
+
+                    foreach ($operatorSubscriptions as $sub) {
+                        $subscription = \Minishlink\WebPush\Subscription::create([
+                            'endpoint' => $sub->endpoint,
+                            'publicKey' => $sub->public_key,
+                            'authToken' => $sub->auth_token,
+                        ]);
+
+                        $webPush->queueNotification(
+                            $subscription,
+                            json_encode([
+                                'title' => '🖨️ Pesanan Siap Cetak Baru! (#' . $order->id . ')',
+                                'body' => 'Ada pesanan baru langsung siap cetak dengan ID #' . $order->id . '.',
+                                'url' => 'https://admin.prinora.store/operator/antrian'
+                            ])
+                        );
+                    }
+
+                    foreach ($webPush->flush() as $report) {
+                        $endpoint = $report->getRequest()->getUri()->__toString();
+                        if (!$report->isSuccess()) {
+                            \App\Models\PushSubscription::where('endpoint', $endpoint)->delete();
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Gagal mengirim push notification ke operator dari checkout: ' . $e->getMessage());
+            }
+
             Config::$serverKey = config('services.midtrans.server_key');
             Config::$isProduction = (bool) config('services.midtrans.is_production', false); 
             Config::$isSanitized = true;

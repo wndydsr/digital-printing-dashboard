@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class MessageController extends Controller
 {
@@ -32,7 +33,7 @@ class MessageController extends Controller
 
         } catch (\Exception $e) {
             // Catat error sistem ke storage/logs/laravel.log agar bisa kamu pelajari detailnya
-            \Log::error("Gagal memuat pesan chat Order #{$orderId}: " . $e->getMessage());
+            Log::error("Gagal memuat pesan chat Order #{$orderId}: " . $e->getMessage());
 
             // Kembalikan array kosong dengan status 200 sebagai penangkal crash .reverse() di frontend
             return response()->json([], 200);
@@ -90,6 +91,8 @@ class MessageController extends Controller
                 return response()->json(['message' => 'Item produk tidak ditemukan.'], 404);
             }
 
+            $oldStageId = $item->order_stage_id;
+
             // Update status item tersebut menjadi 2 (Siap Cetak) secara mandiri
             $item->update([
                 'order_stage_id' => 2
@@ -120,14 +123,58 @@ class MessageController extends Controller
             $totalItems = OrderItem::where('order_id', $orderId)->count();
             $approvedItems = OrderItem::where('order_id', $orderId)->where('order_stage_id', 2)->count();
             
+            $order = Order::findOrFail($orderId);
             if ($totalItems === $approvedItems) {
-                Order::where('id', $orderId)->update(['current_stage_id' => 2]);
+                $order->update(['current_stage_id' => 2]);
+            } else {
+                $order->update(['current_stage_id' => 2]); // atau sesuaikan stage induk
+            }
+
+            // 🔔 TAMBAHAN: Kirim Notifikasi ke Operator karena desain disetujui & masuk Siap Cetak
+            try {
+                $webPush = new \Minishlink\WebPush\WebPush([
+                    'VAPID' => [
+                        'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                        'publicKey' => config('services.vapid.public_key'),
+                        'privateKey' => config('services.vapid.private_key'),
+                    ],
+                ]);
+
+                $operatorSubscriptions = \App\Models\PushSubscription::whereHas('user', function($q) {
+                    $q->where('role', 'operator');
+                })->get();
+
+                foreach ($operatorSubscriptions as $sub) {
+                    $subscription = \Minishlink\WebPush\Subscription::create([
+                        'endpoint' => $sub->endpoint,
+                        'publicKey' => $sub->public_key,
+                        'authToken' => $sub->auth_token,
+                    ]);
+
+                    $webPush->queueNotification(
+                        $subscription,
+                        json_encode([
+                            'title' => '🖨️ Desain Selesai & Siap Cetak! (#' . $order->id . ')',
+                            'body' => 'Desain untuk pesanan #' . $order->id . ' telah disetujui dan siap dicetak.',
+                            'url' => 'https://admin.prinora.store/operator/antrian'
+                        ])
+                    );
+                }
+
+                foreach ($webPush->flush() as $report) {
+                    $endpoint = $report->getRequest()->getUri()->__toString();
+                    if (!$report->isSuccess()) {
+                        \App\Models\PushSubscription::where('endpoint', $endpoint)->delete();
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Gagal mengirim push notification ke operator dari approveDesign: ' . $e->getMessage());
             }
 
             // 4. Buat log pesan otomatis di dalam room chat item tersebut
             $systemMessage = Message::create([
                 'order_id' => (int)$orderId,
-                'order_item_id' => (int)$orderItemId, // 🔥 Kunci log ke item ini
+                'order_item_id' => (int)$orderItemId,
                 'sender' => 'customer',
                 'message' => '✔️ [SISTEM]: Customer telah menyetujui desain untuk item ini. Pesanan diteruskan ke bagian Cetak.',
                 'file' => null,
@@ -150,5 +197,4 @@ class MessageController extends Controller
                 'message' => 'Terjadi kesalahan: ' . $e->getMessage()
             ], 500);
         }
-    }
-}
+    }}

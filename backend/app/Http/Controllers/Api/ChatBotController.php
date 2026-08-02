@@ -304,6 +304,7 @@ class ChatBotController extends Controller
         $priceData = [
             'product_id' => $product->id,
             'product_name' => $product->name,
+            'product_photo' => $product->photo ? asset('storage/' . $product->photo) : null,
             'quantity' => $quantity,
             'panjang_cm' => $panjang,
             'lebar_cm' => $lebar,

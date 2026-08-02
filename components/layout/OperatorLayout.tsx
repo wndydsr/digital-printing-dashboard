@@ -16,6 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { toast } from "sonner" // 👈 Toast Sonner
 
 const navigation = [
   { name: "Dashboard", href: "/operator", icon: Home },
@@ -32,7 +33,6 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
     email: "operator@prinora.store",
   })
 
-  // 🔔 SCRIPT SERVICE WORKER & PUSH NOTIFICATION OPERATOR
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       navigator.serviceWorker.register('/sw.js')
@@ -62,13 +62,13 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
       });
 
       if (response.ok) {
-        alert('Web Push Notifikasi Operator Berhasil Diaktifkan!');
+        toast.success('Web Push Notifikasi Operator Berhasil Diaktifkan!');
       } else {
-        alert('Gagal menyimpan langganan ke server.');
+        toast.error('Gagal menyimpan langganan ke server.');
       }
     } catch (error) {
       console.error('Error saat subscribe:', error);
-      alert('Gagal mengaktifkan notifikasi.');
+      toast.error('Gagal mengaktifkan notifikasi.');
     }
   };
 
@@ -91,7 +91,6 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="font-semibold text-gray-900">Operator Panel</div>
@@ -105,7 +104,6 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* 🔔 Tombol Aktifkan Notifikasi Operator */}
           <Button 
             onClick={handleSubscribe} 
             variant="outline" 
@@ -159,7 +157,6 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       <div className="flex">
-        {/* Sidebar */}
         <aside className="w-60 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="p-4">
             <nav className="space-y-1">
@@ -185,14 +182,12 @@ export function OperatorLayout({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        {/* Content */}
         <main className="flex-1 p-8 bg-gray-50">{children}</main>
       </div>
     </div>
   )
 }
 
-// Helper pengubah format VAPID Key
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

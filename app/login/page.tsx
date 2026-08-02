@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  // State untuk kontrol visibilitas password
   const [showPassword, setShowPassword] = useState(false);
 
-  // Efek untuk mengecek apakah data "Remember Me" tersimpan di browser
   useEffect(() => {
     const savedEmail = localStorage.getItem("remember_email");
     const savedPassword = localStorage.getItem("remember_password");
@@ -23,7 +22,6 @@ export default function LoginPage() {
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
-    // Mencegah browser reload halaman saat form disubmit
     e.preventDefault();
 
     try {
@@ -41,11 +39,10 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message);
+        toast.error(data.message || "Gagal masuk, periksa kembali email dan password.");
         return;
       }
 
-      // Logika Penanganan "Remember Me" setelah login sukses
       if (rememberMe) {
         localStorage.setItem("remember_email", email);
         localStorage.setItem("remember_password", password); 
@@ -56,31 +53,33 @@ export default function LoginPage() {
         localStorage.removeItem("remember_check");
       }
 
-      // Menyimpan data sesi autentikasi pengguna
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("user_name", data.user.name); 
       localStorage.setItem("user_email", data.user.email);
 
-      if (data.user.role === "admin") {
-        window.location.href = "/admin";
-      } else if (data.user.role === "desainer") {
-        window.location.href = "/desainer";
-      } else if (data.user.role === "operator") {
-        window.location.href = "/operator";
-      } else if (data.user.role === "kurir") {
-        window.location.href = "/kurir";
-      }
+      toast.success(`Selamat datang kembali, ${data.user.name}!`);
+
+      setTimeout(() => {
+        if (data.user.role === "admin") {
+          window.location.href = "/admin";
+        } else if (data.user.role === "desainer") {
+          window.location.href = "/desainer";
+        } else if (data.user.role === "operator") {
+          window.location.href = "/operator";
+        } else if (data.user.role === "kurir") {
+          window.location.href = "/kurir";
+        }
+      }, 500);
 
     } catch (error) {
       console.error(error);
-      alert("Terjadi error");
+      toast.error("Terjadi kesalahan pada sistem, silakan coba lagi.");
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-blue-400 to-indigo-500">
-      {/* Mengubah div menjadi form agar trigger enter otomatis berfungsi */}
       <form onSubmit={handleLogin} className="bg-white w-[380px] rounded-2xl shadow-xl p-8">
         <h2 className="text-center text-xl font-semibold">Welcome Back!</h2>
         <p className="text-center text-sm text-gray-500 mb-6">

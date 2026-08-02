@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
-import { se } from "date-fns/locale"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -13,11 +12,10 @@ interface Props {
   onSuccess: () => void
 }
 
-export default function CustomerDetailModal({ open, onClose, customer, onSuccess,  }: Props) {
+export default function CustomerDetailModal({ open, onClose, customer, onSuccess }: Props) {
   const [isEdit, setIsEdit] = useState(false)
   const [form, setForm] = useState<any>(customer)
   const [errors, setErrors] = useState<any>({})
-  const { toast } = useToast()
 
   useEffect(() => {
     setForm(customer)
@@ -36,7 +34,7 @@ export default function CustomerDetailModal({ open, onClose, customer, onSuccess
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          Authorization: `Bearer ${token}`, // 🔥 WAJIB
+          Authorization: `Bearer ${token}`, 
         },
         body: JSON.stringify(form),
       })
@@ -57,7 +55,6 @@ export default function CustomerDetailModal({ open, onClose, customer, onSuccess
           const errorsArr = Object.values(data.errors) as string[][]
           firstError = errorsArr[0][0]
 
-          // 🔥 custom biar lebih user-friendly
           if (data.errors.phone) {
             firstError = "Nomor telepon sudah terdaftar"
           }
@@ -65,18 +62,11 @@ export default function CustomerDetailModal({ open, onClose, customer, onSuccess
           firstError = data.message
         }
 
-        toast({
-        title: "Gagal",
-        description: firstError,
-        variant: "destructive",
-      })
+        toast.error(firstError) 
         return
       }
 
-      toast({
-      title: "Berhasil",
-      description: "Data berhasil diupdate",
-    })
+      toast.success("Data berhasil diupdate") 
 
       setErrors({})
       onSuccess()
@@ -85,12 +75,7 @@ export default function CustomerDetailModal({ open, onClose, customer, onSuccess
 
     } catch (err) {
       console.error(err)
-
-      toast({
-      title: "Error",
-      description: "Terjadi kesalahan koneksi",
-      variant: "destructive",
-    })
+      toast.error("Terjadi kesalahan koneksi")
     }
   }
 
@@ -165,7 +150,7 @@ export default function CustomerDetailModal({ open, onClose, customer, onSuccess
   )
 }
 
-function Field({ label, value, isEdit, onChange, error, }: { label: string; value: any; isEdit: boolean; onChange: (value: string) => void; error?: string }) {
+function Field({ label, value, isEdit, onChange, error }: { label: string; value: any; isEdit: boolean; onChange: (value: string) => void; error?: string }) {
   return (
     <div>
       <label className="text-sm text-gray-500">{label}</label>

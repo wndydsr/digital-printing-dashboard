@@ -155,7 +155,7 @@ export default function AntrianCetakPage() {
                   <TableHead>Pelanggan</TableHead>
                   <TableHead>Item Produk</TableHead>
                   <TableHead>Qty</TableHead>
-                  <TableHead>Deadline</TableHead>
+                  <TableHead>Tanggal</TableHead>
                   <TableHead>Tahap Item</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">Aksi</TableHead>

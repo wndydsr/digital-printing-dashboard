@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { toast } from "sonner" // 🌟 Import Sonner Toast
 
 interface Props {
   open: boolean
@@ -80,7 +81,8 @@ export default function PaymentModal({
     if (isSubmitting) return 
 
     if (!paymentMethod) {
-      return alert("Pilih metode pembayaran terlebih dahulu")
+      toast.error("Pilih metode pembayaran terlebih dahulu")
+      return
     }
 
     try {
@@ -99,7 +101,7 @@ export default function PaymentModal({
       const midtransSnapToken = responseData?.token || responseData?.data?.token;
 
       if (!idDariDatabase) {
-        alert("Pesanan gagal diproses: Nomor order tidak ditemukan.");
+        toast.error("Pesanan gagal diproses: Nomor order tidak ditemukan.");
         setIsSubmitting(false);
         return;
       }
@@ -110,14 +112,14 @@ export default function PaymentModal({
       // Jalur A: Gateway Online (QRIS / Midtrans Snap)
       if (paymentMethod === "qris") {
         if (!midtransSnapToken || !(window as any).snap) {
-          alert(`Sistem pembayaran online belum siap.\nDetail -> Token: ${midtransSnapToken ? 'Ada' : 'Kosong'}, SDK Midtrans: ${(window as any).snap ? 'Siap' : 'Belum Dimuat Browser'}`);
+          toast.error(`Sistem pembayaran online belum siap (Token: ${midtransSnapToken ? 'Ada' : 'Kosong'}).`);
           setIsSubmitting(false);
           return;
         }
         
         (window as any).snap.pay(midtransSnapToken, {
           onSuccess: async function (result: any) {
-            alert("Pembayaran Online Berhasil!");
+            toast.success("Pembayaran Online Berhasil!");
 
             // Update stage melalui endpoint /admin/orders/{id}/stage
             try {
@@ -138,13 +140,13 @@ export default function PaymentModal({
             onClose();
           },
           onPending: function (result: any) {
-            alert("Menunggu pembayaran diselesaikan oleh customer.");
+            toast.info("Menunggu pembayaran diselesaikan oleh customer.");
             setConfirmationDone(true);
             setShowInvoice(true);
             onClose();
           },
           onError: function (result: any) {
-            alert("Transaksi pembayaran gagal.");
+            toast.error("Transaksi pembayaran gagal.");
             setConfirmationDone(false);
           },
           onClose: function () {
@@ -154,15 +156,11 @@ export default function PaymentModal({
 
       } else {
         // Jalur B: Cash (Tunai) di Kasir
-        // Karena uang tunai diterima langsung di tempat, kita update stage pesanan langsung
         try {
           const anyNeedDesign = products.some((p) => p.need_design === true || p.need_design === "1" || p.need_design === 1);
           
-          // Stage 6 = Antrean Desain (jika ada item butuh desain)
-          // Stage 2 = Siap Cetak (jika tidak ada item yang butuh desain)
           const targetStage = anyNeedDesign ? 6 : 2;
 
-          // 🌟 PERBAIKAN ROUTE: Menambahkan prefix '/admin' agar sesuai routes/api.php
           await apiFetch(`/admin/orders/${idDariDatabase}/stage`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -171,17 +169,18 @@ export default function PaymentModal({
 
         } catch (e) {
           console.error("Gagal update stage transaksi tunai:", e);
-          alert("Pesanan tercatat, tetapi gagal memperbarui stage pesanan secara otomatis.");
+          toast.error("Pesanan tercatat, tetapi gagal memperbarui stage pesanan secara otomatis.");
         }
 
-        alert("Pembayaran tunai berhasil diproses!");
+        toast.success("Pembayaran tunai berhasil diproses!");
         setConfirmationDone(true);
         setShowInvoice(true);
-        onClose(); // Menutup modal checkout & memicu reload tabel pesanan
+        onClose(); 
       }
 
     } catch (error) {
       console.error("Gagal konfirmasi pesanan:", error)
+      toast.error("Terjadi kesalahan saat memproses pesanan.")
       setConfirmationDone(false)
     } finally {
       setIsSubmitting(false) 
@@ -221,7 +220,7 @@ export default function PaymentModal({
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setPaymentMethod("qris")}
-          className={`border rounded-xl p-4 transition-all ${paymentMethod === "qris" ? "border-blue-600 border-2 bg-blue-50" : "hover:border-gray-400"}`}
+          className={`border rounded-xl p-4 transition-all text-left ${paymentMethod === "qris" ? "border-blue-600 border-2 bg-blue-50" : "hover:border-gray-400"}`}
         >
           <div className="font-semibold">Gateway Online (QRIS/VA)</div>
           <div className="text-xs text-gray-400 mt-1">Scan QR or Online Bank Transfer</div>
@@ -229,7 +228,7 @@ export default function PaymentModal({
 
         <button
           onClick={() => setPaymentMethod("cash")}
-          className={`border rounded-xl p-4 transition-all ${paymentMethod === "cash" ? "border-blue-600 border-2 bg-blue-50" : "hover:border-gray-400"}`}
+          className={`border rounded-xl p-4 transition-all text-left ${paymentMethod === "cash" ? "border-blue-600 border-2 bg-blue-50" : "hover:border-gray-400"}`}
         >
           <div className="font-semibold">Cash (Tunai)</div>
           <div className="text-xs text-gray-400 mt-1">Pay directly with cash at cashier</div>
@@ -255,7 +254,7 @@ export default function PaymentModal({
     <div className="bg-gray-50 border border-green-200 rounded-2xl p-6 text-center bg-green-50/50">
       <h3 className="font-semibold text-lg text-green-900">Pembayaran Tunai (Cash)</h3>
       <p className="text-sm text-green-700 mt-2">
-        Uang diterima langsung dari pelanggan di kasir. Setelah mengonfirmasi, pesanan akan langsung diproses ke tahap pengerjaan (Antrean Desain / Siap Cetak).
+        Uang diterima langsung dari pelanggan di kasir. Setelah mengonfirmasi, pesanan akan langsung diproses ke tahap pengerjaan.
       </p>
       <div className="w-full bg-white border rounded-xl p-4 mt-4 text-center">
         <p className="text-sm text-gray-400">Total Pembayaran Tunai</p>
@@ -319,7 +318,7 @@ export default function PaymentModal({
                 <button
                   onClick={onClose}
                   disabled={isSubmitting} 
-                  className="flex-1 border rounded-xl p-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 border rounded-xl p-4 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>

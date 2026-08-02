@@ -18,6 +18,7 @@ import {
   PaginationLink, PaginationNext, PaginationPrevious
 } from "@/components/ui/pagination"
 import { apiFetch } from "@/lib/api"
+import { toast } from "sonner"
 
 interface Customer {
   id: number
@@ -43,28 +44,30 @@ export default function CustomerPage() {
       setCustomers(Array.isArray(data) ? data : data.data || [])
     } catch (err) {
       console.error(err)
+      toast.error("Gagal memuat data pelanggan.")
     }
   }
       
-
   const [openDelete, setOpenDelete] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
- const handleDelete = async () => {
-  if (!selectedId) return
+  const handleDelete = async () => {
+    if (!selectedId) return
 
-  try {
-    await apiFetch(`/customers/${selectedId}`, {
-      method: "DELETE",
-    })
+    try {
+      await apiFetch(`/customers/${selectedId}`, {
+        method: "DELETE",
+      })
 
-    fetchCustomers()
-    setOpenDelete(false)
-    setSelectedId(null)
-  } catch (err) {
-    console.error(err)
+      fetchCustomers()
+      setOpenDelete(false)
+      setSelectedId(null)
+      toast.success("Data pelanggan berhasil dihapus!")
+    } catch (err) {
+      console.error(err)
+      toast.error("Gagal menghapus data pelanggan.")
+    }
   }
-}
 
   useEffect(() => {
     fetchCustomers()
@@ -83,7 +86,7 @@ export default function CustomerPage() {
   // 🛠️ FUNGSI EXCEL DATA EXPORTER (NATIVE CLIENT METHOD)
   const handleExportCustomers = () => {
     if (customers.length === 0) {
-      alert("Tidak ada data pelanggan untuk di-export.")
+      toast.error("Tidak ada data pelanggan untuk di-export.")
       return
     }
 
@@ -115,6 +118,8 @@ export default function CustomerPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+
+    toast.success("Data pelanggan berhasil di-export ke CSV!")
   }
 
   return (
@@ -126,7 +131,6 @@ export default function CustomerPage() {
           <h1 className="text-2xl font-semibold">Pelanggan</h1>
 
           <div className="flex gap-2">
-            {/* 🛠️ FILTER DIHAPUS, DAN BUTTON EXPORT DISINKRONKAN DENGAN ONCLICK */}
             <Button onClick={handleExportCustomers} variant="outline" className="gap-2">
               <Download className="w-4 h-4" /> Export
             </Button>
@@ -198,49 +202,50 @@ export default function CustomerPage() {
               </TableBody>
             </Table>
             {/* PAGINATION DI DALAM CARD */}
-                    <div className="flex items-center justify-between w-full px-4 py-3 border-t bg-gray-50">
-                      
-                      {/* INFO */}
-                      <span className="text-sm text-gray-500">
-                        {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length} items
-                      </span>          
-                      <Pagination className="mx-0 w-auto justify-end"> 
-                        <PaginationContent>
+                <div className="flex items-center justify-between w-full px-4 py-3 border-t bg-gray-50">
+                  
+                  {/* INFO */}
+                  <span className="text-sm text-gray-500">
+                    {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length} items
+                  </span>         
+                  
+                  <Pagination className="mx-0 w-auto justify-end"> 
+                    <PaginationContent>
 
-                          <PaginationItem>
-                            <PaginationPrevious
-                              href="#"
-                              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                            />
-                          </PaginationItem>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                        />
+                      </PaginationItem>
 
-                          {Array.from({ length: totalPages }, (_, i) => (
-                            <PaginationItem key={i}>
-                              <PaginationLink
-                                href="#"
-                                isActive={currentPage === i + 1}
-                                onClick={() => setCurrentPage(i + 1)}
-                              >
-                                {i + 1}
-                              </PaginationLink>
-                            </PaginationItem>
-                          ))}
+                      {Array.from({ length: totalPages }, (_, i) => (
+                        <PaginationItem key={i}>
+                          <PaginationLink
+                            href="#"
+                            isActive={currentPage === i + 1}
+                            onClick={() => setCurrentPage(i + 1)}
+                          >
+                            {i + 1}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
 
-                          <PaginationItem>
-                            <PaginationNext
-                              href="#"
-                              onClick={() =>
-                                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                              }
-                            />
-                          </PaginationItem>
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={() =>
+                            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                          }
+                        />
+                      </PaginationItem>
 
-                        </PaginationContent>
-                      </Pagination>
-                    </div>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
 
           </CardContent>
-      
+        
         </Card>
         <CustomerCreateModal
           open={openCreate}
@@ -256,10 +261,10 @@ export default function CustomerPage() {
         />
 
          <DeleteModal
-                  open={openDelete}
-                  onClose={() => setOpenDelete(false)}
-                  onDelete={handleDelete}
-                />
+                open={openDelete}
+                onClose={() => setOpenDelete(false)}
+                onDelete={handleDelete}
+              />
       </div>
     </DashboardLayout>
   )

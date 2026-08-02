@@ -6,19 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useToast } from "@/components/ui/use-toast"
-// 1. Tambahkan ArrowLeft ke dalam import lucide-react
 import { User, Mail, Shield, UserCheck, Edit3, X, Save, ArrowLeft } from "lucide-react"
 import { apiFetch } from "@/lib/api"
-// 2. Import useRouter untuk fungsi Back dinamis
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export default function ProfilePage() {
-  const router = useRouter() // Inisialisasi router
+  const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [role, setRole] = useState("-")
-  const { toast } = useToast()
 
   const [formData, setFormData] = useState({
     name: "Admin",
@@ -71,10 +68,10 @@ export default function ProfilePage() {
       localStorage.setItem("user_email", formData.email)
       setBackupData({ ...formData })
       setIsEditing(false)
-      toast({ title: "Profil Diperbarui", description: "Informasi akun Anda berhasil disimpan." })
+      toast.success("Informasi akun Anda berhasil disimpan.")
     } catch (err) {
       console.error(err)
-      toast({ title: "Gagal Memperbarui", description: "Terjadi kesalahan sistem.", variant: "destructive" })
+      toast.error("Terjadi kesalahan sistem saat memperbarui profil.")
     } finally {
       setLoading(false)
     }

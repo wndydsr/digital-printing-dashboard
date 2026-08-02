@@ -8,7 +8,8 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Trash2 } from "lucide-react" // 🛠️ Tambahkan icon Trash untuk hapus atribut baru
+import { Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -45,7 +46,6 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
 
   const handleEdit = () => {
     setIsEdit(true)
-    // 🛠️ Pastikan kita melakukan deep copy pada attributes agar manipulasi array aman
     const deepCloneAttributes = product.attributes 
       ? JSON.parse(JSON.stringify(product.attributes)) 
       : [];
@@ -62,19 +62,17 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
     })
   }
 
-  // 🛠️ FUNGSI BARU: MENAMBAHKAN INDUK ATRIBUT BARU
   const handleAddAttribute = () => {
     const currentAttrs = [...(formData.attributes || [])]
     setFormData({
       ...formData,
       attributes: [
         ...currentAttrs,
-        { name: "", values: [{ name: "", additional_price: 0 }] } // Format standar atribut baru
+        { name: "", values: [{ name: "", additional_price: 0 }] }
       ]
     })
   }
 
-  // 🛠️ FUNGSI BARU: MENGHAPUS INDUK ATRIBUT
   const handleRemoveAttribute = (attrIndex: number) => {
     const currentAttrs = [...formData.attributes]
     const updatedAttrs = currentAttrs.filter((_, i) => i !== attrIndex)
@@ -100,10 +98,8 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
       form.append("category_id", formData.category_id) 
       form.append("is_custom", formData.is_custom == 1 ? "1" : "0")
       
-      // 🛠️ Kirim header Accept agar data validasi Laravel terbaca sebagai JSON
       const token = localStorage.getItem("token")
       
-      // Bersihkan muatan data attributes dari spasi / string kosong ilegal sebelum dikirim ke Laravel
       const sanitizedAttributes = (formData.attributes || []).map((a: any) => ({
         name: a.name || "",
         values: Array.isArray(a.values) 
@@ -129,17 +125,20 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        alert(`Gagal update: ${errorData.message || "Periksa kembali data form anda."}`)
+        toast.error(`Gagal update: ${errorData.message || "Periksa kembali data form anda."}`)
         return
       }
 
       const json = await res.json()
       const updated = json.data
 
+      toast.success("Perubahan produk berhasil disimpan!")
+
       setIsEdit(false)
       onSuccess?.(updated)
     } catch (err) {
       console.error(err)
+      toast.error("Terjadi kesalahan jaringan atau sistem.")
     }
   }
 
@@ -388,7 +387,6 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                         {(isEdit ? formData.attributes : product.attributes).map((attribute: any, attrIndex: number) => (
                           <div key={attrIndex} className="border border-slate-200 rounded-xl p-4 bg-slate-50/30 relative">
                             
-                            {/* 🛠️ TOMBOL HAPUS INDUK ATRIBUT (Hanya muncul saat mode edit) */}
                             {isEdit && (
                               <button
                                 type="button"
@@ -487,11 +485,9 @@ export default function ProductDetailModal({ open, onClose, product, onSuccess }
                         ))}
                       </div>
                     ) : (
-                      // Tampilan fallback jika data kosong
                       !isEdit && <p className="text-gray-400 text-xs italic">Tidak ada atribut khusus pada produk ini</p>
                     )}
 
-                    {/* 🛠️ TOMBOL UTAMA BARU: UNTUK MENAMBAH INDUK ATRIBUT BARU */}
                     {isEdit && (
                       <button
                         type="button"

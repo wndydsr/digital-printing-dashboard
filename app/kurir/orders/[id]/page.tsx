@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Navigation, Phone, CheckCircle, Truck, ArrowLeft, Calendar, FileText } from "lucide-react"
 import { apiFetch } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function KurirOrderDetail() {
   const { id } = useParams()
@@ -12,13 +13,13 @@ export default function KurirOrderDetail() {
   const [loading, setLoading] = useState(true)
   const [btnLoading, setBtnLoading] = useState(false)
 
-  // Fungsi fetch kita pisah agar bisa dipanggil ulang setelah update sukses
   const fetchDetail = async () => {
     try {
       const data = await apiFetch(`/orders/${id}`)
       setOrder(data)
     } catch (err) {
       console.error("Gagal memuat detail koordinat pengantaran:", err)
+      toast.error("Gagal memuat detail koordinat.")
     } finally {
       setLoading(false)
     }
@@ -38,12 +39,11 @@ export default function KurirOrderDetail() {
         }),
       })
       
-      alert("Sukses! Pesanan telah dikonfirmasi selesai.");
-      // Panggil fetchDetail lagi agar UI lokal langsung tahu statusnya sudah Stage 5
+      toast.success("Sukses! Pesanan telah dikonfirmasi selesai.");
       await fetchDetail()
     } catch (err) {
       console.error(err)
-      alert("Gagal memperbarui status pengantaran ke database.")
+      toast.error("Gagal memperbarui status pengantaran ke database.") 
     } finally {
       setBtnLoading(false)
     }
@@ -52,7 +52,6 @@ export default function KurirOrderDetail() {
   if (loading) return <div className="p-8 text-center text-sm text-gray-500">Memuat detail lokasi koordinat...</div>
   if (!order) return <div className="p-8 text-center text-sm text-red-500">Data pesanan tidak ditemukan.</div>
 
-  // 🔥 Cek apakah pesanan sudah berada di stage selesai (5)
   const isFinished = order.current_stage_id === 5
 
   return (
@@ -71,7 +70,6 @@ export default function KurirOrderDetail() {
             <span className="text-xs font-mono text-gray-400">ORD-{String(order.id).padStart(5, "0")}</span>
             <h2 className="text-base font-bold text-gray-800 mt-0.5">{order.customer?.name || "-"}</h2>
           </div>
-          {/* Badge status dinamis di dalam detail */}
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
             isFinished ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700 animate-pulse"
           }`}>
@@ -126,7 +124,7 @@ export default function KurirOrderDetail() {
         </div>
       </div>
 
-      {/* 🔥 TOMBOL AKSIONER KONFIRMASI (OTOMATIS MATI & BERUBAH WARNA JIKA SUDAH STAGE 5) */}
+      {/* 🔥 TOMBOL AKSIONER KONFIRMASI */}
       <div className="fixed bottom-4 left-4 right-4 max-w-md mx-auto">
         <button
           disabled={btnLoading || isFinished}

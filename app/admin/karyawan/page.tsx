@@ -18,6 +18,7 @@ import {
   PaginationLink, PaginationNext, PaginationPrevious
 } from "@/components/ui/pagination"
 import { apiFetch } from "@/lib/api"
+import { toast } from "sonner"
 
 interface Karyawan {
   id: number
@@ -47,6 +48,7 @@ export default function KaryawanPage() {
       setKaryawanList(rawData)
     } catch (err) {
       console.error(err)
+      toast.error("Gagal memuat data karyawan.")
     }
   }
 
@@ -61,8 +63,10 @@ export default function KaryawanPage() {
       fetchKaryawan()
       setOpenDelete(false)
       setSelectedId(null)
+      toast.success("Data karyawan berhasil dihapus!")
     } catch (err) {
       console.error(err)
+      toast.error("Gagal menghapus data karyawan.")
     }
   }
 
@@ -115,7 +119,7 @@ export default function KaryawanPage() {
   // 🛠️ FUNGSI EXCEL EXPORTER UNTUK DATA KARYAWAN
   const handleExportKaryawan = () => {
     if (karyawanList.length === 0) {
-      alert("Tidak ada data karyawan untuk di-export.")
+      toast.error("Tidak ada data karyawan untuk di-export.")
       return
     }
 
@@ -147,6 +151,8 @@ export default function KaryawanPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+
+    toast.success("Data karyawan berhasil di-export ke CSV!")
   }
 
   return (
@@ -158,7 +164,6 @@ export default function KaryawanPage() {
           <h1 className="text-2xl font-semibold">Karyawan</h1>
 
           <div className="flex gap-2">
-            {/* 🛠️ FILTER DIHAPUS, DAN BUTTON EXPORT DISINKRONKAN DENGAN ONCLICK */}
             <Button onClick={handleExportKaryawan} variant="outline" className="gap-2">
               <Download className="w-4 h-4" /> Export
             </Button>
@@ -252,7 +257,7 @@ export default function KaryawanPage() {
             <div className="flex items-center justify-between w-full px-4 py-3 border-t bg-gray-50">
               <span className="text-sm text-gray-500">
                 {filtered.length > 0 ? startIndex + 1 : 0} - {Math.min(startIndex + itemsPerPage, filtered.length)} dari {filtered.length} Data
-              </span>          
+              </span>         
               <Pagination className="mx-0 w-auto justify-end"> 
                 <PaginationContent>
 

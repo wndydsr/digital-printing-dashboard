@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -38,21 +38,19 @@ export default function CustomerCreateModal({
     })
   }
 
-  const { toast } = useToast()
-
   const handleSubmit = async () => {
     try {
       const token = localStorage.getItem("token")
 
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/customers`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      Authorization: `Bearer ${token}`, // 🔥 INI WAJIB
-    },
-    body: JSON.stringify(formData),
-  })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/customers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          Authorization: `Bearer ${token}`, 
+        },
+        body: JSON.stringify(formData),
+      })
 
       const text = await res.text()
       console.log("RESPONSE:", text)
@@ -73,7 +71,6 @@ export default function CustomerCreateModal({
           const errorsArr = Object.values(data.errors) as string[][]
           firstError = errorsArr[0][0]
 
-          // 🔥 custom biar lebih user-friendly
           if (data.errors.phone) {
             firstError = "Nomor telepon sudah terdaftar"
           }
@@ -81,19 +78,11 @@ export default function CustomerCreateModal({
           firstError = data.message
         }
 
-        toast({
-          title: "Gagal",
-          description: firstError,
-          variant: "destructive",
-        })
-
+        toast.error(firstError)
         return
       }
 
-      toast({
-        title: "Berhasil",
-        description: "Data pelanggan berhasil ditambahkan",
-      })
+      toast.success("Data pelanggan berhasil ditambahkan") 
 
       setErrors({})
 
@@ -110,6 +99,7 @@ export default function CustomerCreateModal({
 
     } catch (err) {
       console.error("ERROR:", err)
+      toast.error("Terjadi kesalahan pada sistem.")
     }
   }
 

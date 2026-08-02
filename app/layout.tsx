@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { Toaster } from "@/components/ui/toaster"
-import Script from 'next/script' // 1. Import komponen Script dari Next.js
+import { Toaster } from 'sonner'
+import Script from 'next/script' 
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -40,10 +40,13 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-sans antialiased">
         {children}
-        <Toaster />
+        
+        {/* 🌟 Sonner Toaster dipasang di sini agar aktif di seluruh sistem */}
+        <Toaster richColors position="top-right" /> 
+
         {process.env.NODE_ENV === 'production' && <Analytics />}
         
-        {/* 2. Tambahkan script Midtrans Snap di sini dengan strategy "afterInteractive" */}
+        {/* Script Midtrans Snap */}
         <Script
           src="https://app.midtrans.com/snap/snap.js"
           data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || ""}

@@ -6,19 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useToast } from "@/components/ui/use-toast"
-// 1. Tambahkan ArrowLeft ke dalam import lucide-react
 import { User, Mail, Shield, UserCheck, Edit3, X, Save, ArrowLeft } from "lucide-react"
 import { apiFetch } from "@/lib/api"
-// 2. Import useRouter untuk fungsi Back dinamis
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export default function ProfilePage() {
-  const router = useRouter() // Inisialisasi router
+  const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [role, setRole] = useState("-")
-  const { toast } = useToast()
 
   const [formData, setFormData] = useState({
     name: "Admin",
@@ -71,10 +68,10 @@ export default function ProfilePage() {
       localStorage.setItem("user_email", formData.email)
       setBackupData({ ...formData })
       setIsEditing(false)
-      toast({ title: "Profil Diperbarui", description: "Informasi akun Anda berhasil disimpan." })
+      toast.success("Informasi akun Anda berhasil disimpan.")
     } catch (err) {
       console.error(err)
-      toast({ title: "Gagal Memperbarui", description: "Terjadi kesalahan sistem.", variant: "destructive" })
+      toast.error("Terjadi kesalahan sistem saat memperbarui profil.")
     } finally {
       setLoading(false)
     }
@@ -91,7 +88,7 @@ export default function ProfilePage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.back()} // 🔥 Mengembalikan ke halaman sebelumnya secara dinamis
+              onClick={() => router.back()}
               className="mt-1 h-9 w-9 rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm flex-shrink-0"
               title="Kembali ke halaman sebelumnya"
             >
@@ -114,7 +111,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Grid Layout (Tetap Full-Width sesuai request sebelumnya) */}
+        {/* Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-stretch">
           {/* Kiri: Ringkasan Kartu Avatar */}
           <Card className="border-gray-200/80 shadow-sm bg-white overflow-hidden h-full flex flex-col">

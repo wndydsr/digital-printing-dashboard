@@ -8,10 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// 🌟 INTEGRASI useSearchParams untuk menangkap query parameter (?item=) tanpa mengubah folder routing
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { initEcho } from "@/lib/echo";
+import { toast } from "sonner";
 
 type Sender = "desainer" | "customer";
 
@@ -55,7 +55,6 @@ export default function DiskusiDesainPolesan() {
   const params = useParams();
   const router = useRouter();
   
-  // 🌟 AKTIFKAN useSearchParams UNTUK MENYARING DISKUSI PER ITEM PRODUK
   const searchParams = useSearchParams();
   const itemId = searchParams.get("item"); 
 
@@ -64,7 +63,6 @@ export default function DiskusiDesainPolesan() {
   const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // State bantuan untuk memegang preview blob lokal pas gambar di-upload desainer
   const [uploadingBlob, setUploadingBlob] = useState<string | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -81,10 +79,8 @@ export default function DiskusiDesainPolesan() {
 
     const channel = window.Echo.private(`chat.${params.id}`);
     channel.listen('.MessageSent', (e: any) => {
-      console.log("🔥 EVENT TERIMA DI DESAINER:", e);
       const incomingMessage = e.message || e;
       
-      // 🌟 FILTER CHAT REAL-TIME BERDASARKAN ITEM ID AGAR TIDAK BOCOR KE ITEM LAIN
       if (itemId && incomingMessage.order_item_id && String(incomingMessage.order_item_id) !== String(itemId)) {
         return;
       }
@@ -93,13 +89,11 @@ export default function DiskusiDesainPolesan() {
         incomingMessage.is_design = true;
       }
 
-      // Jika gambar asli dari Laravel storage sudah datang lewat Echo, matikan blob preview lokal
       if (incomingMessage.file) {
         setUploadingBlob(null);
       }
 
       setMessages((prev) => {
-        // Cek duplikasi ID asli dari Database
         if (prev.some(m => m.id === incomingMessage.id)) return prev;
         return [...prev, incomingMessage];
       });
@@ -119,53 +113,51 @@ export default function DiskusiDesainPolesan() {
     fetchInitialData();
   }, [params?.id, itemId]);
 
- // 🛠️ SINKRONISASI COCOK PADA FUNGSI fetchInitialData
-const fetchInitialData = async () => {
-  if (!params?.id) return;
-  setIsLoading(true);
-  try {
-    const urlMessages = itemId 
-      ? `/orders/${params.id}/messages?item_id=${itemId}`
-      : `/orders/${params.id}/messages`;
+  const fetchInitialData = async () => {
+    if (!params?.id) return;
+    setIsLoading(true);
+    try {
+      const urlMessages = itemId 
+        ? `/orders/${params.id}/messages?item_id=${itemId}`
+        : `/orders/${params.id}/messages`;
 
-    const chatData = await apiFetch(urlMessages);
-    
-    // 🌟 PROTEKSI: Amankan reverse dari kegagalan response objek error server
-    if (Array.isArray(chatData)) {
-      setMessages(chatData.reverse());
-    } else {
-      setMessages([]);
+      const chatData = await apiFetch(urlMessages);
+      
+      if (Array.isArray(chatData)) {
+        setMessages(chatData.reverse());
+      } else {
+        setMessages([]);
+      }
+
+      const orderData = await apiFetch(`/orders/${params.id}`);
+      
+      let mappedStatus: OrderInfo["status"] = "dikerjakan";
+      if (orderData.current_stage_id === 2) mappedStatus = "siap_cetak";
+      else if (orderData.current_stage_id === 3) mappedStatus = "dikerjakan";
+      else if (orderData.current_stage_id === 5) mappedStatus = "selesai";
+
+      const currentItem = orderData.order_items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.[0];
+      
+      let ukuranDisplay = "Ukuran Kustom";
+      if (currentItem && currentItem.panjang && currentItem.lebar) {
+        ukuranDisplay = `${Number(currentItem.panjang)} x ${Number(currentItem.lebar)} meter`;
+      }
+
+      setOrderInfo({
+        order_code: orderData.order_code || "ORD-UNKNOWN",
+        product_name: currentItem?.product?.name || "Produk Cetak",
+        product_thumbnail_label: currentItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
+        size: ukuranDisplay,
+        qty: currentItem?.quantity || 1,
+        status: mappedStatus
+      });
+
+    } catch (err) {
+      console.error("Gagal memuat data awal:", err);
+    } finally {
+      setIsLoading(false);
     }
-
-    const orderData = await apiFetch(`/orders/${params.id}`);
-    
-    let mappedStatus: OrderInfo["status"] = "dikerjakan";
-    if (orderData.current_stage_id === 2) mappedStatus = "siap_cetak";
-    else if (orderData.current_stage_id === 3) mappedStatus = "dikerjakan";
-    else if (orderData.current_stage_id === 5) mappedStatus = "selesai";
-
-    const currentItem = orderData.order_items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.find((i: any) => String(i.id) === String(itemId)) || orderData.items?.[0];
-    
-    let ukuranDisplay = "Ukuran Kustom";
-    if (currentItem && currentItem.panjang && currentItem.lebar) {
-      ukuranDisplay = `${Number(currentItem.panjang)} x ${Number(currentItem.lebar)} meter`;
-    }
-
-    setOrderInfo({
-      order_code: orderData.order_code || "ORD-UNKNOWN",
-      product_name: currentItem?.product?.name || "Produk Cetak",
-      product_thumbnail_label: currentItem?.product?.name?.substring(0, 5).toUpperCase() || "PRINT",
-      size: ukuranDisplay,
-      qty: currentItem?.quantity || 1,
-      status: mappedStatus
-    });
-
-  } catch (err) {
-    console.error("Gagal memuat data awal:", err);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const handleSend = async () => {
     if (!inputText.trim() || !params?.id) return;
@@ -178,7 +170,6 @@ const fetchInitialData = async () => {
       formData.append("sender", "desainer");
       formData.append("message", textToSend);
       
-      // 🌟 SERTAKAN IDENTITAS order_item_id PADA CHAT TEKS
       if (itemId) {
         formData.append("order_item_id", String(itemId));
       }
@@ -190,7 +181,7 @@ const fetchInitialData = async () => {
     } catch (err) {
       console.error("Gagal kirim:", err);
       setInputText(textToSend);
-      alert("Gagal mengirim pesan. Silakan coba lagi.");
+      toast.error("Gagal mengirim pesan. Silakan coba lagi.");
     }
   };
 
@@ -204,7 +195,6 @@ const fetchInitialData = async () => {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans">
-      {/* TOPBAR */}
       <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shadow-sm z-10">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={() => router.back()}>
@@ -215,20 +205,17 @@ const fetchInitialData = async () => {
             <Badge variant="secondary" className="font-mono text-indigo-600 bg-indigo-50 border-none px-2 py-0.5">
               {orderInfo.order_code}
             </Badge>
-            {/* Tag visual penanda produk aktif */}
             <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded border border-slate-200">
               {orderInfo.product_name}
             </span>
           </div>
         </div>
-        <Button variant="ghost" className="text-indigo-600 font-semibold hover:bg-indigo-50" onClick={() => router.push(`/desainer/order/${params?.id}`)}>
+        <Button variant="ghost" className="text-indigo-600 font-semibold hover:bg-indigo-50" onClick={() => router.push(`/desainer/order/${params?.id}?item=${itemId}`)}>
           Detail Pesanan
         </Button>
       </header>
 
-      {/* MAIN LAYOUT */}
       <main className="flex flex-1 overflow-hidden">
-        {/* CHAT PANEL */}
         <section className="flex-1 flex flex-col bg-[#F8FAFC]">
           <ScrollArea className="flex-1 px-6 py-6">
             {messages.length === 0 && !uploadingBlob ? (
@@ -273,7 +260,7 @@ const fetchInitialData = async () => {
                           {memilikiFile || merupakanDesain ? (
                             <Card className="overflow-hidden border-slate-200 shadow-md max-w-[340px] rounded-2xl bg-white">
                               <img 
-                               src={msg.file?.startsWith("blob:") ? msg.file : `${ASSET_URL}/storage/${msg.file}`}
+                                src={msg.file?.startsWith("blob:") ? msg.file : `${ASSET_URL}/storage/${msg.file}`}
                                 alt="Desain" 
                                 className="w-full h-44 object-cover border-b border-slate-100 cursor-zoom-in hover:opacity-95 transition-opacity" 
                                 onClick={() => setPreviewImage(msg.file?.startsWith("blob:") ? msg.file : `${ASSET_URL}/storage/${msg.file}`)}
@@ -302,7 +289,6 @@ const fetchInitialData = async () => {
               ))
             )}
             
-            {/* OPTIMISTIC VIEW UNTUK BUBBLE UPLOAD GAMBAR BARU */}
             {uploadingBlob && (
               <div className="flex gap-3 flex-row-reverse mb-6">
                 <Avatar className="h-9 w-9 border-2 border-white shadow-sm">
@@ -326,7 +312,6 @@ const fetchInitialData = async () => {
             <div ref={bottomRef} />
           </ScrollArea>
 
-          {/* INPUT BAR */}
           <footer className="p-4 bg-white border-t border-slate-200">
             <div className="flex items-center gap-3">
               <div className="flex-1 flex items-center gap-2 bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-1.5 focus-within:border-indigo-400 focus-within:bg-white transition-all">
@@ -363,7 +348,6 @@ const fetchInitialData = async () => {
                     formData.append("is_design", "1");
                     formData.append("message", "Mengirim berkas pratinjau desain terbaru untuk Anda periksa.");
 
-                    // 🌟 SERTAKAN IDENTITAS order_item_id PADA UPLOAD GAMBAR PREVIEW BARU
                     if (itemId) {
                       formData.append("order_item_id", String(itemId));
                     }
@@ -374,10 +358,11 @@ const fetchInitialData = async () => {
                     });
                     
                     e.target.value = "";
+                    toast.success("Pratinjau desain berhasil dikirim!");
                   } catch (err) {
                     console.error(err);
                     setUploadingBlob(null);
-                    alert("Gagal mengunggah gambar.");
+                    toast.error("Gagal mengunggah gambar.");
                   }
                 }}
               />
@@ -385,7 +370,6 @@ const fetchInitialData = async () => {
           </footer>
         </section>
 
-        {/* SIDEBAR INFO */}
         <aside className="w-[300px] bg-white border-l border-slate-200 p-5 overflow-y-auto hidden lg:flex flex-col gap-8">
           <div>
             <h3 className="text-sm font-bold text-slate-800 mb-4">Info Pesanan</h3>
@@ -438,7 +422,6 @@ const fetchInitialData = async () => {
         </aside>
       </main>
 
-      {/* MODAL CUSTOM PDF VIEWER LAYOUT */}
       {previewImage && (
         <div 
           className="fixed inset-0 z-[9999] flex flex-col bg-[#525659] text-white font-sans select-none"

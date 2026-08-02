@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
+import { toast } from "sonner" // 👈 Toast Sonner
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
@@ -35,7 +36,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter()
   const [adminName, setAdminName] = useState("Admin")
 
-  // ─── 🔔 SCRIPT SERVICE WORKER & PUSH NOTIFICATION ───
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       navigator.serviceWorker.register('/sw.js')
@@ -65,18 +65,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       });
 
       if (response.ok) {
-        alert('Web Push Notifikasi Berhasil Diaktifkan!');
+        toast.success('Web Push Notifikasi Berhasil Diaktifkan!');
       } else {
-        alert('Gagal menyimpan langganan ke server.');
+        toast.error('Gagal menyimpan langganan ke server.');
       }
     } catch (error) {
       console.error('Error saat subscribe:', error);
-      alert('Gagal mengaktifkan notifikasi. Pastikan izin browser diizinkan.');
+      toast.error('Gagal mengaktifkan notifikasi. Pastikan izin browser diizinkan.');
     }
   };
-  // ───────────────────────────────────────────────────
 
-  // Ambil nama dari localStorage saat komponen dimuat di browser
   useEffect(() => {
     const name = localStorage.getItem("user_name")
     if (name) {
@@ -89,11 +87,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     localStorage.removeItem("role")
     localStorage.removeItem("user_name")
     localStorage.removeItem("user_email")
-    
     router.push("/login")
   }
 
-  // Mendapatkan inisial untuk Avatar Fallback
   const getInitials = (name: string) => {
     const parts = name.split(" ")
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
@@ -102,7 +98,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -118,7 +113,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* 🔔 Tombol Aktifkan Notifikasi di Header */}
           <Button 
             onClick={handleSubscribe} 
             variant="outline" 
@@ -145,13 +139,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="font-semibold text-gray-900">{adminName}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              
               <DropdownMenuItem asChild>
                 <Link href="/admin/profile" className="w-full cursor-pointer">
                   Profile
                 </Link>
               </DropdownMenuItem>
-              
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="text-red-600 cursor-pointer focus:text-red-600">
                 Sign out
@@ -162,7 +154,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </header>
 
       <div className="flex">
-        {/* Sidebar */}
         <aside className="w-60 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="p-4">
             <nav className="space-y-1">
@@ -185,14 +176,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 p-8 bg-gray-50">{children}</main>
       </div>
     </div>
   )
 }
 
-// Helper pengubah format VAPID Key
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

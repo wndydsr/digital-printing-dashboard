@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Truck, MapPin, Eye, Bell } from "lucide-react"
 import { apiFetch } from "@/lib/api"
-import { Button } from "@/components/ui/button" // Pastikan import button tersedia
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner" 
 
 export default function KurirDashboard() {
   const [orders, setOrders] = useState<any[]>([])
@@ -40,13 +41,13 @@ export default function KurirDashboard() {
       });
 
       if (response.ok) {
-        alert('Web Push Notifikasi Kurir Berhasil Diaktifkan!');
+        toast.success('Web Push Notifikasi Kurir Berhasil Diaktifkan!');
       } else {
-        alert('Gagal menyimpan langganan ke server.');
+        toast.error('Gagal menyimpan langganan ke server.');
       }
     } catch (error) {
       console.error('Error saat subscribe:', error);
-      alert('Gagal mengaktifkan notifikasi.');
+      toast.error('Gagal mengaktifkan notifikasi.');
     }
   };
 
@@ -69,6 +70,7 @@ export default function KurirDashboard() {
         setOrders(kurirJob)
       } catch (err) {
         console.error("Gagal memuat tugas kurir:", err)
+        toast.error("Gagal memuat daftar antrean pengantaran.")
       } finally {
         setLoading(false)
       }

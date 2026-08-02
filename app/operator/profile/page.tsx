@@ -6,19 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useToast } from "@/components/ui/use-toast"
 import { User, Mail, Shield, UserCheck, Edit3, X, Save, ArrowLeft } from "lucide-react"
 import { apiFetch } from "@/lib/api"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export default function ProfilePage() {
   const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [role, setRole] = useState("-")
-  const { toast } = useToast()
 
-  // Mengubah fallback text bawaan menjadi Operator
   const [formData, setFormData] = useState({
     name: "Operator",
     email: "operator@prinora.store",
@@ -70,10 +68,10 @@ export default function ProfilePage() {
       localStorage.setItem("user_email", formData.email)
       setBackupData({ ...formData })
       setIsEditing(false)
-      toast({ title: "Profil Diperbarui", description: "Informasi akun Anda berhasil disimpan." })
+      toast.success("Informasi akun Anda berhasil disimpan.")
     } catch (err) {
       console.error(err)
-      toast({ title: "Gagal Memperbarui", description: "Terjadi kesalahan sistem.", variant: "destructive" })
+      toast.error("Terjadi kesalahan sistem saat memperbarui profil.")
     } finally {
       setLoading(false)
     }
@@ -103,7 +101,6 @@ export default function ProfilePage() {
           </div>
           
           {!isEditing && (
-            // Mengubah tema warna tombol edit dari purple ke blue agar match dengan tema operator
             <Button 
               onClick={() => setIsEditing(true)} 
               className="bg-blue-600 hover:bg-blue-700 gap-2 self-start md:self-auto shadow-sm"
@@ -117,11 +114,9 @@ export default function ProfilePage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-stretch">
           {/* Kiri: Ringkasan Kartu Avatar */}
           <Card className="border-gray-200/80 shadow-sm bg-white overflow-hidden h-full flex flex-col">
-            {/* Mengubah gradient dari purple-indigo ke blue-indigo */}
             <div className="h-24 bg-gradient-to-r from-blue-600 to-indigo-600" />
             <CardContent className="pt-0 text-center flex flex-col items-center flex-1 pb-6">
               <Avatar className="w-24 h-24 border-4 border-white rounded-full -mt-12 shadow-md bg-white">
-                {/* Mengubah warna dasar inisial nama menjadi bertema biru */}
                 <AvatarFallback className="text-xl font-bold bg-blue-100 text-blue-700">
                   {getInitials(formData.name)}
                 </AvatarFallback>
@@ -129,7 +124,6 @@ export default function ProfilePage() {
               <h2 className="text-lg font-bold text-gray-900 mt-3">{formData.name}</h2>
               <p className="text-xs text-gray-400 mt-0.5">{formData.email}</p>
               
-              {/* Mengubah warna tag badge hak akses menjadi bertema biru */}
               <div className="mt-5 w-full pt-4 border-t border-gray-100 flex items-center justify-center gap-2 mt-auto">
                 <Shield className="w-4 h-4 text-blue-600" />
                 <span className="text-xs font-semibold text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 tracking-wider">
@@ -152,7 +146,6 @@ export default function ProfilePage() {
                     <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-2">
                       <User className="w-3.5 h-3.5 text-gray-400" /> Nama Lengkap
                     </label>
-                    {/* Mengubah focus dan border active ring menjadi warna blue */}
                     <Input name="name" value={formData.name} onChange={handleChange} disabled={!isEditing || loading} className={`bg-gray-50/50 border-gray-200 focus:bg-white focus:ring-blue-500 transition-colors ${isEditing ? "border-blue-300 bg-white" : ""}`} placeholder="Masukkan nama lengkap" required />
                   </div>
 
@@ -176,7 +169,6 @@ export default function ProfilePage() {
                     <Button type="button" variant="ghost" onClick={handleCancel} disabled={loading} className="gap-2 text-gray-600 hover:bg-gray-100">
                       <X className="w-4 h-4" /> Batal
                     </Button>
-                    {/* Mengubah warna tombol simpan ke warna blue */}
                     <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 px-5 shadow-sm shadow-blue-200">
                       <Save className="w-4 h-4" /> {loading ? "Menyimpan..." : "Simpan Perubahan"}
                     </Button>

@@ -10,7 +10,6 @@ use Minishlink\WebPush\Subscription;
 
 class PushSubscriptionController extends Controller
 {
-    // Simpan subscription baru dari frontend
     public function store(Request $request)
     {
         $request->validate([
@@ -19,7 +18,16 @@ class PushSubscriptionController extends Controller
             'keys.auth' => 'required|string',
         ]);
 
-        $userId = $request->user()->id;
+        $customerStr = $request->header('X-Customer-Id') ?? $request->input('customer_id');
+        
+        $userId = null;
+        if ($request->user()) {
+            $userId = $request->user()->id;
+        } elseif ($customerStr) {
+            $userId = $customerStr;
+        } else {
+            return response()->json(['error' => 'Unauthorized or missing identifier'], 401);
+        }
 
         PushSubscription::updateOrCreate(
             [
@@ -35,7 +43,6 @@ class PushSubscriptionController extends Controller
         return response()->json(['message' => 'Subscribed successfully'], 201);
     }
 
-    // Kirim notif test / manual (nanti bisa dipanggil dari Smart Deadline Alert)
     public function sendTest(Request $request)
     {
         $webPush = new WebPush([
@@ -68,7 +75,6 @@ class PushSubscriptionController extends Controller
             $endpoint = $report->getRequest()->getUri()->__toString();
 
             if (!$report->isSuccess()) {
-                // Kalau gagal & subscription expired, hapus dari DB
                 PushSubscription::where('endpoint', $endpoint)->delete();
             }
         }
@@ -76,7 +82,6 @@ class PushSubscriptionController extends Controller
         return response()->json(['message' => 'Notifications sent']);
     }
 
-    // Endpoint buat kasih public key ke frontend (opsional, kalau gak pakai .env NEXT_PUBLIC)
     public function publicKey()
     {
         return response(config('services.vapid.public_key'));

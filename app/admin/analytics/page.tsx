@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { BarChart3, Activity, Clock, CheckCircle, Download, FileText, Printer } from "lucide-react"
+import { BarChart3, Activity, Clock, CheckCircle, Download, FileText, Printer, Search } from "lucide-react"
 import {
   AreaChart,
   Area,
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/pagination"
 import { apiFetch } from "@/lib/api"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 
 const monthsList = [
   { value: "all", label: "Semua Bulan" },
@@ -92,6 +93,8 @@ function getPaginationPages(current: number, total: number) {
 export default function AnalyticsPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>("all")
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
+  const [selectedStatus, setSelectedStatus] = useState<string>("all")
+  const [searchQuery, setSearchQuery] = useState<string>("")
 
   const [revenueData, setRevenueData] = useState<any[]>([])
   const [orderData, setOrderData] = useState<any[]>([])
@@ -99,7 +102,6 @@ export default function AnalyticsPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
   const [showInvoice, setShowInvoice] = useState(false)
 
-  // Pagination untuk Riwayat Transaksi
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
@@ -121,7 +123,6 @@ export default function AnalyticsPage() {
         const orderDataRes = await apiFetch("/orders")
         const rawOrders = Array.isArray(orderDataRes) ? orderDataRes : orderDataRes.data || []
 
-        // 1. Filter berdasarkan Bulan & Tahun
         const filteredOrders = rawOrders.filter((order: any) => {
           const orderDateStr = order.order_date ? order.order_date.replace(" ", "T") : order.created_at
           if (!orderDateStr) return true
@@ -138,7 +139,6 @@ export default function AnalyticsPage() {
           return matchesYear && matchesMonth
         })
 
-        // 2. Kalkulasi Total Pendapatan (Kecuali Stage 7 = Menunggu Pembayaran dan Stage 8 = Dibatalkan)
         const validPaidOrders = filteredOrders.filter((o: any) => {
           const stageId = Number(o.current_stage_id || 0)
           return stageId !== 7 && stageId !== 8
@@ -165,7 +165,6 @@ export default function AnalyticsPage() {
           pesanan_pending: pesananPending,
         })
 
-        // Format data untuk tabel riwayat transaksi (Semua pesanan yang terfilter)
         const formattedTransactions = filteredOrders.map((o: any) => ({
           id: o.id,
           invoice: o.order_code || `ORD-${String(o.id).padStart(5, "0")}`,
@@ -177,9 +176,8 @@ export default function AnalyticsPage() {
         }))
 
         setTransactions(formattedTransactions)
-        setCurrentPage(1) // Reset ke halaman 1 saat filter berubah
+        setCurrentPage(1)
 
-        // 3. Kalkulasi Grafik 12 Bulan (Berdasarkan Tahun yang Dipilih, mengabaikan stage 7 & 8 untuk pendapatan)
         const chartOrders = rawOrders.filter((order: any) => {
           const orderDateStr = order.order_date ? order.order_date.replace(" ", "T") : order.created_at
           const orderDate = new Date(orderDateStr)
@@ -198,7 +196,6 @@ export default function AnalyticsPage() {
             const monthIndex = date.getMonth()
             const stageId = Number(order.current_stage_id || 0)
             
-            // Pendapatan hanya masuk jika bukan menunggu pembayaran (7) atau dibatalkan (8)
             if (stageId !== 7 && stageId !== 8) {
               monthlyRevenueMap[monthIndex] += Number(order.total_price || order.total || 0)
             }
@@ -216,15 +213,67 @@ export default function AnalyticsPage() {
     load()
   }, [selectedMonth, selectedYear])
 
-  // Logika Pagination untuk Riwayat Transaksi
+  const filteredTransactions = transactions.filter((t) => {
+    const statusLower = t.status.toLowerCase()
+    let matchesStatus = false
+
+    if (selectedStatus === "all") {
+      matchesStatus = true
+    } else if (selectedStatus === "diproses") {
+      matchesStatus = statusLower.includes("proses") || 
+                      statusLower.includes("desain") || 
+                      statusLower.includes("cetak") || 
+                      statusLower.includes("antrean") ||
+                      statusLower.includes("butuh")
+    } else {
+      matchesStatus = statusLower === selectedStatus.toLowerCase()
+    }
+
+    const matchesSearch = searchQuery === "" || t.invoice.toLowerCase().includes(searchQuery.toLowerCase()) || (t.customer?.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+    
+    return matchesStatus && matchesSearch
+  })
+
+  const handleExportCSV = () => {
+    if (filteredTransactions.length === 0) {
+      alert("Tidak ada data untuk diexport pada periode ini.");
+      return;
+    }
+
+    const headers = ["No Pesanan", "Pelanggan", "Produk", "Total Pendapatan (Rp)", "Tanggal", "Status"];
+
+    const rows = filteredTransactions.map((t) => [
+      t.invoice,
+      `"${t.customer?.name || "-"}"`,
+      `"${(t.products || []).map((p: any) => p.product_name).join(", ")}"`,
+      t.total,
+      t.date,
+      `"${t.status}"`
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Laporan_Transaksi_${selectedMonth}_${selectedYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const startIndex = (currentPage - 1) * itemsPerPage
-  const currentTableData = transactions.slice(startIndex, startIndex + itemsPerPage)
-  const totalPages = Math.ceil(transactions.length / itemsPerPage || 1)
+  const currentTableData = filteredTransactions.slice(startIndex, startIndex + itemsPerPage)
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage || 1)
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Laporan & Analitik</h1>
@@ -257,14 +306,13 @@ export default function AnalyticsPage() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" className="gap-2 bg-white">
+            <Button variant="outline" className="gap-2 bg-white hover:bg-gray-50 cursor-pointer" onClick={handleExportCSV}>
               <Download className="w-4 h-4" />
               Export
             </Button>
           </div>
         </div>
 
-        {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="border-gray-200">
             <CardContent className="p-6">
@@ -352,8 +400,37 @@ export default function AnalyticsPage() {
             </div>
 
             <Card className="w-full border-gray-200">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between pb-4">
                 <CardTitle className="text-lg font-semibold">Riwayat Transaksi (Berdasarkan Filter)</CardTitle>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-64">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                    <Input
+                      placeholder="Cari No Pesanan / Pelanggan..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value)
+                        setCurrentPage(1)
+                      }}
+                      className="pl-9 bg-white"
+                    />
+                  </div>
+                  <Select value={selectedStatus} onValueChange={(val) => {
+                    setSelectedStatus(val)
+                    setCurrentPage(1)
+                  }}>
+                    <SelectTrigger className="w-44 bg-white">
+                      <SelectValue placeholder="Filter Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Status</SelectItem>
+                      <SelectItem value="selesai">Selesai</SelectItem>
+                      <SelectItem value="diproses">Diproses</SelectItem>
+                      <SelectItem value="menunggu pembayaran">Menunggu Pembayaran</SelectItem>
+                      <SelectItem value="dibatalkan">Dibatalkan</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
 
               <CardContent className="p-0">
@@ -419,10 +496,9 @@ export default function AnalyticsPage() {
                   </TableBody>
                 </Table>
 
-                {/* PAGINATION */}
                 <div className="flex items-center justify-between w-full px-4 py-3 border-t bg-gray-50">
                   <span className="text-sm text-gray-500">
-                    {transactions.length > 0 ? startIndex + 1 : 0} - {Math.min(startIndex + itemsPerPage, transactions.length)} of {transactions.length} items
+                    {filteredTransactions.length > 0 ? startIndex + 1 : 0} - {Math.min(startIndex + itemsPerPage, filteredTransactions.length)} of {filteredTransactions.length} items
                   </span>
 
                   <Pagination className="mx-0 w-auto justify-end"> 
@@ -480,7 +556,6 @@ export default function AnalyticsPage() {
           </TabsContent>
         </Tabs>
 
-        {/* DIALOG INVOICE VIEW */}
         <Dialog open={showInvoice} onOpenChange={setShowInvoice}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
             <DialogHeader>

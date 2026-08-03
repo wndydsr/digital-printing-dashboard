@@ -268,7 +268,6 @@ class OrderController extends Controller
 
             DB::commit();
 
-            // Notifikasi Admin tetap dipertahankan di sini jika pesanan dibuat via store umum
             try {
                 $auth = [
                     'VAPID' => [
@@ -542,6 +541,7 @@ class OrderController extends Controller
     {
         try {
             $order = Order::findOrFail($id);
+            $oldStageId = $order->current_stage_id;
 
             if ($request->has('current_stage_id')) {
                 $order->current_stage_id = $request->current_stage_id;
@@ -552,6 +552,50 @@ class OrderController extends Controller
             }
 
             $order->save();
+
+            // 🌟 KIRIM PUSH NOTIFIKASI KE CUSTOMER JIKA BERUBAH KE TAHAP SELESAI (STAGE 5)
+            if ($oldStageId != self::STAGE_SELESAI && $order->current_stage_id == self::STAGE_SELESAI) {
+                try {
+                    $webPush = new WebPush([
+                        'VAPID' => [
+                            'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                            'publicKey' => config('services.vapid.public_key'),
+                            'privateKey' => config('services.vapid.private_key'),
+                        ],
+                    ]);
+
+                    $customerSubscriptions = PushSubscription::where('user_id', $order->customer_id)->get();
+
+                    foreach ($customerSubscriptions as $sub) {
+                        $subscription = Subscription::create([
+                            'endpoint' => $sub->endpoint,
+                            'publicKey' => $sub->public_key,
+                            'authToken' => $sub->auth_token,
+                        ]);
+
+                        $webPush->queueNotification(
+                            $subscription,
+                            json_encode([
+                                'title' => '🎉 Pesanan Selesai!',
+                                'body' => 'Pesanan #' . ($order->order_code ?? $order->id) . ' telah selesai dikerjakan.',
+                                'url' => 'https://prinora.store/my-account?tab=orders'
+                            ])
+                        );
+                    }
+
+                    foreach ($webPush->flush() as $report) {
+                        $endpoint = $report->getRequest()->getUri()->__toString();
+                        if (!$report->isSuccess()) {
+                            $statusCode = $report->getResponse() ? $report->getResponse()->getStatusCode() : null;
+                            if (in_array($statusCode, [404, 410])) {
+                                PushSubscription::where('endpoint', $endpoint)->delete();
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Gagal mengirim push notification ke customer via updateStage: ' . $e->getMessage());
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -578,6 +622,7 @@ class OrderController extends Controller
 
             $orderId = $item->order_id;
             $order = Order::findOrFail($orderId);
+            $oldOrderStage = $order->current_stage_id;
             $totalItems = \App\Models\OrderItem::where('order_id', $orderId)->count();
             
             $finishedItems = \App\Models\OrderItem::where('order_id', $orderId)
@@ -586,11 +631,57 @@ class OrderController extends Controller
 
             if ($totalItems === $finishedItems) {
                 Order::where('id', $orderId)->update(['current_stage_id' => self::STAGE_SELESAI]);
+                $order->current_stage_id = self::STAGE_SELESAI;
             } else {
                 Order::where('id', $orderId)->update(['current_stage_id' => $item->order_stage_id]);
+                $order->current_stage_id = $item->order_stage_id;
             }
 
-                if ($oldStageId != $item->order_stage_id && in_array($item->order_stage_id, [self::STAGE_CETAK, self::STAGE_SELESAI]) && $order->shipping_method === 'delivery') {
+            // 🌟 KIRIM PUSH NOTIFIKASI KE CUSTOMER KETIKA STATUS TOTAL ORDER BERUBAH MENJADI SELESAI
+            if ($oldOrderStage != self::STAGE_SELESAI && $order->current_stage_id == self::STAGE_SELESAI) {
+                try {
+                    $webPush = new WebPush([
+                        'VAPID' => [
+                            'subject' => config('services.vapid.subject', 'mailto:prinoramystore@gmail.com'),
+                            'publicKey' => config('services.vapid.public_key'),
+                            'privateKey' => config('services.vapid.private_key'),
+                        ],
+                    ]);
+
+                    $customerSubscriptions = PushSubscription::where('user_id', $order->customer_id)->get();
+
+                    foreach ($customerSubscriptions as $sub) {
+                        $subscription = Subscription::create([
+                            'endpoint' => $sub->endpoint,
+                            'publicKey' => $sub->public_key,
+                            'authToken' => $sub->auth_token,
+                        ]);
+
+                        $webPush->queueNotification(
+                            $subscription,
+                            json_encode([
+                                'title' => '🎉 Pesanan Selesai!',
+                                'body' => 'Pesanan #' . ($order->order_code ?? $order->id) . ' telah selesai dikerjakan.',
+                                'url' => 'https://prinora.store/my-account?tab=orders'
+                            ])
+                        );
+                    }
+
+                    foreach ($webPush->flush() as $report) {
+                        $endpoint = $report->getRequest()->getUri()->__toString();
+                        if (!$report->isSuccess()) {
+                            $statusCode = $report->getResponse() ? $report->getResponse()->getStatusCode() : null;
+                            if (in_array($statusCode, [404, 410])) {
+                                PushSubscription::where('endpoint', $endpoint)->delete();
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Gagal mengirim push notification ke customer via updateItemStage: ' . $e->getMessage());
+                }
+            }
+
+            if ($oldStageId != $item->order_stage_id && in_array($item->order_stage_id, [self::STAGE_CETAK, self::STAGE_SELESAI]) && $order->shipping_method === 'delivery') {
                 try {
                     $webPush = new WebPush([
                         'VAPID' => [

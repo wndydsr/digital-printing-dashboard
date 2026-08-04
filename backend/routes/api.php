@@ -37,6 +37,8 @@ Route::post('/chatbot', [ChatBotController::class, 'handleChat']);
 // Taruh di bagian rute public (TIDAK PERLU LOGIN)
 Route::post('/midtrans-notification', [App\Http\Controllers\Api\PaymentController::class, 'notificationHandler']);
 
+Route::get('/vapid-public-key', [PushSubscriptionController::class, 'publicKey']);
+Route::get('/push-subscription/public-key', [PushSubscriptionController::class, 'publicKey']);
 
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -124,9 +126,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/push-subscribe', [PushSubscriptionController::class, 'store']);
     Route::post('/push-test', [PushSubscriptionController::class, 'sendTest']);
-    Route::get('/vapid-public-key', [PushSubscriptionController::class, 'publicKey']);
-    Route::get('/push-subscription/public-key', [PushSubscriptionController::class, 'publicKey']);
-
 });
 
  Broadcast::routes(['middleware' => ['auth:sanctum']]);

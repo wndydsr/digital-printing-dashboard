@@ -125,6 +125,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/push-subscribe', [PushSubscriptionController::class, 'store']);
     Route::post('/push-test', [PushSubscriptionController::class, 'sendTest']);
     Route::get('/vapid-public-key', [PushSubscriptionController::class, 'publicKey']);
+    Route::get('/push-subscription/public-key', [PushSubscriptionController::class, 'publicKey']);
 
 });
 

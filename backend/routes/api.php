@@ -34,12 +34,13 @@ Route::post('/categories', [CategoryController::class, 'store']);
 
 Route::post('/chatbot', [ChatBotController::class, 'handleChat']);
 
-// Taruh di bagian rute public (TIDAK PERLU LOGIN)
 Route::post('/midtrans-notification', [App\Http\Controllers\Api\PaymentController::class, 'notificationHandler']);
 
 Route::get('/vapid-public-key', [PushSubscriptionController::class, 'publicKey']);
 Route::get('/push-subscription/public-key', [PushSubscriptionController::class, 'publicKey']);
 
+Route::post('/push-subscribe', [PushSubscriptionController::class, 'store']);
+Route::post('/push-subscription', [PushSubscriptionController::class, 'store']);
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -50,7 +51,6 @@ Route::post('/login', [AuthController::class, 'login']);
 */
 Route::middleware('auth:sanctum')->group(function () {
 
-    // 🔹 ambil user login
     Route::get('/me', function (Request $request) {
         return $request->user();
     });
@@ -62,7 +62,6 @@ Route::middleware('auth:sanctum')->group(function () {
     
     Route::put('/orders/items/{id}/stage', [OrderController::class, 'updateItemStage']);
 
-    // 🔹 SEMUA ROLE BOLEH
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::post('/orders', [OrderController::class, 'store']);
@@ -73,8 +72,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/checkout', [PaymentController::class, 'checkout']);
     Route::post('/orders/{id}/repay', [PaymentController::class, 'repay']);
 
-   Route::put('orders/{id}/assign-designer', [OrderController::class, 'assignDesigner']);
-   Route::get('/orders/customer/{customer_id}', [App\Http\Controllers\Api\OrderController::class, 'getCustomerOrders']);
+    Route::put('orders/{id}/assign-designer', [OrderController::class, 'assignDesigner']);
+    Route::get('/orders/customer/{customer_id}', [App\Http\Controllers\Api\OrderController::class, 'getCustomerOrders']);
    
     Route::get('/users', [AuthController::class, 'getDesigners']);
     Route::get('/designer/orders', [OrderController::class, 'designerOrders']);
@@ -117,15 +116,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/orders/{id}/approve-design', [MessageController::class, 'approveDesign']);
 
-
     Route::get('/cart/{customer_id}', [CartController::class, 'index']); 
     Route::post('/cart', [CartController::class, 'store']); 
     Route::put('/cart/item/{id}', [CartController::class, 'update']);
     Route::delete('/cart/item/{id}', [CartController::class, 'destroy']); 
     Route::delete('/cart/clear/{customer_id}', [CartController::class, 'clear']); 
 
-    Route::post('/push-subscribe', [PushSubscriptionController::class, 'store']);
     Route::post('/push-test', [PushSubscriptionController::class, 'sendTest']);
 });
 
- Broadcast::routes(['middleware' => ['auth:sanctum']]);
+Broadcast::routes(['middleware' => ['auth:sanctum']]);

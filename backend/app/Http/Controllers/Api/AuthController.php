@@ -127,11 +127,11 @@ class AuthController extends Controller
     public function loginCustomer(Request $request)
     {
         // Validasi reCAPTCHA untuk customer juga (opsional, sesuaikan kebutuhan)
-        if (!$this->verifyCaptcha($request->captcha_token)) {
-            return response()->json([
-                'message' => 'Verifikasi reCAPTCHA gagal. Silakan coba lagi.'
-            ], 400);
-        }
+        // if (!$this->verifyCaptcha($request->captcha_token)) {
+        //     return response()->json([
+        //         'message' => 'Verifikasi reCAPTCHA gagal. Silakan coba lagi.'
+        //     ], 400);
+        // }
 
         $customer = Customer::where('email', $request->email)->first();
 

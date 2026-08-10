@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import ReCAPTCHA from "react-google-recaptcha";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -9,13 +10,15 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // State tambahan untuk alur MFA & Loading
+  // State tambahan untuk alur MFA, Loading & reCAPTCHA
   const [isMfaStep, setIsMfaStep] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
-  // State untuk timer kirim ulang OTP (60 detik)
   const [countdown, setCountdown] = useState(0);
+
+  // State untuk Captcha
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -39,13 +42,19 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return; // Mencegah klik ganda saat proses berjalan
+    if (isLoading) return;
+
+    // Validasi Captcha hanya pada tahap awal login (sebelum masuk tahap OTP)
+    if (!isMfaStep && !captchaToken) {
+      toast.error("Silakan selesaikan verifikasi CAPTCHA terlebih dahulu!");
+      return;
+    }
 
     setIsLoading(true);
 
     try {
       if (!isMfaStep) {
-        // TAHAP 1: Kirim Email & Password
+        // TAHAP 1: Kirim Email, Password, & captcha_token
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/login`, {
           method: "POST",
           headers: {
@@ -54,6 +63,7 @@ export default function LoginPage() {
           body: JSON.stringify({
             email,
             password,
+            captcha_token: captchaToken,
           }),
         });
 
@@ -61,6 +71,9 @@ export default function LoginPage() {
 
         if (!res.ok) {
           toast.error(data.message || "Gagal masuk, periksa kembali email dan password.");
+          // Reset captcha jika gagal agar user bisa coba lagi
+          recaptchaRef.current?.reset();
+          setCaptchaToken(null);
           setIsLoading(false);
           return;
         }
@@ -68,7 +81,7 @@ export default function LoginPage() {
         // Jika backend meminta MFA, alihkan tampilan ke form input OTP
         if (data.mfa_required) {
           setIsMfaStep(true);
-          setCountdown(60); // Set jeda 60 detik sebelum bisa minta kirim ulang
+          setCountdown(60);
           toast.success("Kode OTP telah dikirim ke email Anda.");
         }
       } else {
@@ -130,7 +143,6 @@ export default function LoginPage() {
     }
   };
 
-  // Fungsi khusus jika ingin mengirim ulang OTP
   const handleResendOtp = async () => {
     if (countdown > 0 || isLoading) return;
     setIsLoading(true);
@@ -144,13 +156,14 @@ export default function LoginPage() {
         body: JSON.stringify({
           email,
           password,
+          captcha_token: "bypass_resend",
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
         toast.success("Kode OTP baru telah dikirim ulang ke email Anda.");
-        setCountdown(60); // Reset timer 60 detik
+        setCountdown(60);
       } else {
         toast.error(data.message || "Gagal mengirim ulang OTP.");
       }
@@ -162,7 +175,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-blue-400 to-indigo-500">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-blue-400 to-indigo-500 py-10">
       <form onSubmit={handleLogin} className="bg-white w-[380px] rounded-2xl shadow-xl p-8">
         <h2 className="text-center text-xl font-semibold">
           {isMfaStep ? "Verifikasi Keamanan" : "Welcome Back!"}
@@ -218,7 +231,7 @@ export default function LoginPage() {
             </div>
 
             {/* Remember Me */}
-            <div className="flex items-center text-sm mb-6">
+            <div className="flex items-center text-sm mb-4">
               <label className="flex items-center gap-2 cursor-pointer text-gray-600 select-none">
                 <input 
                   type="checkbox" 
@@ -228,6 +241,15 @@ export default function LoginPage() {
                 />
                 Remember me
               </label>
+            </div>
+
+            {/* Google reCAPTCHA Widget */}
+            <div className="mb-4 flex justify-center scale-95 origin-center">
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey="6LdGO38tAAAAAJCX0YRlckd_pczbbZSdjbDci7pL"
+                onChange={(token: string | null) => setCaptchaToken(token)}
+              />
             </div>
           </>
         ) : (
@@ -263,7 +285,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={isLoading}
-          className={`w-full flex justify-center font-medium text-white py-2.5 rounded-lg transition font-medium text-sm shadow-sm ${
+          className={`w-full flex justify-center font-medium text-white py-2.5 rounded-lg transition text-sm shadow-sm ${
             isLoading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >

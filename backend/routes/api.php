@@ -44,6 +44,9 @@ Route::post('/push-subscription', [PushSubscriptionController::class, 'store']);
 
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::post('/verify-mfa', [AuthController::class, 'verifyMfa']);
+Route::post('/customer/verify-mfa', [AuthController::class, 'verifyCustomerMfa']);
+
 /*
 |--------------------------------------------------------------------------
 | HARUS LOGIN

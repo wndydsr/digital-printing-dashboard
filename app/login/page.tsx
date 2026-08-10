@@ -9,9 +9,21 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // State tambahan untuk alur MFA
+  // State tambahan untuk alur MFA & Loading
   const [isMfaStep, setIsMfaStep] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // State untuk timer kirim ulang OTP (60 detik)
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown > 0) {
+      timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [countdown]);
 
   useEffect(() => {
     const savedEmail = localStorage.getItem("remember_email");
@@ -27,6 +39,9 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return; // Mencegah klik ganda saat proses berjalan
+
+    setIsLoading(true);
 
     try {
       if (!isMfaStep) {
@@ -46,12 +61,14 @@ export default function LoginPage() {
 
         if (!res.ok) {
           toast.error(data.message || "Gagal masuk, periksa kembali email dan password.");
+          setIsLoading(false);
           return;
         }
 
         // Jika backend meminta MFA, alihkan tampilan ke form input OTP
         if (data.mfa_required) {
           setIsMfaStep(true);
+          setCountdown(60); // Set jeda 60 detik sebelum bisa minta kirim ulang
           toast.success("Kode OTP telah dikirim ke email Anda.");
         }
       } else {
@@ -71,6 +88,7 @@ export default function LoginPage() {
 
         if (!res.ok) {
           toast.error(data.message || "Kode OTP salah atau kedaluwarsa.");
+          setIsLoading(false);
           return;
         }
 
@@ -107,6 +125,39 @@ export default function LoginPage() {
     } catch (error) {
       console.error(error);
       toast.error("Terjadi kesalahan pada sistem, silakan coba lagi.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fungsi khusus jika ingin mengirim ulang OTP
+  const handleResendOtp = async () => {
+    if (countdown > 0 || isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Kode OTP baru telah dikirim ulang ke email Anda.");
+        setCountdown(60); // Reset timer 60 detik
+      } else {
+        toast.error(data.message || "Gagal mengirim ulang OTP.");
+      }
+    } catch (err) {
+      toast.error("Terjadi kesalahan koneksi.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -192,15 +243,35 @@ export default function LoginPage() {
               onChange={(e) => setOtpCode(e.target.value)}
               required
             />
+
+            {/* Tombol Resend OTP dengan Countdown */}
+            <div className="text-center mt-3 text-sm">
+              <span className="text-gray-500">Tidak menerima kode? </span>
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={countdown > 0 || isLoading}
+                className={`font-medium ${countdown > 0 ? "text-gray-400 cursor-not-allowed" : "text-blue-600 hover:underline"}`}
+              >
+                {countdown > 0 ? `Kirim ulang dalam ${countdown}s` : "Kirim Ulang OTP"}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Button Submit */}
+        {/* Button Submit dengan Indikator Loading */}
         <button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition font-medium text-sm shadow-sm"
+          disabled={isLoading}
+          className={`w-full flex justify-center font-medium text-white py-2.5 rounded-lg transition font-medium text-sm shadow-sm ${
+            isLoading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+          }`}
         >
-          {isMfaStep ? "Verifikasi OTP" : "Sign in"}
+          {isLoading 
+            ? "Memproses..." 
+            : isMfaStep 
+            ? "Verifikasi OTP" 
+            : "Sign in"}
         </button>
       </form>
     </div>

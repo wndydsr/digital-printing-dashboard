@@ -9,14 +9,33 @@ use App\Models\User;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Http; // Wajib import Http client untuk cek captcha
 use App\Mail\SendOtpMail;
 use Carbon\Carbon;
 
 class AuthController extends Controller
 {
-    // 1. Modifikasi fungsi login utama (Mengirim OTP, belum mengeluarkan token)
+    // Fungsi pembantu untuk memvalidasi reCAPTCHA ke Google
+    private function verifyCaptcha($token)
+    {
+        $response = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+            'secret' => env('RECAPTCHA_SECRET_KEY'),
+            'response' => $token,
+        ]);
+
+        return $response->json()['success'] ?? false;
+    }
+
+    // 1. Modifikasi fungsi login utama (Admin/Karyawan)
     public function login(Request $request)
     {
+        // Validasi reCAPTCHA terlebih dahulu
+        if (!$this->verifyCaptcha($request->captcha_token)) {
+            return response()->json([
+                'message' => 'Verifikasi reCAPTCHA gagal. Silakan coba lagi.'
+            ], 400);
+        }
+
         $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
@@ -107,6 +126,13 @@ class AuthController extends Controller
 
     public function loginCustomer(Request $request)
     {
+        // Validasi reCAPTCHA untuk customer juga (opsional, sesuaikan kebutuhan)
+        if (!$this->verifyCaptcha($request->captcha_token)) {
+            return response()->json([
+                'message' => 'Verifikasi reCAPTCHA gagal. Silakan coba lagi.'
+            ], 400);
+        }
+
         $customer = Customer::where('email', $request->email)->first();
 
         if (!$customer || !Hash::check($request->password, $customer->password)) {
